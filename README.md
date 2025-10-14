@@ -1,25 +1,34 @@
-# EcoVisionLabs-Software
-Ein Projekt von **EcoVision Labs** Soft :)
+# Simulationssoftware-EcoVisionLabs
+
+Ein Projekt von **EcoVision Labs** :) 
 
 
 
-## Funktionen
-Simulierung von ...
+## 1. Funktionen
 
-<ol>
-  <li>Verschiedenen Energiequellen <ul>
-      <li>Wind</li>
-      <li>Solar</li>
-  </ul></li>
-  <li>Genauigkeit <ul>
-      <li>in 25min abständen </li>
-  </ul></li>
-</ol>
+Die Software dient zur **Simulation und Analyse der Energieerzeugung in Deutschland**,  
+mit Fokus auf erneuerbare Energien und das Erreichen der Klimaziele 2030/2045.  
 
-
-## Das EcoVision Team
-
-Wir sind ein Junges Team von Studenten die sich als Aufgabe vorgenommen haben die qualitativ hochwertigste Software zu schreiben um Transparenz in der Welt zu schaffen und Menschen und Behörden über die aktuelle Lage zu informieren :)
+### Hauptfunktionen
+- **Simulation verschiedener Energiequellen**
+  - Windenergie  
+  - Solarenergie
+- **Zeitlich hochaufgelöste Berechnungen**
+  - Viertelstunden- bzw. 15-Minuten-Intervalle  
+- **Visualisierung**
+  - Diagramme und Statistiken zur Stromerzeugung, -nachfrage und zum Anteil erneuerbarer Energien  
 
 
-![the team](Image.jpg)
+
+## 2. Das EcoVision-Team
+
+Wir sind ein junges Team von Studierenden,  
+das sich das Ziel gesetzt hat, eine **präzise, transparente und benutzerfreundliche Simulationssoftware** zu entwickeln.  
+
+Unsere Mission:
+### **Transparenz in der Energiewelt schaffen** –  für Bürger:innen, Wissenschaft und Behörden.
+
+---
+
+![Teamfoto](assets/team1.jpg)  
+*Team EcoVision Labs – Gründung Oktober 2025*
