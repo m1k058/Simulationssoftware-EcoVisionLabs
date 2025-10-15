@@ -9,8 +9,8 @@
 
 ---
 
-### Dieses Dokument beschreibt die **technische Struktur und die genutzten Werkzeuge** für die Umsetzung der Aufgaben im **IPJ1**.  
-### Es dient als Leitfaden für das Entwicklerteam und zur Transparenz innerhalb des Projekts.
+ Dieses Dokument beschreibt die **technische Struktur und die genutzten Werkzeuge** für die Umsetzung der Aufgaben im **IPJ1**.  
+ Es dient als Leitfaden für das Entwicklerteam und zur Transparenz innerhalb des Projekts.
 
 ---
 
@@ -38,3 +38,13 @@
 
 ---
 
+## 3. Datenbeschaffung (SMARD)
+
+Zugriff über: 
+| Methode | Ursprung |
+|-----|-----|
+| SMARD API | Bundesnetzagentur Strommarktdaten |
+| CSV-Download | SMARD Downloadcenter |
+| Smardcast-Tool | Kolja Egers Github |
+
+(Kombination der Methoden möglich)

@@ -20,5 +20,5 @@ mit Fokus auf erneuerbare Energien und das Erreichen der Klimaziele 2030/2045.
 
 ## 2. Das EcoVision-Team
 
-![Teamfoto](assets/team1.jpg)  
+![Teamfoto](assets/team1.png)  
 *Team EcoVision Labs – Gründung Oktober 2025*
