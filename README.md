@@ -12,7 +12,8 @@ mit Fokus auf erneuerbare Energien und das Erreichen der Klimaziele 2030/2045.
 ### Hauptfunktionen
 - **Simulation verschiedener Energiequellen**
   - Windenergie  
-  - Solarenergie 
+  - Solarenergie
+  - und mehr
 - **Visualisierung**
   - Diagramme und Statistiken zur Stromerzeugung, -nachfrage und zum Anteil erneuerbarer Energien  
 
