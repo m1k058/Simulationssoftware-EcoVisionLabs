@@ -2,7 +2,7 @@
 
 Ein Projekt von **EcoVision Labs** :) 
 
-[Zur technischen Planung](documentation/technische_planung.md)
+[Zur technischen Planung](docu/technische_planung.md)
 
 ## 1. Funktionen
 
