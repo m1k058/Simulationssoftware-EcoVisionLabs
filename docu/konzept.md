@@ -1,0 +1,11 @@
+- E-Autos als Speicher?
+- Marktanteil E-Autos
+- Merit Order Prinzip
+- Ausbau erneuerbare vs Menge an konventionellen
+- Blackouts
+    - Speicherausbau
+- Szenarien auswählen und Annahmen treffen
+- Wirtschaftlichkeit vs. Klimaschadenfolgekosten
+- Netzausbau, Stromtrassen
+- 
+  
