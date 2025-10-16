@@ -4,9 +4,9 @@ Ein Projekt von **EcoVision Labs** :)
 
 ### Shortcuts:
 
-[zur technischen Planung](docu/technische_planung.md)
+1. [zur technischen Planung](docu/technische_planung.md)
 
-[zum Konzept](docu/konzept.md)
+2. [zum Konzept](docu/konzept.md)
 
 ## 1. Funktionen
 
