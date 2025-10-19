@@ -8,9 +8,8 @@ from constants import EnergySources as ES
 DATA_PATH = r"raw-data\Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei
 DATE_START = "01.01.2025 08:00" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
 DATE_END = "01.05.2025 08:00" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
-ENGY_SRC0 = ES.SK # Energiequelle für Stapelung
-ENGY_SRC1 = ES.BK # Energiequelle
-ONLY_SAVE_PLOT = True # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
+ENERGY_SOURCES = [ES.SK, ES.BK, ES.PV, ES.WAS]  # Liste der Energiequellen
+ONLY_SAVE_PLOT = False # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
 
 # Laden der CSV-Datei in ein DataFrame
 df = pd.read_csv(DATA_PATH, sep=';')
@@ -26,46 +25,37 @@ df["zeit"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
 df_filtered = df[(df["zeit"] >= DATE_START) & (df["zeit"] <= DATE_END)]
 
 # Konvertiere den String-Wert der .csv mit Komma in einen Float (deutsches Format zu US-Format (grrr!!! AMERIKANER!!!))
-#df_filtered[ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
-#df_filtered[ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
-
-df_filtered.loc[:, ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
-df_filtered.loc[:, ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
+for source in ENERGY_SOURCES:
+        df_filtered.loc[:, source.value["col"]] = df_filtered[source.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
 
 
 # das Plotten der Daten
 plt.figure(figsize=(20,10))
-plt.bar(
+source_buffer = None
+for source in ENERGY_SOURCES:
+    bottom_fill = None if source_buffer is None else df_filtered[source_buffer.value["col"]]
+    plt.bar(
         df_filtered["zeit"],
-        df_filtered[ENGY_SRC0.value["col"]],
+        df_filtered[source.value["col"]],
         width=pd.Timedelta(hours=0.8),
         align='center',
-        color=ENGY_SRC0.value["color"],
-        label=ENGY_SRC0.value["name"],
-        bottom=df_filtered[ENGY_SRC1.value["col"]] # Stapeln der Balken
-)
-
-plt.bar(
-        df_filtered["zeit"],
-        df_filtered[ENGY_SRC1.value["col"]],
-        width=pd.Timedelta(hours=0.8),
-        align='center',
-        color=ENGY_SRC1.value["color"],
-        label=ENGY_SRC1.value["name"]
-)
-
+        color=source.value["color"],
+        label=source.value["name"],
+        bottom=bottom_fill # Stapeln der Balken
+    )
+    source_buffer = source
 
 plt.xlabel("Datum")
 plt.ylabel("Erzeugung [MWh]")
-plt.title("Stündliche Stromerzeugung " + ENGY_SRC0.value["name"] + " und " + ENGY_SRC1.value["name"] + " von " + DATE_START + " bis " + DATE_END)
+plt.title("Stündliche Stromerzeugung " + "VERSCHIEDENE QUELLEN" + " von " + DATE_START + " bis " + DATE_END)
 plt.legend()
 plt.grid(True)
 plt.gcf().autofmt_xdate()  # Datumsanzeige schräg stellen
 
-if ONLY_SAVE_PLOT:
-    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-    filename = f"output/test_plots/plot_{ENGY_SRC0.name}+{ENGY_SRC1.name}_{timestamp}.png"
-    plt.savefig(filename, dpi=300, bbox_inches="tight")
-    plt.close()
-else:
-    plt.show()
+# if ONLY_SAVE_PLOT:
+#     timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+#     filename = f"output/test_plots/plot_{ENGY_SRC0.name}+{ENGY_SRC1.name}_{timestamp}.png"
+#     plt.savefig(filename, dpi=300, bbox_inches="tight")
+#     plt.close()
+# else:
+plt.show()
