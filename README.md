@@ -3,11 +3,10 @@
 Ein Projekt von **EcoVision Labs** :) 
 
 ### Shortcuts:
-
-1. [zur technischen Planung](docu/technische_planung.md)
-
-2. [zum Konzept](docu/konzept.md)
-
+### [**zu den Features**](docu/code_features_aktuell.md)
+[zur technischen Planung](docu/technische_planung.md)  
+[zum Konzept](docu/konzept.md)
+   
 ## 1. Funktionen
 
 Die Software dient zur **Simulation und Analyse der Energieerzeugung in Deutschland**,  
