@@ -3,9 +3,10 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from constants import EnergySources as ES
+from pathlib import Path
 
 
-DATA_PATH = r"raw-data\Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei
+DATA_PATH = Path("raw-data") / "Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei
 DATE_START = "01.01.2025 08:00" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
 DATE_END = "01.05.2025 08:00" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
 ENGY_SRC0 = ES.SK # Energiequelle für Stapelung
