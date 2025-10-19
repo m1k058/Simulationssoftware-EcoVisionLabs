@@ -39,7 +39,7 @@ class EnergySources(Enum):
     BK = {
         "name": "Braunkohle",
         "col": "Braunkohle [MWh] Berechnete Auflösungen",
-        "color": "#362300"
+        "color": "#774400"
     }
     SK = {
         "name": "Steinkohle",

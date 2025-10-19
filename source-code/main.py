@@ -1,14 +1,16 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from constants import EnergySources as ES
 
 
 DATA_PATH = r"raw-data\Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei
 DATE_START = "01.01.2025 08:00" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
 DATE_END = "01.05.2025 08:00" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
-ENGY_SRC0 = ES.PV # Energiequelle für Stapelung
-ENGY_SRC1 = ES.SK # Energiequelle
+ENGY_SRC0 = ES.SK # Energiequelle für Stapelung
+ENGY_SRC1 = ES.BK # Energiequelle
+ONLY_SAVE_PLOT = True # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
 
 # Laden der CSV-Datei in ein DataFrame
 df = pd.read_csv(DATA_PATH, sep=';')
@@ -24,8 +26,11 @@ df["zeit"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
 df_filtered = df[(df["zeit"] >= DATE_START) & (df["zeit"] <= DATE_END)]
 
 # Konvertiere den String-Wert der .csv mit Komma in einen Float (deutsches Format zu US-Format (grrr!!! AMERIKANER!!!))
-df_filtered[ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
-df_filtered[ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
+#df_filtered[ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
+#df_filtered[ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
+
+df_filtered.loc[:, ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
+df_filtered.loc[:, ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
 
 
 # das Plotten der Daten
@@ -56,4 +61,11 @@ plt.title("Stündliche Stromerzeugung " + ENGY_SRC0.value["name"] + " und " + EN
 plt.legend()
 plt.grid(True)
 plt.gcf().autofmt_xdate()  # Datumsanzeige schräg stellen
-plt.show()
+
+if ONLY_SAVE_PLOT:
+    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+    filename = f"output/test_plots/plot_{ENGY_SRC0.name}+{ENGY_SRC1.name}_{timestamp}.png"
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close()
+else:
+    plt.show()
