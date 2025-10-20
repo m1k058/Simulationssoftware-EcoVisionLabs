@@ -24,6 +24,7 @@ ___
 
 ### Software
 
+- Einbindung von API zum Nutzen spezifischer Daten / aktuellster Daten
 - modularer Aufbau, muss stets nutzbar sein
 - Kernfeatures als erstes lauffähig machen
 - schrittweise Erweiterung der Features
