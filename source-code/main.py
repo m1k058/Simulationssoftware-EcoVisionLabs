@@ -3,8 +3,20 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import os
-#from constants import EnergySourcesCalc as ES # Bei Verwendung der berechneten Auflösungen
-from constants import EnergySourcesOG as ES # Bei Verwendung der Originalauflösungen
+
+INPUT_MODE = "Viertelstunde" # "Stunde" oder "Viertelstunde"
+
+if INPUT_MODE == "Stunde":
+    DATA_PATH = r"raw-data\Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei Stündliche Daten
+    wth = pd.Timedelta(hours=1)  # Angepasste Breite für Stündliche Daten
+    from constants import EnergySourcesCalc as ES # Bei Verwendung der berechneten Auflösungen
+elif INPUT_MODE == "Viertelstunde":
+    DATA_PATH = r"raw-data\1.1.2020-16.10.2025--Realisierte_Erzeugung_202001010000_202510170000_Viertelstunde.csv" # Pfad zur CSV-Datei Viertelstündliche Daten
+    wth = pd.Timedelta(hours=0.25)  # Angepasste Breite für Viertelstündliche Daten
+    from constants import EnergySourcesOG as ES # Bei Verwendung der Originalauflösungen
+    
+else:
+    raise ValueError("Ungültiger INPUT_MODE. Verwenden Sie 'Stunde' oder 'Viertelstunde'.")
 
 ALL = [ES.KE, ES.BK, ES.SK, ES.EG, ES.SOK, ES.BIO, ES.PS, ES.WAS, ES.SOE, ES.WOF, ES.WON, ES.PV]
 RENEWABLE = [ES.SOE, ES.BIO, ES.WAS, ES.WOF, ES.WON, ES.PV]
@@ -12,11 +24,8 @@ LOW_CARBON = [ES.KE, ES.BIO, ES.WAS, ES.SOE, ES.WOF, ES.WON, ES.PV]
 FOSSIL = [ES.BK, ES.SK, ES.EG, ES.SOK]
 STORAGE = [ES.PS]
 
-# DATA_PATH = r"raw-data\Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei Stündliche Daten
-DATA_PATH = r"raw-data\1.1.2020-16.10.2025--Realisierte_Erzeugung_202001010000_202510170000_Viertelstunde.csv" # Pfad zur CSV-Datei Viertelstündliche Daten
-
-DATE_START = "04.01.2025 08:00" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
-DATE_END = "04.03.2025 08:00" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
+DATE_START = "05.01.2020 00:01" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
+DATE_END = "05.03.2020 23:59" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
 ENERGY_SOURCES = ALL  # Liste der Energiequellen
 ONLY_SAVE_PLOT = False # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
 
@@ -56,13 +65,13 @@ bottom = np.zeros(len(df_filtered), dtype=float)
 
 # das Plotten der Daten
 plt.figure(figsize=(20,10))
+
 for source in ENERGY_SOURCES:
     plt.bar(
         df_filtered["zeit"],
         df_filtered[source.value["col"]],
-        width=pd.Timedelta(hours=0.25),  # Angepasste Breite für Viertelstündliche Daten
-        # width=pd.Timedelta(hours=1), # Angepasste Breite für Stündliche Daten
-        align='center',
+        width=wth,  # Angepassung der Breite
+        align='edge',
         color=source.value["color"],
         label=source.value["name"],
         bottom=bottom # Stapeln der Balken
@@ -73,7 +82,7 @@ for source in ENERGY_SOURCES:
 
 plt.xlabel("Datum")
 plt.ylabel("Erzeugung [MWh]")
-plt.title("Stündliche Stromerzeugung " + "+".join([source.name for source in ENERGY_SOURCES]) + " von " + DATE_START + " bis " + DATE_END)
+plt.title("Stromerzeugung " + "+".join([source.name for source in ENERGY_SOURCES]) + " von " + DATE_START + " bis " + DATE_END)
 plt.legend()
 plt.grid(True)
 plt.gcf().autofmt_xdate()  # Datumsanzeige schräg stellen
