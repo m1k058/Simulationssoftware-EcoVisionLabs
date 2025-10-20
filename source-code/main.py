@@ -15,7 +15,6 @@ elif INPUT_MODE == "Viertelstunde":
     DATA_PATH = Path("raw-data") / "1.1.2020-16.10.2025--Realisierte_Erzeugung_202001010000_202510170000_Viertelstunde.csv" # Pfad zur CSV-Datei Viertelstündliche Daten
     wth = pd.Timedelta(hours=0.25)  # Angepasste Breite für Viertelstündliche Daten
     from constants import EnergySourcesOG as ES # Bei Verwendung der Originalauflösungen
-    
 else:
     raise ValueError("Ungültiger INPUT_MODE. Verwenden Sie 'Stunde' oder 'Viertelstunde'.")
 
@@ -29,6 +28,8 @@ DATE_START = "05.01.2020 00:01" # Startdatum für die Filterung (MM.TT.JJJJ HH:M
 DATE_END = "05.03.2020 23:59" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
 ENERGY_SOURCES = ALL  # Liste der Energiequellen
 ONLY_SAVE_PLOT = False # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
+
+
 
 # Laden der CSV-Datei in ein DataFrame
 df = pd.read_csv(DATA_PATH, sep=';')
@@ -72,7 +73,7 @@ for source in ENERGY_SOURCES:
         df_filtered["zeit"],
         df_filtered[source.value["col"]],
         width=wth,  # Angepassung der Breite
-        align='edge',
+        align='center',
         color=source.value["color"],
         label=source.value["name"],
         bottom=bottom # Stapeln der Balken
