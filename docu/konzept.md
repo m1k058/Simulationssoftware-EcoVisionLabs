@@ -30,5 +30,7 @@ ___
 - schrittweise Erweiterung der Features
 - Unit-Tests
 - Validierung der Berechnungen mit bestehenden Daten oder anderen Tools wie Excel / KI
-
-
+___
+- Konvertierung verschiedener Dateiformate oder .csv Formatierungen einheitlich machen
+- Benutzereingabe zur Auswahl der Quellen / Zeiträume / Datenpunkte
+-  
