@@ -2,16 +2,33 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from constants import EnergySources as ES
 from pathlib import Path
+import os
 
+INPUT_MODE = "Viertelstunde" # "Stunde" oder "Viertelstunde"
 
-DATA_PATH = Path("raw-data") / "Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei
-DATE_START = "01.01.2025 08:00" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
-DATE_END = "01.05.2025 08:00" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
-ENGY_SRC0 = ES.SK # Energiequelle für Stapelung
-ENGY_SRC1 = ES.BK # Energiequelle
-ONLY_SAVE_PLOT = True # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
+if INPUT_MODE == "Stunde":
+    DATA_PATH = Path("raw-data") / "Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei Stündliche Daten
+    wth = pd.Timedelta(hours=1)  # Angepasste Breite für Stündliche Daten
+    from constants import EnergySourcesCalc as ES # Bei Verwendung der berechneten Auflösungen
+elif INPUT_MODE == "Viertelstunde":
+    DATA_PATH = Path("raw-data") / "1.1.2020-16.10.2025--Realisierte_Erzeugung_202001010000_202510170000_Viertelstunde.csv" # Pfad zur CSV-Datei Viertelstündliche Daten
+    wth = pd.Timedelta(hours=0.25)  # Angepasste Breite für Viertelstündliche Daten
+    from constants import EnergySourcesOG as ES # Bei Verwendung der Originalauflösungen
+    
+else:
+    raise ValueError("Ungültiger INPUT_MODE. Verwenden Sie 'Stunde' oder 'Viertelstunde'.")
+
+ALL = [ES.KE, ES.BK, ES.SK, ES.EG, ES.SOK, ES.BIO, ES.PS, ES.WAS, ES.SOE, ES.WOF, ES.WON, ES.PV]
+RENEWABLE = [ES.SOE, ES.BIO, ES.WAS, ES.WOF, ES.WON, ES.PV]
+LOW_CARBON = [ES.KE, ES.BIO, ES.WAS, ES.SOE, ES.WOF, ES.WON, ES.PV]
+FOSSIL = [ES.BK, ES.SK, ES.EG, ES.SOK]
+STORAGE = [ES.PS]
+
+DATE_START = "05.01.2020 00:01" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
+DATE_END = "05.03.2020 23:59" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
+ENERGY_SOURCES = ALL  # Liste der Energiequellen
+ONLY_SAVE_PLOT = False # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
 
 # Laden der CSV-Datei in ein DataFrame
 df = pd.read_csv(DATA_PATH, sep=';')
@@ -26,46 +43,57 @@ df["zeit"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
 # Filtern der Daten
 df_filtered = df[(df["zeit"] >= DATE_START) & (df["zeit"] <= DATE_END)]
 
-# Konvertiere den String-Wert der .csv mit Komma in einen Float (deutsches Format zu US-Format (grrr!!! AMERIKANER!!!))
-#df_filtered[ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
-#df_filtered[ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
 
-df_filtered.loc[:, ENGY_SRC0.value["col"]] = df_filtered[ENGY_SRC0.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
-df_filtered.loc[:, ENGY_SRC1.value["col"]] = df_filtered[ENGY_SRC1.value["col"]].str.replace('.', '').str.replace(',', '.').astype(float)
+# Nur Quellen verwenden, deren Spalte existiert
+valid_sources = []
+missing = []
+for source in ENERGY_SOURCES:
+    col = source.value["col"]
+    if col in df_filtered.columns:
+        # Zuerst als string behandeln und Tausendertrennzeichen entfernen, Dezimal-Komma ersetzen
+        s = df_filtered[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        # Sichere Umwandlung: nicht-konvertierbare Werte werden zu NaN, dann mit 0.0 ersetzt
+        df_filtered.loc[:, col] = pd.to_numeric(s, errors='coerce').fillna(0.0).astype(float)
+        valid_sources.append(source)
+    else:
+        missing.append(source)
+if missing:
+    print("Warnung: folgende Quellen fehlen in der CSV und werden übersprungen:", [m.name for m in missing])
+ENERGY_SOURCES = valid_sources
 
+# Initialisiere die Basis für gestapelte Balken als Float-Array
+bottom = np.zeros(len(df_filtered), dtype=float)
 
 # das Plotten der Daten
 plt.figure(figsize=(20,10))
-plt.bar(
-        df_filtered["zeit"],
-        df_filtered[ENGY_SRC0.value["col"]],
-        width=pd.Timedelta(hours=0.8),
-        align='center',
-        color=ENGY_SRC0.value["color"],
-        label=ENGY_SRC0.value["name"],
-        bottom=df_filtered[ENGY_SRC1.value["col"]] # Stapeln der Balken
-)
 
-plt.bar(
+for source in ENERGY_SOURCES:
+    plt.bar(
         df_filtered["zeit"],
-        df_filtered[ENGY_SRC1.value["col"]],
-        width=pd.Timedelta(hours=0.8),
-        align='center',
-        color=ENGY_SRC1.value["color"],
-        label=ENGY_SRC1.value["name"]
-)
-
+        df_filtered[source.value["col"]],
+        width=wth,  # Angepassung der Breite
+        align='edge',
+        color=source.value["color"],
+        label=source.value["name"],
+        bottom=bottom # Stapeln der Balken
+    )
+    # Addiere die aktuellen Werte zur Basis für den nächsten Balken
+    # Verwende to_numpy(dtype=float) um sicherzustellen, dass wir ein float64-Array addieren
+    bottom += df_filtered[source.value["col"]].to_numpy(dtype=float)
 
 plt.xlabel("Datum")
 plt.ylabel("Erzeugung [MWh]")
-plt.title("Stündliche Stromerzeugung " + ENGY_SRC0.value["name"] + " und " + ENGY_SRC1.value["name"] + " von " + DATE_START + " bis " + DATE_END)
+plt.title("Stromerzeugung " + "+".join([source.name for source in ENERGY_SOURCES]) + " von " + DATE_START + " bis " + DATE_END)
 plt.legend()
 plt.grid(True)
 plt.gcf().autofmt_xdate()  # Datumsanzeige schräg stellen
 
 if ONLY_SAVE_PLOT:
     timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-    filename = f"output/test_plots/plot_{ENGY_SRC0.name}+{ENGY_SRC1.name}_{timestamp}.png"
+    sources_name = "+".join([source.name for source in ENERGY_SOURCES])
+    outdir = os.path.join("output", "test_plots")
+    os.makedirs(outdir, exist_ok=True)
+    filename = os.path.join(outdir, f"plot_{sources_name}_{timestamp}.png")
     plt.savefig(filename, dpi=300, bbox_inches="tight")
     plt.close()
 else:
