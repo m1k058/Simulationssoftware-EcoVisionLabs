@@ -33,4 +33,9 @@ ___
 ___
 - Konvertierung verschiedener Dateiformate oder .csv Formatierungen einheitlich machen
 - Benutzereingabe zur Auswahl der Quellen / Zeiträume / Datenpunkte
--  
+- Methoden vs Funktionen
+- Modularisierung
+    - Dateneinlesen & -verarbeiten
+    - Plotting
+    - UI
+- wie ein Python Programm richtig aufbauen?
