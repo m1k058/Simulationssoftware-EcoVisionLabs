@@ -123,3 +123,5 @@ class EnergySourcesOG(Enum):
         "col": "Sonstige Konventionelle [MWh] Originalauflösungen",
         "color": "#A9A9A9"
     }
+
+    
