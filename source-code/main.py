@@ -4,6 +4,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 import os
+import data_handling_test
 
 INPUT_MODE = "Viertelstunde" # "Stunde" oder "Viertelstunde"
 
@@ -29,21 +30,7 @@ DATE_END = "05.03.2020 23:59" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
 ENERGY_SOURCES = ALL  # Liste der Energiequellen
 ONLY_SAVE_PLOT = False # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
 
-
-
-# Laden der CSV-Datei in ein DataFrame
-df = pd.read_csv(DATA_PATH, sep=';')
-
-# Start/End-Datum in datetime-Objekte umwandeln
-df["Datum von"] = pd.to_datetime(df["Datum von"], format="%d.%m.%Y %H:%M")
-df["Datum bis"] = pd.to_datetime(df["Datum bis"], format="%d.%m.%Y %H:%M")
-
-# Berechnung der mittleren Zeit für jeden Eintrag
-df["zeit"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
-
-# Filtern der Daten
-df_filtered = df[(df["zeit"] >= DATE_START) & (df["zeit"] <= DATE_END)]
-
+df_filtered = data_handling_test.read_csv(data_path=DATA_PATH, start_date=DATE_START, end_date=DATE_END)
 
 # Nur Quellen verwenden, deren Spalte existiert
 valid_sources = []
