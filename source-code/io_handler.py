@@ -1,36 +1,47 @@
 from pathlib import Path
 import pandas as pd
-from typing import Optional, Sequence, List
-import os
 import csv
 import re
+from constants import HEADER_CLEAN_PATTERNS, EXPECTED_HEADERS, FILE_FORMAT_OPTIONS
 
 def load_data(
     path: Path,
     datatype: str = "SMARD",
-    sep: str = ";",
-    date_cols: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
-    """Simple and safe CSV loader focused on your requested features:
+    """Simple and safe File loader with following features:
 
     - Basic path and extension checks
     - Read and validate the header / first line against expected headers for `datatype`
-    - Convert specified German-formatted datetime columns to pandas datetimes
+    - Load File with proper separators, decimal/thousands formats, NA values and date formats
+    - Light normalization of header names (removal of known patterns)
+    - Create midpoint timestamp column 'Zeitpunkt' if 'Datum von' and 'Datum bis' are present
 
     Args:
-        path: Path to the CSV file
-        datatype: A short identifier for expected layout (e.g. 'SMARD'). Used to choose expected headers.
-        sep: Field delimiter (default ';')
+        path: Path to the file
+        datatype: A short identifier for expected layout (e.g. 'SMARD'). Used to choose expected headers and file format options.
 
     Returns:
-        pd.DataFrame: Loaded and lightly-normalized DataFrame
+        pd.DataFrame: Loaded and normalized DataFrame
     """
 
     # Validate datatype
-    if datatype==None:
+    if not datatype:
         raise ValueError("datatype must be provided and cannot be None")
-    if datatype not in {"SMARD", "OTHER"}:
-        raise ValueError(f"Unsupported datatype '{datatype}'. Supported: 'SMARD', 'OTHER'.")
+    if datatype not in EXPECTED_HEADERS:
+        raise ValueError(
+            f"Unsupported datatype '{datatype}'. "
+            f"Supported: {list(EXPECTED_HEADERS.keys())}"
+            f"You need to update constants.py to add support for this datatype."
+            )
+    if datatype not in FILE_FORMAT_OPTIONS:
+        raise ValueError(
+            f"Unsupported datatype '{datatype}'. "
+            f"Supported: {list(FILE_FORMAT_OPTIONS.keys())}"
+            f"You need to update constants.py to add support for this datatype."
+        )
+
+    
+    cfg = FILE_FORMAT_OPTIONS[datatype]
 
     # Normalize path for Linux/Windows
     if not isinstance(path, Path):
@@ -47,91 +58,49 @@ def load_data(
         print(f"Warn: file extension '{path.suffix}' is unexpected. Attempting to read anyway ;)")
 
     # Read first line to check headers
-    with path.open("r") as f:
-        reader = csv.reader(f, delimiter=sep)
-        header = next(reader)
-        if not header:
+    with path.open("r", encoding="utf-8-sig") as f:
+        reader = csv.reader(f, delimiter=cfg["sep"])
+        raw_header = next(reader)
+        if not raw_header:
             raise ValueError(f"Could not read header line from {path}")
-        header = [c.strip() for c in header]
+        header = [c.strip() for c in raw_header if c.strip() != ""]
 
-    # Validate header based on datatype
-    # For SMARD we may encounter several header variants. We'll detect by normalizing
-    # header names and ensuring required core columns exist. Then we'll later unify
-    # (simplify) all column names so downstream code can rely on a consistent naming.
-    def _normalize_for_matching(name: str) -> str:
-        n = name.lower()
-        # remove common words
-        n = n.replace("berechnete auflösungen", "")
-        n = n.replace("berechnete", "")
-        n = n.replace("auflösungen", "")
-        return n.strip()
+    # Clean header
+    clean_header = header[:]
+    for pattern in HEADER_CLEAN_PATTERNS:
+        clean_header = [re.sub(rf"\s*{pattern}\s*", "", c).strip() for c in clean_header]
 
-    normalized_header = {h: _normalize_for_matching(h) for h in header}
+    # Validate header
+    expected = EXPECTED_HEADERS[datatype]
+    unexpected = [c for c in clean_header if c not in expected]
 
-    if datatype == "SMARD":
-        # Core required columns (in various header variants these may appear with extra words)
-        required = ["datumvon", "datumbis"]
-        norm_values = set(normalized_header.values())
-        missing_required = [r for r in required if r not in norm_values]
-        if missing_required:
-            raise ValueError(f"Header validation failed for datatype='SMARD'. Missing core columns (after normalization): {missing_required}. Header read: {header}")
-    else:
-        # OTHER expects at least 'datum' or similar
-        req = ["datum"]
-        if not any(x in normalized_header.values() for x in req):
-            raise ValueError(f"Header validation failed for datatype='{datatype}'. Expected a 'Datum' column. Header read: {header}")
+    if clean_header != expected:
+        raise ValueError(
+            f"Header mismatch for datatype '{datatype}' in file {path}.\n"
+            f"Unexpected columns: {unexpected}\n"
+            f"Expected: {expected}\n"
+            f"Found:    {clean_header}"
+        )
+    
+    # Load Data into DataFrame fromated properly
+    df = pd.read_csv(
+        path,
+        sep=cfg["sep"],
+        encoding=cfg["encoding"],
+        skiprows=1,
+        header=None,
+        decimal=cfg["decimal"],
+        thousands=cfg["thousands"],
+        na_values=cfg["na_values"],
+        )
+    df.columns = clean_header
 
-    # Read full CSV
-    df = pd.read_csv(path, sep=sep)
+    # Convert date columns
+    for col in [c for c in df.columns if "Datum" in c]:
+        df[col] = pd.to_datetime(df[col], format=cfg["date_format"], errors="coerce")
 
-    # Simplify/unify column names so later code can work with consistent names.
-    # datatype-specific removal phrases (case-insensitive). These phrases will be removed
-    # from the column name but bracketed units like '[MWh]' are preserved.
-    removals_by_datatype = {
-        "SMARD": [
-            "berechnete auflösungen",
-            "berechneteauflösungen",
-            "berechnete aufloesungen",
-            "berechnete",
-            "auflösungen",
-            "originalauflösung",
-            "originalauflösungen",
-            "originalaufloesung",
-        ],
-        "OTHER": [],
-    }
-
-    def _simplify_col(name: str) -> str:
-        s = name
-        # remove the configured phrases for this datatype only (case-insensitive)
-        removals = removals_by_datatype.get(datatype, [])
-        for r in removals:
-            s = re.sub(r, "", s, flags=re.IGNORECASE)
-        # normalize whitespace
-        s = re.sub(r"\s+", " ", s).strip()
-        return s
-
-    new_columns = {old: _simplify_col(old) for old in df.columns}
-    df = df.rename(columns=new_columns)
-
-    # Parse German datetime columns if requested
-    if date_cols:
-        for col in date_cols:
-            # after renaming, user might pass original names or simplified names; support both
-            target_col = None
-            if col in df.columns:
-                target_col = col
-            else:
-                # try simplified form
-                simp = _simplify_col(col)
-                if simp in df.columns:
-                    target_col = simp
-
-            if target_col:
-                s = df[target_col].astype(str).str.strip()
-                s = s.replace('\u00a0', ' ')
-                df[target_col] = pd.to_datetime(s, dayfirst=True, errors='coerce')
-            else:
-                print(f"Warn: requested date column '{col}' not found in file columns after normalization")
+    # Create midpoint timestamp column
+    if "Datum von" in df.columns and "Datum bis" in df.columns:
+        df["Zeitpunkt"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
 
     return df

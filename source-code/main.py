@@ -3,85 +3,72 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
-import os
-import data_handling_test
+from io_handler import load_data
+from constants import ENERGY_SOURCES
 
-INPUT_MODE = "Viertelstunde" # "Stunde" oder "Viertelstunde"
+# --- Konfiguration ---
+INPUT_MODE = "Viertelstunde"  # oder "Stunde"
 
 if INPUT_MODE == "Stunde":
-    DATA_PATH = Path("raw-data") / "Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv" # Pfad zur CSV-Datei Stündliche Daten
-    wth = pd.Timedelta(hours=1)  # Angepasste Breite für Stündliche Daten
-    from constants import EnergySourcesCalc as ES # Bei Verwendung der berechneten Auflösungen
+    DATA_PATH = Path("raw-data/Realisierte_Erzeugung_2025_Jan-Juni_Stunde_test.csv")
+    wth = pd.Timedelta(hours=1)
 elif INPUT_MODE == "Viertelstunde":
-    DATA_PATH = Path("raw-data") / "1.1.2020-16.10.2025--Realisierte_Erzeugung_202001010000_202510170000_Viertelstunde.csv" # Pfad zur CSV-Datei Viertelstündliche Daten
-    wth = pd.Timedelta(hours=0.25)  # Angepasste Breite für Viertelstündliche Daten
-    from constants import EnergySourcesOG as ES # Bei Verwendung der Originalauflösungen
+    DATA_PATH = Path("raw-data/1.1.2020-16.10.2025--Realisierte_Erzeugung_202001010000_202510170000_Viertelstunde.csv")
+    wth = pd.Timedelta(minutes=15)
 else:
-    raise ValueError("Ungültiger INPUT_MODE. Verwenden Sie 'Stunde' oder 'Viertelstunde'.")
+    raise ValueError("Ungültiger INPUT_MODE. Verwende 'Stunde' oder 'Viertelstunde'.")
 
-ALL = [ES.KE, ES.BK, ES.SK, ES.EG, ES.SOK, ES.BIO, ES.PS, ES.WAS, ES.SOE, ES.WOF, ES.WON, ES.PV]
-RENEWABLE = [ES.SOE, ES.BIO, ES.WAS, ES.WOF, ES.WON, ES.PV]
-LOW_CARBON = [ES.KE, ES.BIO, ES.WAS, ES.SOE, ES.WOF, ES.WON, ES.PV]
-FOSSIL = [ES.BK, ES.SK, ES.EG, ES.SOK]
-STORAGE = [ES.PS]
+# Reihenfolge und Auswahl der Energiequellen
+ALL = ["KE", "BK", "SK", "EG", "SOK", "BIO", "PS", "WAS", "SOE", "WOF", "WON", "PV"]
 
-DATE_START = "05.01.2020 00:01" # Startdatum für die Filterung (MM.TT.JJJJ HH:MM)
-DATE_END = "05.03.2020 23:59" # Enddatum für die Filterung (MM.TT.JJJJ HH:MM)
-ENERGY_SOURCES = ALL  # Liste der Energiequellen
-ONLY_SAVE_PLOT = False # Wenn True, wird der Plot gespeichert anstatt angezeigt zu werden
+DATE_START = "01.01.2024 00:00"
+DATE_END = "02.01.2024 23:00"
+ENERGY_SOURCE_KEYS = ALL
+ONLY_SAVE_PLOT = False
 
-df_filtered = data_handling_test.read_csv(data_path=DATA_PATH, start_date=DATE_START, end_date=DATE_END)
+# --- Daten laden ---
+df = load_data(path=DATA_PATH, datatype="SMARD")
 
-# Nur Quellen verwenden, deren Spalte existiert
-valid_sources = []
-missing = []
-for source in ENERGY_SOURCES:
-    col = source.value["col"]
-    if col in df_filtered.columns:
-        # Zuerst als string behandeln und Tausendertrennzeichen entfernen, Dezimal-Komma ersetzen
-        s = df_filtered[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        # Sichere Umwandlung: nicht-konvertierbare Werte werden zu NaN, dann mit 0.0 ersetzt
-        df_filtered.loc[:, col] = pd.to_numeric(s, errors='coerce').fillna(0.0).astype(float)
-        valid_sources.append(source)
-    else:
-        missing.append(source)
-if missing:
-    print("Warnung: folgende Quellen fehlen in der CSV und werden übersprungen:", [m.name for m in missing])
-ENERGY_SOURCES = valid_sources
+# Filterung nach Zeitraum
+df_filtered = df[(df["Zeitpunkt"] >= DATE_START) & (df["Zeitpunkt"] <= DATE_END)]
 
-# Initialisiere die Basis für gestapelte Balken als Float-Array
-bottom = np.zeros(len(df_filtered), dtype=float)
+# --- Vorbereitung für Stackplot ---
+# Alle Spalten, die existieren und gebraucht werden
+available_cols = [f"{ENERGY_SOURCES[k]['name']} [MWh]" for k in ENERGY_SOURCE_KEYS if f"{ENERGY_SOURCES[k]['name']} [MWh]" in df_filtered.columns]
+labels = [ENERGY_SOURCES[k]["name"] for k in ENERGY_SOURCE_KEYS if f"{ENERGY_SOURCES[k]['name']} [MWh]" in df_filtered.columns]
+colors = [ENERGY_SOURCES[k]["color"] for k in ENERGY_SOURCE_KEYS if f"{ENERGY_SOURCES[k]['name']} [MWh]" in df_filtered.columns]
 
-# das Plotten der Daten
-plt.figure(figsize=(20,10))
+if not available_cols:
+    raise ValueError("Keine passenden Spalten im Datensatz gefunden – prüfe ENERGY_SOURCES oder Datei.")
 
-for source in ENERGY_SOURCES:
-    plt.bar(
-        df_filtered["zeit"],
-        df_filtered[source.value["col"]],
-        width=wth,  # Angepassung der Breite
-        align='center',
-        color=source.value["color"],
-        label=source.value["name"],
-        bottom=bottom # Stapeln der Balken
-    )
-    # Addiere die aktuellen Werte zur Basis für den nächsten Balken
-    # Verwende to_numpy(dtype=float) um sicherzustellen, dass wir ein float64-Array addieren
-    bottom += df_filtered[source.value["col"]].to_numpy(dtype=float)
+# Stackplot erwartet ein 2D-Array (jede Zeile = Quelle)
+data_matrix = [df_filtered[c].to_numpy(dtype=float) for c in available_cols]
 
-plt.xlabel("Datum")
-plt.ylabel("Erzeugung [MWh]")
-plt.title("Stromerzeugung " + "+".join([source.name for source in ENERGY_SOURCES]) + " von " + DATE_START + " bis " + DATE_END)
-plt.legend()
-plt.grid(True)
-plt.gcf().autofmt_xdate()  # Datumsanzeige schräg stellen
+# --- Plotten mit stackplot ---
+fig, ax = plt.subplots(figsize=(20, 10))
 
+ax.stackplot(
+    df_filtered["Zeitpunkt"],
+    *data_matrix,
+    labels=labels,
+    colors=colors,
+)
+
+ax.set_xlabel("Datum")
+ax.set_ylabel("Erzeugung [MWh]")
+ax.set_title(
+    f"Stromerzeugung ({', '.join(labels)})\n{DATE_START} bis {DATE_END}"
+)
+ax.legend(loc="upper left", ncol=2, fontsize=9)
+ax.grid(True)
+fig.autofmt_xdate()
+
+# --- Speichern oder Anzeigen ---
 if ONLY_SAVE_PLOT:
-    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-    sources_name = "+".join([source.name for source in ENERGY_SOURCES])
-    outdir = os.path.join("output", "test_plots")
-    os.makedirs(outdir, exist_ok=True)
-    filename = os.path.join(outdir, f"plot_{sources_name}_{timestamp}.png")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    outdir = Path("output/test_plots")
+    outdir.mkdir(parents=True, exist_ok=True)
+    filename = outdir / f"plot_{INPUT_MODE}_{timestamp}.png"
     plt.savefig(filename, dpi=300, bbox_inches="tight")
     plt.close()
 else:
