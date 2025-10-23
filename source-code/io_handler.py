@@ -43,19 +43,33 @@ def load_data(
     
     cfg = FILE_FORMAT_OPTIONS[datatype]
 
-    # Normalize path for Linux/Windows
+    # Normalize path for Windows/Linux
     if not isinstance(path, Path):
         path = Path(path)
 
     # Path checks
     if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
+        raise FileNotFoundError("File not found: {0}".format(path))
     if not path.is_file():
-        raise FileNotFoundError(f"Path is not a file: {path}")
+        raise FileNotFoundError("Path is not a file: {0}".format(path))
 
-    # File Extension check
+    # File extension check
     if path.suffix.lower() not in {".csv", ".txt"}:
-        print(f"Warn: file extension '{path.suffix}' is unexpected. Attempting to read anyway ;)")
+        print("Warn: file extension '{0}' is unexpected. Attempting to read anyway ;)".format(path.suffix))
+
+    # Helper: remove SMARD resolution suffixes from a column name
+    def _strip_resolution_suffix(col: str) -> str:
+        # Remove trailing resolution descriptors regardless of encoding glitches
+        # Examples removed:
+        # - " Berechnete Auflösung", " Berechnete Aufloesung", " Berechnete Auflösungen"
+        # - " Originalauflösung", " Originalaufloesung", " Originalauflösungen"
+        return re.sub(
+            r"\s*(Berechnete\s+Aufl[oö]s(?:ung|ungen)|Berechnete\s+Aufloes(?:ung|ungen)|"
+            r"Originalauf(?:l[oö]s(?:ung|ungen)|loes(?:ung|ungen))|Originalaufl.*)$",
+            "",
+            col,
+            flags=re.IGNORECASE,
+        )
 
     # Read first line to check headers
     with path.open("r", encoding="utf-8-sig") as f:
@@ -103,4 +117,3 @@ def load_data(
     if "Datum von" in df.columns and "Datum bis" in df.columns:
         df["Zeitpunkt"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
 
-    return df
