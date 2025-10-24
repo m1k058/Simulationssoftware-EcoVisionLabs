@@ -57,20 +57,6 @@ def load_data(
     if path.suffix.lower() not in {".csv", ".txt"}:
         print("Warn: file extension '{0}' is unexpected. Attempting to read anyway ;)".format(path.suffix))
 
-    # Helper: remove SMARD resolution suffixes from a column name
-    def _strip_resolution_suffix(col: str) -> str:
-        # Remove trailing resolution descriptors regardless of encoding glitches
-        # Examples removed:
-        # - " Berechnete Auflösung", " Berechnete Aufloesung", " Berechnete Auflösungen"
-        # - " Originalauflösung", " Originalaufloesung", " Originalauflösungen"
-        return re.sub(
-            r"\s*(Berechnete\s+Aufl[oö]s(?:ung|ungen)|Berechnete\s+Aufloes(?:ung|ungen)|"
-            r"Originalauf(?:l[oö]s(?:ung|ungen)|loes(?:ung|ungen))|Originalaufl.*)$",
-            "",
-            col,
-            flags=re.IGNORECASE,
-        )
-
     # Read first line to check headers
     with path.open("r", encoding="utf-8-sig") as f:
         reader = csv.reader(f, delimiter=cfg["sep"])
@@ -117,3 +103,4 @@ def load_data(
     if "Datum von" in df.columns and "Datum bis" in df.columns:
         df["Zeitpunkt"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
 
+    return df

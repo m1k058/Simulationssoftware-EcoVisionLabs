@@ -5,6 +5,26 @@ from datetime import datetime
 from pathlib import Path
 from io_handler import load_data
 from constants import ENERGY_SOURCES
+from data_manager import DataManager
+
+# Manager erstellen
+manager = DataManager(max_datasets=100)
+
+# Alle Datasets aus config laden
+manager.load_from_config()
+
+# Übersicht anzeigen
+print(manager.list_datasets())
+
+# Einzelnes Dataset holen
+df = manager.get("SMARD_Viertelstunde_2020-2025")
+
+# Neues Dataset aus beliebiger Datei laden
+manager.load_from_path(Path("raw-data/Custom_2026.csv"), datatype="SMARD", name="Custom_2026")
+
+# Dataset löschen
+manager.delete("Custom_2026")
+
 
 # --- Konfiguration ---
 INPUT_MODE = "Viertelstunde"  # oder "Stunde"
@@ -21,8 +41,8 @@ else:
 # Reihenfolge und Auswahl der Energiequellen
 ALL = ["KE", "BK", "SK", "EG", "SOK", "BIO", "PS", "WAS", "SOE", "WOF", "WON", "PV"]
 
-DATE_START = "01.01.2024 00:00"
-DATE_END = "02.01.2024 23:00"
+DATE_START = "01.01.2020 00:00"
+DATE_END = "01.01.2024 23:59"
 ENERGY_SOURCE_KEYS = ALL
 ONLY_SAVE_PLOT = False
 
