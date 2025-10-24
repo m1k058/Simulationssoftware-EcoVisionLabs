@@ -53,16 +53,16 @@ FILE_FORMAT_OPTIONS = {
 
 # Energy Sources Names, Shortcodes and Colors
 ENERGY_SOURCES = {
-    "BIO": {"name": "Biomasse", "color": "#00A51B"},
-    "WAS": {"name": "Wasserkraft", "color": "#1E90FF"},
-    "WOF": {"name": "Wind Offshore", "color": "#00BFFF"},
-    "WON": {"name": "Wind Onshore", "color": "#007F78"},
-    "PV": {"name": "Photovoltaik", "color": "#FFD700"},
-    "SOE": {"name": "Sonstige Erneuerbare", "color": "#ADFF2F"},
-    "KE": {"name": "Kernenergie", "color": "#800080"},
-    "BK": {"name": "Braunkohle", "color": "#774400"},
-    "SK": {"name": "Steinkohle", "color": "#1F1F1F"},
-    "EG": {"name": "Erdgas", "color": "#5D5D5D"},
-    "PS": {"name": "Pumpspeicher", "color": "#090085"},
-    "SOK": {"name": "Sonstige Konventionelle", "color": "#A9A9A9"},
+    "BIO": {"name": "Biomasse", "color": "#00A51B", "colname": "Biomasse [MWh]"},
+    "WAS": {"name": "Wasserkraft", "color": "#1E90FF", "colname": "Wasserkraft [MWh]"},
+    "WOF": {"name": "Wind Offshore", "color": "#00BFFF", "colname": "Wind Offshore [MWh]"},
+    "WON": {"name": "Wind Onshore", "color": "#007F78", "colname": "Wind Onshore [MWh]"},
+    "PV": {"name": "Photovoltaik", "color": "#FFD700", "colname": "Photovoltaik [MWh]"},
+    "SOE": {"name": "Sonstige Erneuerbare", "color": "#ADFF2F", "colname": "Sonstige Erneuerbare [MWh]"},
+    "KE": {"name": "Kernenergie", "color": "#800080", "colname": "Kernenergie [MWh]"},
+    "BK": {"name": "Braunkohle", "color": "#774400", "colname": "Braunkohle [MWh]"},
+    "SK": {"name": "Steinkohle", "color": "#1F1F1F", "colname": "Steinkohle [MWh]"},
+    "EG": {"name": "Erdgas", "color": "#5D5D5D", "colname": "Erdgas [MWh]"},
+    "PS": {"name": "Pumpspeicher", "color": "#090085", "colname": "Pumpspeicher [MWh]"},
+    "SOK": {"name": "Sonstige Konventionelle", "color": "#A9A9A9", "colname": "Sonstige Konventionelle [MWh]"},
 }
