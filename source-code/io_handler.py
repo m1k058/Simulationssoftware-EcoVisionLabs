@@ -97,7 +97,7 @@ def load_data(
 
     # Convert date columns
     for col in [c for c in df.columns if "Datum" in c]:
-        df[col] = pd.to_datetime(df[col], format=cfg["date_format"], errors="coerce")
+        df[col] = pd.to_datetime(df[col], format=cfg["date_format"],  errors="coerce")
 
     # Create midpoint timestamp column
     if "Datum von" in df.columns and "Datum bis" in df.columns:

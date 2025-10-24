@@ -9,8 +9,5 @@ dm = DataManager(max_datasets=100)
 # Load data from config to DataManager
 dm.load_from_config()
 
-# Einzelnes Dataset holen
-df = dm.get("SMARD_Viertelstunde_2020-2025")
-
 # Beispielplot erstellen
 plot_auto(dm, "Example_1")
