@@ -28,7 +28,7 @@ cfg.add_plot(
     )
 
 # List Plots
-print(cfg.get_plots("Example Plot"))
+print(cfg.get_plot("Example Plot"))
 
 # Generate Plot
 plot_auto(cfg, dm, "Example Plot", True)

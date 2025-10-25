@@ -5,7 +5,7 @@ from copy import deepcopy
 CONFIG_PATH = Path("source-code/config.json")
 
 class ConfigManager:
-    """Handles reading, modifying and saving the config.json."""
+    """Handles reading, modifying and saving the configuaration to config.json."""
 
     def __init__(self, config_path: Path = CONFIG_PATH):
         self.config_path = config_path
@@ -14,7 +14,15 @@ class ConfigManager:
 
     # load base config from JSON
     def load(self):
-        """Load config.json and convert paths to Path objects."""
+        """Load the configuration from the JSON file.
+
+    Reads and parses the config file defined by `self.config_path`.
+    Converts path strings to `Path` objects for easier usage.
+    Can be called again at any time to reload configuration changes from disk.
+
+    Raises:
+        FileNotFoundError: If the configuration file does not exist.
+    """
         if not self.config_path.exists():
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
@@ -26,10 +34,24 @@ class ConfigManager:
             df["path"] = Path(df["path"])
 
         self.config = data
+
+        self.dataframes = self.config.get("DATAFRAMES", [])
+        self.plots = self.config.get("PLOTS", [])
+        self.global_cfg = self.config.get("GLOBAL", {})
+
         print(f"Config loaded from {self.config_path}")
 
     def save(self):
-        """Save current config back to JSON (convert Paths to strings)."""
+        """Save the current configuration back to the JSON file.
+
+    All in-memory changes will be written to disk, overwriting the existing config.
+
+    Warning:
+        This operation overwrites the existing config file permanently.
+
+    Returns:
+        None
+    """
         def convert_paths(obj):
             if isinstance(obj, Path):
                 return str(obj)
@@ -47,21 +69,42 @@ class ConfigManager:
         print(f"Config saved to {self.config_path}")
 
     # getters for GLOBAL
-    def get_global(self):
-        return self.config["GLOBAL"]
 
     def get_global(self, key=None):
-        """Gibt die globale Konfiguration oder einen einzelnen Wert zurück."""
+        """Retrieve the global configuration or a specific key from it.
+
+    Args:
+        key (str, optional): Specific key within GLOBAL to retrieve. 
+            If None, the entire GLOBAL configuration is returned.
+
+    Returns:
+         dict | Any: The full GLOBAL configuration or a single value if key is provided.
+    """
         if key:
             return self.global_cfg.get(key)
         return self.global_cfg
     
     # getters for DATAFRAMES
     def get_dataframes(self):
+        """Retrieve all DataFrame configurations.
+
+    Returns:
+        list[dict]: A list containing all DataFrame configuration dictionaries.
+    """
         return self.config["DATAFRAMES"]
     
     def get_dataframe(self, identifier):
-        """Gibt einen DataFrame-Eintrag aus der Config zurück (per ID oder Name)."""
+        """Retrieve a specific DataFrame configuration by ID or name.
+
+    Args:
+        identifier (int | str): The ID or name of the DataFrame to retrieve.
+
+    Returns:
+        dict: The corresponding DataFrame configuration.
+
+    Raises:
+        KeyError: If no matching DataFrame is found.
+    """
         if isinstance(identifier, int):
             for df_cfg in self.dataframes:
                 if df_cfg["id"] == identifier:
@@ -73,15 +116,34 @@ class ConfigManager:
         raise KeyError(f"DataFrame with identifier '{identifier}' not found.")
     
     def list_dataframes(self):
-        """Listet alle DataFrames (nur ID und Name)."""
+        """List all DataFrames with only their IDs and names.
+
+    Returns:
+        list[dict]: A compact list containing only the ID and name of each DataFrame.
+    """
         return [{"id": d["id"], "name": d["name"]} for d in self.dataframes]
 
     # getters for PLTOS
     def get_plots(self):
+        """Retrieve all plot configurations.
+
+    Returns:
+        list[dict]: A list containing all plot configuration dictionaries.
+    """
         return self.config["PLOTS"]
 
     def get_plot(self, identifier):
-        """Gibt eine Plot-Konfiguration aus der Config zurück (per ID oder Name)."""
+        """Retrieve a specific plot configuration by ID or name.
+
+    Args:
+        identifier (int | str): The ID or name of the plot to retrieve.
+
+    Returns:
+        dict: The corresponding plot configuration.
+
+    Raises:
+        KeyError: If no matching plot is found.
+    """
         if isinstance(identifier, int):
             for plot_cfg in self.plots:
                 if plot_cfg["id"] == identifier:
@@ -93,12 +155,26 @@ class ConfigManager:
         raise KeyError(f"Plot with identifier '{identifier}' not found.")
     
     def list_plots(self):
-        """Listet alle Plots (nur ID und Name)."""
+        """List all plots with only their IDs and names.
+
+    Returns:
+        list[dict]: A compact list containing only the ID and name of each plot.
+    """
         return [{"id": p["id"], "name": p["name"]} for p in self.plots]
 
     # add/delete/edit dataframes
-    def add_dataframe(self, name, path, datatype, description=""):
-        """Add a new dataframe."""
+    def add_dataframe(self, name, path, datatype="SMARD", description=""):
+        """Add a new DataFrame configuration entry.
+
+    Args:
+        name (str): Name of the new DataFrame.
+        path (str | Path): File path of the dataset.
+        datatype (str, optional): Data type of the dataset (e.g. "SMARD"). Defaults to "SMARD".
+        description (str, optional): Short description of the dataset. Defaults to "".
+
+    Returns:
+        int: The automatically generated ID of the new DataFrame.
+    """
         new_id = max((df["id"] for df in self.config["DATAFRAMES"]), default=-1) + 1
         new_entry = {
             "id": new_id,
@@ -112,7 +188,14 @@ class ConfigManager:
         return new_id
     
     def delete_dataframe(self, identifier):
-        """Delete a dataframe definition from config by ID or name."""
+        """Delete a DataFrame configuration by ID or name.
+
+    Args:
+        identifier (int | str): The ID or name of the DataFrame to delete.
+
+    Returns:
+        bool: True if the DataFrame was deleted, False if not found.
+    """
 
         if not self.config.get("DATAFRAMES"):
             print("No datasets found in config.")
@@ -133,7 +216,19 @@ class ConfigManager:
             return False
         
     def edit_dataframe(self, identifier, **updates):
-        """Bearbeitet einen DataFrame-Eintrag in der Config."""
+        """Edit an existing DataFrame configuration.
+
+    Args:
+        identifier (int | str): The ID or name of the DataFrame to edit.
+        **updates (dict): Key-value pairs representing the fields to update.
+            Unknown keys are ignored with a warning.
+
+    Returns:
+        dict: The updated DataFrame configuration dictionary.
+
+    Example:
+        >>> manager.edit_dataframe(1, name="Updated Dataset", description="New data for 2025")
+    """
         df_cfg = self.get_dataframe(identifier)
 
         for key, value in updates.items():
@@ -148,7 +243,20 @@ class ConfigManager:
     # add/delete/edit plots
     def add_plot(self, name, dataframes, date_start, date_end, energy_sources,
                  plot_type="stacked_bar", description=""):
-        """Add a new plot configuration."""
+        """Add a new plot configuration entry.
+
+    Args:
+        name (str): Name of the plot.
+        dataframes (list[int]): List of DataFrame IDs used as input for this plot.
+        date_start (str): Start date/time of the plot range.
+        date_end (str): End date/time of the plot range.
+        energy_sources (list[str]): Energy source keys to include in the plot.
+        plot_type (str, optional): Type of plot (e.g. "stacked_bar"). Defaults to "stacked_bar".
+        description (str, optional): Short description of the plot. Defaults to "".
+
+    Returns:
+        int: The automatically generated ID of the new plot.
+    """
         new_id = max((p["id"] for p in self.config["PLOTS"]), default=-1) + 1
         new_plot = {
             "id": new_id,
@@ -165,7 +273,14 @@ class ConfigManager:
         return new_id
 
     def delete_plot(self, identifier):
-        """Delete a plot by ID or name."""
+        """Delete a plot configuration by ID or name.
+
+    Args:
+        identifier (int | str): The ID or name of the plot to delete.
+
+    Returns:
+        bool: True if the plot was deleted successfully, False if not found.
+    """
         if isinstance(identifier, int):
             before = len(self.config["PLOTS"])
             self.config["PLOTS"] = [p for p in self.config["PLOTS"] if p["id"] != identifier]
@@ -180,7 +295,19 @@ class ConfigManager:
         return False
 
     def edit_plot(self, identifier, **updates):
-        """Bearbeitet einen Plot-Eintrag in der Config."""
+        """Edit an existing plot configuration.
+
+    Args:
+        identifier (int | str): The ID or name of the plot to edit.
+        **updates (dict): Key-value pairs representing the fields to update.
+            Unknown keys are ignored with a warning.
+
+    Returns:
+        dict: The updated plot configuration dictionary.
+
+    Example:
+        >>> manager.edit_plot("Example_1", date_start="01.02.2024 00:00", date_end="05.02.2024 23:59")
+    """
         plot_cfg = self.get_plot(identifier)
 
         for key, value in updates.items():
