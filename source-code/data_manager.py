@@ -1,19 +1,29 @@
 from pathlib import Path
 import pandas as pd
 from io_handler import load_data
-from config import DATAFRAMES, GLOBAL
 
 
 class DataManager:
     """Class to manage loading, deleting and accessing datasets."""
 
-    def __init__(self, max_datasets: int = GLOBAL["max_datasets"]):
+    def __init__(self, config_manager=None):
         self.dataframes: dict[int, pd.DataFrame] = {}
         self.metadata: dict[int, dict] = {}
-        self.max_datasets = max_datasets
+        self.config_manager = config_manager
+
+        if self.config_manager:
+            self.max_datasets = self.config_manager.get_global()["max_datasets"]
+        else:
+            self.max_datasets = 100
+        self.load_from_config()
     
-    def load_from_config(self, dataframes=DATAFRAMES):
+    def load_from_config(self):
         """Loads dataframes as defined in the config file."""
+        if not self.config_manager:
+            raise ValueError("No ConfigManager provided to DataManager.")
+
+        dataframes = self.config_manager.get_dataframes()
+        
         for df in dataframes[: self.max_datasets]:
             self.load_from_path(
                 path=df["path"],

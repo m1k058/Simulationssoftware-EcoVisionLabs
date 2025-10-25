@@ -5,18 +5,21 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from constants import ENERGY_SOURCES
-from config import PLOTS
 
 
-def plot_auto(manager, plot_identifier, save=False, output_dir=None):
+def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, output_dir=None):
     """Generates a plot based on the plot configuration identified by name or ID.
     
     Args:
+        config_manager: ConfigManager instance (provides PLOTS)
         manager: Instance of DataManager (provides DataFrames)
         plot_identifier: Name (str) or ID (int) of the plot from config.PLOTS
-        save (bool): If True -> save instead of show
+        show (bool, optional): If True -> Plot will be shown (default = True)
+        save (bool, optional): If True -> Plot will be saved (default = False)
         output_dir (Path, optional): Target directory (default = GLOBAL["output_dir"])
     """
+    PLOTS = config_manager.get_plots()
+    output_dir = config_manager.get_global()["output_dir"]
     
     # get plot config from config file
     plot_cfg = None
@@ -119,10 +122,9 @@ def plot_stacked_bar(df, plot_config, show=True, save=False, output_dir=None):
         outdir.mkdir(parents=True, exist_ok=True)
         filename = outdir / f"{plot_cfg['name']}_{timestamp}.png"
         plt.savefig(filename, dpi=300, bbox_inches="tight")
-        plt.close()
         print(f"Plot saved: {filename}")
     if show:
         plt.show()
     if not save and not show:
         print("Warning: Plot neither saved nor shown.")
-        plt.close()
+    plt.close()

@@ -1,0 +1,49 @@
+{
+    "GLOBAL": {
+        "max_datasets": 100,
+        "output_dir": "output\\test_plots"
+    },
+    "DATAFRAMES": [
+        {
+            "id": 0,
+            "name": "included_data_2015-2020_OG",
+            "path": "raw-data\\Realisierte_Erzeugung_Jan2015_Dez2020_Viertelstunde.csv",
+            "datatype": "SMARD",
+            "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
+        },
+        {
+            "id": 1,
+            "name": "included_data_2020-2025_OG",
+            "path": "raw-data\\Realisierte_Erzeugung_Jan2020_heute_Viertelstunde.csv",
+            "datatype": "SMARD",
+            "description": "Daten für Stromerzeugung verschiedener Quellen 2020-heute"
+        }
+    ],
+    "PLOTS": [
+        {
+            "id": 0,
+            "name": "Test Plot A",
+            "dataframes": [
+                1
+            ],
+            "date_start": "01.01.2023 00:00",
+            "date_end": "7.01.2023 23:59",
+            "energy_sources": [
+                "KE",
+                "BK",
+                "SK",
+                "EG",
+                "SOK",
+                "SOE",
+                "BIO",
+                "PS",
+                "WAS",
+                "WOF",
+                "WON",
+                "PV"
+            ],
+            "plot_type": "stacked_bar",
+            "description": "TEST PLOT BY MICHAL KOS"
+        }
+    ]
+}

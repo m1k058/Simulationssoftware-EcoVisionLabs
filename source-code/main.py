@@ -1,13 +1,40 @@
 from constants import ENERGY_SOURCES
 from data_manager import DataManager
-from config import DATAFRAMES, PLOTS, GLOBAL
 from plotting import plot_auto
+from config_manager import ConfigManager
+from pathlib import Path
 
-# Create DataManager instance
-dm = DataManager(max_datasets=100)
+# Create ConfigManager instance and load config.json
+cfg = ConfigManager(Path("source-code/config.json"))
 
-# Load data from config to DataManager
+# Create DataManager instance and load config
+dm = DataManager(config_manager=cfg)
+
+# Add new file for session
+cfg.add_dataframe("Example Data", Path("raw-data/DATA_EXAMPLE.csv"), "SMARD", "Beispiel Daten (py of 2020-2025 data)")
+
+# To save added or removed Dataframes or Plots to config.json use:
+# cfg.save
+
+# If config.json was updated you can reload it with:
+# cfg.load
+
+# Reload Dataframes from config
 dm.load_from_config()
 
-# Beispielplot erstellen
-plot_auto(dm, "Example_1")
+# Add new Plot
+cfg.add_plot(
+    "Example Plot",
+    ["Example Data"],
+    "01.01.2019 00:00",
+    "07.01.2019 23:59",
+    ["KE", "BK", "SK", "EG", "SOK", "SOE", "BIO", "PS", "WAS", "WOF", "WON", "PV"],
+    "stacked_bar",
+    "This is an example Plot"
+    )
+
+# List Plots
+print(cfg.list_plots())
+
+# Generate Plot
+plot_auto(cfg, dm, "Example Plot", True)
