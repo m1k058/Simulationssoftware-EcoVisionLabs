@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 from copy import deepcopy
+from errors import FileLoadError, DataframeNotFoundError, WarningMessage, PlotNotFoundError
+import warnings
+
 
 CONFIG_PATH = Path("source-code/config.json")
 
@@ -24,7 +27,7 @@ class ConfigManager:
         FileNotFoundError: If the configuration file does not exist.
     """
         if not self.config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+            raise FileLoadError(f"Config file not found: {self.config_path}")
 
         with open(self.config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -113,7 +116,7 @@ class ConfigManager:
             for df_cfg in self.dataframes:
                 if df_cfg["name"] == identifier:
                     return df_cfg
-        raise KeyError(f"DataFrame with identifier '{identifier}' not found.")
+        raise DataframeNotFoundError(f"DataFrame with identifier '{identifier}' not found.")
     
     def list_dataframes(self):
         """List all DataFrames with only their IDs and names.
@@ -152,7 +155,7 @@ class ConfigManager:
             for plot_cfg in self.plots:
                 if plot_cfg["name"] == identifier:
                     return plot_cfg
-        raise KeyError(f"Plot with identifier '{identifier}' not found.")
+        raise PlotNotFoundError(f"Plot with identifier '{identifier}' not found.")
     
     def list_plots(self):
         """List all plots with only their IDs and names.
@@ -198,7 +201,7 @@ class ConfigManager:
     """
 
         if not self.config.get("DATAFRAMES"):
-            print("No datasets found in config.")
+            warnings.warn("No datasets found in config.", WarningMessage)
             return False
         before = len(self.config["DATAFRAMES"])
 
@@ -212,7 +215,7 @@ class ConfigManager:
             print(f"Dataset '{identifier}' deleted successfully.")
             return True
         else:
-            print(f"Dataset '{identifier}' not found.")
+            warnings.warn(f"Dataset '{identifier}' not found.", WarningMessage)
             return False
         
     def edit_dataframe(self, identifier, **updates):
@@ -233,7 +236,7 @@ class ConfigManager:
 
         for key, value in updates.items():
             if key not in df_cfg:
-                print(f"Key '{key}' doesn't exist in DataFrame config. Skipping...")
+                warnings.warn(f"Key '{key}' doesn't exist in DataFrame config. Skipping...", WarningMessage)
                 continue
             df_cfg[key] = value
 
@@ -291,7 +294,7 @@ class ConfigManager:
         if len(self.config["PLOTS"]) < before:
             print(f"Deleted plot '{identifier}'")
             return True
-        print(f"Plot '{identifier}' not found.")
+        warnings.warn(f"Plot '{identifier}' not found.", WarningMessage)
         return False
 
     def edit_plot(self, identifier, **updates):
@@ -312,7 +315,7 @@ class ConfigManager:
 
         for key, value in updates.items():
             if key not in plot_cfg:
-                print(f"Key '{key}' doesnt exist in Plot config. Skipping...")
+                warnings.warn(f"Key '{key}' doesnt exist in Plot config. Skipping...", WarningMessage)
                 continue
             plot_cfg[key] = value
 
