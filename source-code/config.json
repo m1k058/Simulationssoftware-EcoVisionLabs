@@ -6,14 +6,14 @@
     "DATAFRAMES": [
         {
             "id": 0,
-            "name": "included_data_2015-2020_OG",
+            "name": "SMARD_2015-2020",
             "path": "raw-data\\Realisierte_Erzeugung_Jan2015_Dez2020_Viertelstunde.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
         },
         {
             "id": 1,
-            "name": "included_data_2020-2025_OG",
+            "name": "SMARD_2020-2025",
             "path": "raw-data\\Realisierte_Erzeugung_Jan2020_heute_Viertelstunde.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2020-heute"
@@ -43,7 +43,7 @@
                 "PV"
             ],
             "plot_type": "stacked_bar",
-            "description": "TEST PLOT BY MICHAL KOS"
+            "description": "All Sources from 01.01.2023 to 07.01.2023"
         }
     ]
 }

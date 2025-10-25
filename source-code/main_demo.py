@@ -13,6 +13,12 @@ dm = DataManager(config_manager=cfg)
 # Add new file for session
 cfg.add_dataframe("Example Data", Path("raw-data/DATA_EXAMPLE.csv"), "SMARD", "Beispiel Daten (py of 2020-2025 data)")
 
+# To save added or removed Dataframes or Plots to config.json use:
+# cfg.save
+
+# If config.json was updated you can reload it with:
+# cfg.load
+
 # Reload Dataframes from config
 dm.load_from_config()
 
@@ -22,13 +28,13 @@ cfg.add_plot(
     ["Example Data"],
     "01.01.2019 00:00",
     "07.01.2019 23:59",
-    SOURCES_GROUPS["Renewable"],
+    ["KE", "BK", "SK", "EG", "SOK", "SOE", "BIO", "PS", "WAS", "WOF", "WON", "PV"],
     "stacked_bar",
     "This is an example Plot"
     )
 
 # List Plots
-print(cfg.get_plots("Example Plot"))
+print(cfg.list_plots())
 
 # Generate Plot
 plot_auto(cfg, dm, "Example Plot", True)

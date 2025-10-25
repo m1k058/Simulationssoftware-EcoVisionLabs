@@ -66,3 +66,10 @@ ENERGY_SOURCES = {
     "PS": {"name": "Pumpspeicher", "color": "#090085", "colname": "Pumpspeicher [MWh]"},
     "SOK": {"name": "Sonstige Konventionelle", "color": "#A9A9A9", "colname": "Sonstige Konventionelle [MWh]"},
 }
+
+SOURCES_GROUPS = {
+    "Renewable": ["BIO", "WAS", "WOF", "WON", "PV", "SOE"],
+    "Conventional": ["KE", "BK", "SK", "EG", "SOK"],
+    "Storage": ["PS"],
+    "All": ["KE", "BK", "SK", "EG", "SOK", "SOE", "BIO", "PS", "WAS", "WOF", "WON", "PV"]
+}
