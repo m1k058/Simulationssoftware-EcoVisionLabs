@@ -245,35 +245,62 @@ class ConfigManager:
 
     # add/delete/edit plots
     def add_plot(self, name, dataframes, date_start, date_end, energy_sources,
-                 plot_type="stacked_bar", description=""):
+             plot_type="stacked_bar", description=""):
         """Add a new plot configuration entry.
 
-    Args:
-        name (str): Name of the plot.
-        dataframes (list[int]): List of DataFrame IDs used as input for this plot.
-        date_start (str): Start date/time of the plot range.
-        date_end (str): End date/time of the plot range.
-        energy_sources (list[str]): Energy source keys to include in the plot.
-        plot_type (str, optional): Type of plot (e.g. "stacked_bar"). Defaults to "stacked_bar".
-        description (str, optional): Short description of the plot. Defaults to "".
+        Args:
+            name (str): Name of the plot.
+            dataframes (list[int | str]): List of DataFrame IDs or names used as input.
+                If names are provided, they will be automatically converted to IDs.
+            date_start (str): Start date/time of the plot range.
+            date_end (str): End date/time of the plot range.
+            energy_sources (list[str]): Energy source keys to include in the plot.
+            plot_type (str, optional): Type of plot (e.g. "stacked_bar"). Defaults to "stacked_bar".
+            description (str, optional): Short description of the plot. Defaults to "".
 
-    Returns:
-        int: The automatically generated ID of the new plot.
-    """
+        Returns:
+            int: The automatically generated ID of the new plot.
+        """
+        # --- Convert DataFrame names to IDs if needed ---
+        resolved_df_ids = []
+        for df_ref in dataframes:
+            if isinstance(df_ref, int):
+                resolved_df_ids.append(df_ref)
+            elif isinstance(df_ref, str):
+                try:
+                    df_cfg = self.get_dataframe(df_ref)
+                    resolved_df_ids.append(df_cfg["id"])
+                except Exception:
+                    warnings.warn(
+                        f"DataFrame '{df_ref}' not found — skipping this entry.",
+                        WarningMessage
+                    )
+            else:
+                warnings.warn(f"Ignoring invalid DataFrame reference: {df_ref}", WarningMessage)
+
+        if not resolved_df_ids:
+            warnings.warn(
+                f"No valid DataFrames found for plot '{name}'. Plot will not be usable.",
+                WarningMessage
+            )
+
+        # --- Create plot config ---
         new_id = max((p["id"] for p in self.config["PLOTS"]), default=-1) + 1
         new_plot = {
             "id": new_id,
             "name": name,
-            "dataframes": dataframes,
+            "dataframes": resolved_df_ids,
             "date_start": date_start,
             "date_end": date_end,
             "energy_sources": energy_sources,
             "plot_type": plot_type,
             "description": description,
         }
+
         self.config["PLOTS"].append(new_plot)
         print(f"Added new plot: {name} (ID={new_id})")
         return new_id
+
 
     def delete_plot(self, identifier):
         """Delete a plot configuration by ID or name.

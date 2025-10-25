@@ -16,33 +16,10 @@ def main():
         # --- Initialize DataManager and load available datasets
         dm = DataManager(config_manager=cfg)
 
-        # --- Add a new dataset temporarily for this session
-        cfg.add_dataframe(
-            name="Example Data",
-            path=Path("raw-data/DATA_EXAMPLE.csv"),
-            datatype="SMARD",
-            description="Beispiel-Datensatz (aus 2020-2025)"
-        )
+        
+        #    --->                ---- HIER CODE ---                 <-----
 
-        # Reload datasets into memory
-        dm.load_from_config()
-        print("\nLoaded Datasets:")
-        print(cfg.list_dataframes())
 
-        # --- Add a sample plot configuration
-        cfg.add_plot(
-            name="Example Plot",
-            dataframes=[0],  # IDs, nicht Namen
-            date_start="01.01.2019 00:00",
-            date_end="07.01.2019 23:59",
-            energy_sources=SOURCES_GROUPS["All"],
-            plot_type="stacked_bar",
-            description="Demo-Plot mit erneuerbaren Energiequellen"
-        )
-
-        # --- Generate plot from config
-        print("\nGenerating example plot...")
-        plot_auto(cfg, dm, "Example Plot", show=True, save=False)
 
     # --- Handle controlled application errors
     except AppError as e:

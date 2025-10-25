@@ -1,40 +1,64 @@
+import warnings
+from pathlib import Path
+from errors import AppError, WarningMessage
 from data_manager import DataManager
 from config_manager import ConfigManager
 from plotting import plot_auto
-from pathlib import Path
 from constants import SOURCES_GROUPS
 
-# Create ConfigManager instance and load config.json
-cfg = ConfigManager(Path("source-code/config.json"))
 
-# Create DataManager instance and load config
-dm = DataManager(config_manager=cfg)
+def main():
+    """Main for EcoVisionLabs data and plotting"""
+    try:
+        # --- Load configuration
+        cfg = ConfigManager(Path("source-code/config.json"))
 
-# Add new file for session
-cfg.add_dataframe("Example Data", Path("raw-data/DATA_EXAMPLE.csv"), "SMARD", "Beispiel Daten (py of 2020-2025 data)")
+        # --- Initialize DataManager and load available datasets
+        dm = DataManager(config_manager=cfg)
 
-# To save added or removed Dataframes or Plots to config.json use:
-# cfg.save
+        # --- Add a new dataset temporarily for this session
+        cfg.add_dataframe(
+            name="Example Data",
+            path=Path("raw-data/DATA_EXAMPLE.csv"),
+            datatype="SMARD",
+            description="Beispiel-Datensatz (aus 2020-2025)"
+        )
 
-# If config.json was updated you can reload it with:
-# cfg.load
+        # Reload datasets into memory
+        dm.load_from_config()
+        print("\nLoaded Datasets:")
+        print(cfg.list_dataframes())
 
-# Reload Dataframes from config
-dm.load_from_config()
+        # --- Add a sample plot configuration
+        cfg.add_plot(
+            name="Example Plot",
+            dataframes=["Example Data"],
+            date_start="01.01.2019 00:00",
+            date_end="07.01.2019 23:59",
+            energy_sources=SOURCES_GROUPS["All"],
+            plot_type="stacked_bar",
+            description="Demo-Plot mit erneuerbaren Energiequellen"
+        )
 
-# Add new Plot
-cfg.add_plot(
-    "Example Plot",
-    ["Example Data"],
-    "01.01.2019 00:00",
-    "07.01.2019 23:59",
-    ["KE", "BK", "SK", "EG", "SOK", "SOE", "BIO", "PS", "WAS", "WOF", "WON", "PV"],
-    "stacked_bar",
-    "This is an example Plot"
-    )
+        # --- Generate plot from config
+        print("\nGenerating example plot...")
+        plot_auto(cfg, dm, "Example Plot", show=True, save=False)
 
-# List Plots
-print(cfg.list_plots())
+    # --- Handle controlled application errors
+    except AppError as e:
+        print(f"\n{e}")
 
-# Generate Plot
-plot_auto(cfg, dm, "Example Plot", True)
+    # --- Handle non-critical warnings
+    except WarningMessage as w:
+        warnings.warn(str(w), WarningMessage)
+
+    # --- Handle unexpected Python errors
+    except Exception as e:
+        print(f"\nUnexpected error ({type(e).__name__}): {e}")
+
+    finally:
+        print("\nProgram finished.\n")
+
+
+if __name__ == "__main__":
+    main()
