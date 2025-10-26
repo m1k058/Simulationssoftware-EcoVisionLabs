@@ -1,11 +1,7 @@
-import sys
 import json
 import tempfile
 import unittest
 from pathlib import Path
-
-# Ensure the local source-code directory is importable
-sys.path.insert(0, str(Path.cwd() / "source-code"))
 
 from config_manager import ConfigManager
 
