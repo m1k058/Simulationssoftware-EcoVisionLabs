@@ -32,9 +32,17 @@ class ConfigManager:
         with open(self.config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        data["GLOBAL"]["output_dir"] = Path(data["GLOBAL"]["output_dir"])
-        for df in data["DATAFRAMES"]:
-            df["path"] = Path(df["path"])
+        # Normalize path separators (JSON may contain Windows backslashes) so that
+        # paths work correctly on POSIX systems. Keep them relative to the repo.
+        out_dir = data["GLOBAL"].get("output_dir", "output")
+        out_dir = out_dir.replace("\\", "/")
+        data["GLOBAL"]["output_dir"] = Path(out_dir)
+
+        for df in data.get("DATAFRAMES", []):
+            p = df.get("path", "")
+            if isinstance(p, str):
+                p = p.replace("\\", "/")
+            df["path"] = Path(p)
 
         self.config = data
 
@@ -99,24 +107,66 @@ class ConfigManager:
     def get_dataframe(self, identifier):
         """Retrieve a specific DataFrame configuration by ID or name.
 
-    Args:
-        identifier (int | str): The ID or name of the DataFrame to retrieve.
+        Args:
+            identifier (int | str): The ID or name of the DataFrame to retrieve.
 
-    Returns:
-        dict: The corresponding DataFrame configuration.
+        Returns:
+            dict: The corresponding DataFrame configuration.
 
-    Raises:
-        KeyError: If no matching DataFrame is found.
-    """
+        Raises:
+            DataframeNotFoundError: If no matching DataFrame is found.
+        """
         if isinstance(identifier, int):
             for df_cfg in self.dataframes:
-                if df_cfg["id"] == identifier:
+                if df_cfg.get("id") == identifier:
                     return df_cfg
         else:
             for df_cfg in self.dataframes:
-                if df_cfg["name"] == identifier:
+                if df_cfg.get("name") == identifier:
                     return df_cfg
         raise DataframeNotFoundError(f"DataFrame with identifier '{identifier}' not found.")
+
+    def create_plot_from_ui(self, ui_selections: dict) -> int:
+        """Create a new plot configuration from user interface selections.
+
+        Args:
+            ui_selections (dict): Dictionary containing user selections from user_interface.get_user_input()
+
+        Returns:
+            int: ID of the newly created plot configuration
+
+        Raises:
+            ValueError: If the UI selections are invalid
+        """
+        # Generate new plot ID
+        new_id = max((plot.get('id', -1) for plot in self.plots), default=-1) + 1
+
+        # Create new plot configuration
+        new_plot = {
+            "id": new_id,
+            "name": ui_selections.get("plot_name", f"plot_{new_id}"),
+            "dataframes": [ui_selections["dataset"]["id"]],
+            "date_start": ui_selections.get("date_start"),
+            "date_end": ui_selections.get("date_end"),
+            "energy_sources": ui_selections.get("energy_sources", []),
+            "plot_type": "stacked_bar",  # Default plot type
+            "description": ui_selections.get("description", f"Plot created from {ui_selections['dataset']['name']} dataset")
+        }
+
+        # Ensure internal structures exist and append
+        if not isinstance(self.plots, list):
+            self.plots = []
+        if "PLOTS" not in self.config:
+            self.config["PLOTS"] = []
+
+        self.plots.append(new_plot)
+        self.config["PLOTS"].append(new_plot)
+
+        # Save the configuration if plot should be saved
+        if ui_selections.get("save_plot"):
+            self.save()
+
+        return new_id
     
     def list_dataframes(self):
         """List all DataFrames with only their IDs and names.
