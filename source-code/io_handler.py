@@ -117,4 +117,13 @@ def load_data(path: Path, datatype: str = "SMARD") -> pd.DataFrame:
         except Exception as e:
             warnings.warn(f"Could not calculate 'Zeitpunkt' for {path}: {e}", WarningMessage)
 
+    # --- Fill NaN with 0 to let MatPlot handle it
+    numeric_cols = [c for c in df.columns if "[MWh]" in c]
+    if numeric_cols:
+        missing_count = df[numeric_cols].isna().sum().sum()
+        if missing_count > 0:
+            print(f"Info: Replacing {int(missing_count)} missing values with 0 in file '{path.name}'")
+
+    df[numeric_cols] = df[numeric_cols].fillna(0)
+
     return df

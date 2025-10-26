@@ -1,20 +1,20 @@
 {
     "GLOBAL": {
         "max_datasets": 100,
-        "output_dir": "output/test_plots"
+        "output_dir": "output\\test_plots"
     },
     "DATAFRAMES": [
         {
             "id": 0,
             "name": "SMARD_2015-2020",
-            "path": "raw-data/Realisierte_Erzeugung_Jan2015_Dez2020_Viertelstunde.csv",
+            "path": "raw-data\\Realisierte_Erzeugung_Jan2015_Dez2020_Viertelstunde.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
         },
         {
             "id": 1,
             "name": "SMARD_2020-2025",
-            "path": "raw-data/Realisierte_Erzeugung_Jan2020_heute_Viertelstunde.csv",
+            "path": "raw-data\\Realisierte_Erzeugung_Jan2020_heute_Viertelstunde.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2020-heute"
         }
