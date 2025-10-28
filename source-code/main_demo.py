@@ -21,11 +21,11 @@ def main():
         print(cfg.list_dataframes())
 
         plot_ee_consumption_histogram(
-            config_manager=cfg,
-            df_erzeugung=dm.get("SMARD_2020-2025_Erzeugung"),
-            df_verbrauch=dm.get("SMARD_2020-2025_Verbrauch"),
-            title="Anteil der Erneuerbaren Energien am Gesamtstromverbrauch"
-            )
+            cfg,
+            dm.get("SMARD_2020-2025_Erzeugung"),
+            dm.get("SMARD_2020-2025_Verbrauch"),
+            "EE Anteil des Verbrauchs in Deutschland\n(2020-2025)",
+        )
 
     # --- Handle controlled application errors
     except AppError as e:

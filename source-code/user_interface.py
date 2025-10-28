@@ -56,7 +56,10 @@ def get_user_input(config_manager: Optional[object] = None) -> Dict[str, any]:
     Returns a dictionary with all user selections.
     """
     # Clear screen for better visibility
-    os.system('clear')
+    if os.name == 'nt':  # Windows
+        os.system('cls')
+    else:  # Unix/Linux/Mac
+        os.system('clear')
     
     print("=== EcoVisionLabs Data Visualization Interface ===\n")
     

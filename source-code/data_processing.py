@@ -3,103 +3,88 @@ from constants import ENERGY_SOURCES, SOURCES_GROUPS
 
 def add_total_generation(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Berechnet die Summe aller Erzeugungsquellen pro Zeitpunkt und fügt 
-    sie als neue Spalte 'Gesamterzeugung' zum DataFrame hinzu.
+    Calculates the total generation from all energy sources
+    for each timestamp and adds it as a new column to the DataFrame.
 
     Args:
-        df: Das Eingabe-DataFrame mit den Erzeugungsdaten.
+        df: The input DataFrame with generation data.
 
     Returns:
-        Das DataFrame mit der zusätzlichen Spalte 'Gesamterzeugung'.
+        The DataFrame with the additional column 'Gesamterzeugung [MWh]'.
     """
-    try:
-        # 1. Hol dir die Spaltennamen aller Erzeuger
-        all_sources_cols = [
-            ENERGY_SOURCES[shortcode]["colname"]
-            for shortcode in SOURCES_GROUPS["All"]
-            if shortcode in ENERGY_SOURCES
-        ]
-        
-        # 2. Überprüfe, ob die Spalten im DataFrame existieren
-        valid_cols = [col for col in all_sources_cols if col in df.columns]
-        
-        # 3. Berechne die Summe für jede Zeile (axis=1)
-        df['Gesamterzeugung'] = df[valid_cols].sum(axis=1)
-        
-        return df
-        
-    except KeyError as e:
-        print(f"Fehler bei add_total_generation: Spalte nicht gefunden. Details: {e}")
-        return df
-    except Exception as e:
-        print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
-        return df
+    df = add_energy_source_generation_sum(df, "All", "Gesamterzeugung")
+    return df
 
-
-def add_renewable_generation(df: pd.DataFrame) -> pd.DataFrame:
+def add_total_renewable_generation(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Berechnet die Summe der regenerativen Erzeugungsquellen (ohne Pumpspeicher)
-    pro Zeitpunkt und fügt sie als 'Summe Regenerativ' hinzu.
+    Calculates the total generation from all renewable energy sources
+    for each timestamp and adds it as a new column to the DataFrame.
 
     Args:
-        df: Das Eingabe-DataFrame mit den Erzeugungsdaten.
+        df: The input DataFrame with generation data.
 
     Returns:
-        Das DataFrame mit der zusätzlichen Spalte 'Summe Regenerativ'.
+        The DataFrame with the additional column 'Gesamterzeugung Erneuerbare [MWh]'.
+    """
+    df = add_energy_source_generation_sum(df, "Renewable", "Gesamterzeugung Erneuerbare")
+    return df
+
+def add_total_conventional_generation(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculates the total generation from all conventional energy sources
+    for each timestamp and adds it as a new column to the DataFrame.
+
+    Args:
+        df: The input DataFrame with generation data.
+
+    Returns:
+        The DataFrame with the additional column 'Gesamterzeugung Konventionelle [MWh]'.
+    """
+    df = add_energy_source_generation_sum(df, "Conventional", "Gesamterzeugung Konventionelle")
+    return df
+
+def add_energy_source_generation_sum(df: pd.DataFrame, sources="All", name="Summe Erzeugung") -> pd.DataFrame:
+    """
+    Calculates the sum of energy sources specified in the 'sources' argument
+    for each timestamp and adds it as a new column to the DataFrame.
+
+    Args:
+        df: The input DataFrame with generation data.
+        sources: A list of energy source shortcodes to sum up (e.g., ["KE", "BK"], "All", "Renewable").
+        name: The name of the new column to be added (default is "Summe Erzeugung").
+
+    Returns:
+        The DataFrame with the additional column 'name' containing the sum of specified energy sources.
     """
     try:
-        # 1. Hol dir die Spaltennamen der regenerativen Quellen
-        renewable_sources_cols = [
-            ENERGY_SOURCES[shortcode]["colname"]
-            for shortcode in SOURCES_GROUPS["Renewable"]
-            if shortcode in ENERGY_SOURCES
+        # Get the list of shortcodes based on the input
+        if isinstance(sources, str):
+            shortcodes = SOURCES_GROUPS.get(sources, [sources])
+        else:
+            shortcodes = []
+            for item in sources:
+                if isinstance(item, str) and item in SOURCES_GROUPS:
+                    shortcodes.extend(SOURCES_GROUPS[item])
+                else:
+                    shortcodes.append(item)
+
+        sources_cols = [
+            ENERGY_SOURCES[sc]["colname"]
+            for sc in shortcodes
+            if sc in ENERGY_SOURCES
         ]
+        renewable_sources_cols = sources_cols
         
-        # 2. Überprüfe, ob die Spalten im DataFrame existieren
+        # 2. Check if the columns exist in the DataFrame
         valid_cols = [col for col in renewable_sources_cols if col in df.columns]
-        
-        # 3. Berechne die Summe
-        df['Summe_Regenerativ'] = df[valid_cols].sum(axis=1)
+
+        # 3. Calculate the sum
+        df[name + " [MWh]"] = df[valid_cols].sum(axis=1)
         
         return df
 
     except KeyError as e:
         print(f"Fehler bei add_renewable_generation: Spalte nicht gefunden. {e}")
-        return df
-    except Exception as e:
-        print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
-        return df
-
-
-def add_conventional_generation(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Berechnet die Summe der konventionellen Erzeugungsquellen (ohne Pumpspeicher)
-    pro Zeitpunkt und fügt sie als 'Summe Konventionell' hinzu.
-
-    Args:
-        df: Das Eingabe-DataFrame mit den Erzeugungsdaten.
-
-    Returns:
-        Das DataFrame mit der zusätzlichen Spalte 'Summe Konventionell'.
-    """
-    try:
-        # 1. Hol dir die Spaltennamen der konventionellen Quellen
-        conventional_sources_cols = [
-            ENERGY_SOURCES[shortcode]["colname"]
-            for shortcode in SOURCES_GROUPS["Conventional"]
-            if shortcode in ENERGY_SOURCES
-        ]
-        
-        # 2. Überprüfe, ob die Spalten im DataFrame existieren
-        valid_cols = [col for col in conventional_sources_cols if col in df.columns]
-        
-        # 3. Berechne die Summe
-        df['Summe_Konventionell'] = df[valid_cols].sum(axis=1)
-        
-        return df
-        
-    except KeyError as e:
-        print(f"Fehler bei add_conventional_generation: Spalte nicht gefunden. Details: {e}")
         return df
     except Exception as e:
         print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
