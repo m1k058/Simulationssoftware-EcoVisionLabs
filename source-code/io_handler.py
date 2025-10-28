@@ -7,7 +7,7 @@ from errors import FileLoadError, DataProcessingError, WarningMessage
 from constants import HEADER_CLEAN_PATTERNS, EXPECTED_HEADERS, FILE_FORMAT_OPTIONS
 
 
-def load_data(path: Path, datatype: str = "SMARD") -> pd.DataFrame:
+def load_data(path: Path, datatype: str = "SMARD"):
     """Load and validate a CSV or TXT dataset in a safe, structured way.
 
     Features:
@@ -127,3 +127,41 @@ def load_data(path: Path, datatype: str = "SMARD") -> pd.DataFrame:
     df[numeric_cols] = df[numeric_cols].fillna(0)
 
     return df
+
+def save_data(df: pd.DataFrame, path: Path, datatype: str = "SMARD") -> None:
+    """Save a DataFrame to CSV with proper formatting based on datatype.
+
+    Args:
+        df (pd.DataFrame): DataFrame to save.
+        path (Path | str): Destination file path.
+        datatype (str, optional): Key used to identify format options.
+            Must exist in FILE_FORMAT_OPTIONS. Defaults to "SMARD".
+
+    Raises:
+        DataProcessingError: If datatype is unsupported or saving fails.
+    """
+    # --- Validate datatype
+    if not datatype:
+        raise DataProcessingError("Datatype must be provided and cannot be None.")
+
+    if datatype not in FILE_FORMAT_OPTIONS:
+        raise DataProcessingError(
+            f"Unsupported datatype '{datatype}'. "
+            f"Supported types: {list(FILE_FORMAT_OPTIONS.keys())}. "
+            f"Update constants.py to add support."
+        )
+
+    cfg = FILE_FORMAT_OPTIONS[datatype]
+
+    # --- Save DataFrame to CSV
+    try:
+        df.to_csv(
+            path,
+            sep=cfg["sep"],
+            encoding=cfg["encoding"],
+            index=False,
+            decimal=cfg["decimal"],
+            na_rep=cfg["na_values"][0] if cfg["na_values"] else "",
+        )
+    except Exception as e:
+        raise DataProcessingError(f"Failed to save DataFrame to {path}: {e}")
