@@ -6,17 +6,24 @@
     "DATAFRAMES": [
         {
             "id": 0,
-            "name": "SMARD_2015-2020",
+            "name": "SMARD_2015-2020_Erzeugung",
             "path": "raw-data\\Realisierte_Erzeugung_Jan2015_Dez2020_Viertelstunde.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
         },
         {
             "id": 1,
-            "name": "SMARD_2020-2025",
-            "path": "raw-data\\Realisierte_Erzeugung_Jan2020_heute_Viertelstunde.csv",
+            "name": "SMARD_2020-2025_Erzeugung",
+            "path": "raw-data\\Realisierte_Erzeugung_Jan2020_25Oct2025_Viertelstunde.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2020-heute"
+        },
+        {
+            "id": 2,
+            "name": "SMARD_2020-2025_Verbrauch",
+            "path": "raw-data\\Realisierter_Stromverbrauch_Jan2020_25Oct2025_Viertelstunde.csv",
+            "datatype": "SMARD-V",
+            "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2020-heute"
         }
     ],
     "PLOTS": [

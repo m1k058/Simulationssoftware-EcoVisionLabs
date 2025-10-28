@@ -3,7 +3,7 @@ from pathlib import Path
 from errors import AppError, WarningMessage
 from data_manager import DataManager
 from config_manager import ConfigManager
-from plotting import plot_auto
+from plotting import plot_auto, plot_ee_consumption_histogram
 from constants import SOURCES_GROUPS
 
 
@@ -16,33 +16,16 @@ def main():
         # --- Initialize DataManager and load available datasets
         dm = DataManager(config_manager=cfg)
 
-        # --- Add a new dataset temporarily for this session
-        cfg.add_dataframe(
-            name="Example Data",
-            path=Path("raw-data/DATA_EXAMPLE.csv"),
-            datatype="SMARD",
-            description="Beispiel-Datensatz (aus 2020-2025)"
-        )
-
-        # Reload datasets into memory
-        dm.load_from_config()
+    
         print("\nLoaded Datasets:")
         print(cfg.list_dataframes())
 
-        # --- Add a sample plot configuration
-        cfg.add_plot(
-            name="Example Plot",
-            dataframes=["Example Data"],
-            date_start="01.01.2019 00:00",
-            date_end="07.01.2019 23:59",
-            energy_sources=SOURCES_GROUPS["All"],
-            plot_type="stacked_bar",
-            description="Demo-Plot mit erneuerbaren Energiequellen"
-        )
-
-        # --- Generate plot from config
-        print("\nGenerating example plot...")
-        plot_auto(cfg, dm, "Example Plot", show=True, save=False)
+        plot_ee_consumption_histogram(
+            config_manager=cfg,
+            df_erzeugung=dm.get("SMARD_2020-2025_Erzeugung"),
+            df_verbrauch=dm.get("SMARD_2020-2025_Verbrauch"),
+            title="Anteil der Erneuerbaren Energien am Gesamtstromverbrauch"
+            )
 
     # --- Handle controlled application errors
     except AppError as e:

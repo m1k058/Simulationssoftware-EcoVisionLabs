@@ -24,15 +24,27 @@ EXPECTED_HEADERS = {
         "Pumpspeicher [MWh]",
         "Sonstige Konventionelle [MWh]",
     ],
-    "OTHER": [
-        "Column1",
-        "Column2",
+    "SMARD-V": [
+        "Datum von",
+        "Datum bis",
+        "Netzlast [MWh]",
+        "Netzlast inkl. Pumpspeicher [MWh]",
+        "Pumpspeicher [MWh]",
+        "Residuallast [MWh]",
     ]
 }
 
 # Format for data in file
 FILE_FORMAT_OPTIONS = {
     "SMARD": {
+        "sep": ";",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+        "na_values": ["-", "NaN", "n/a", ""]
+    },
+    "SMARD-V": {
         "sep": ";",
         "decimal": ",",
         "thousands": ".",
@@ -58,7 +70,7 @@ ENERGY_SOURCES = {
     "SK": {"name": "Steinkohle", "color": "#1F1F1F", "colname": "Steinkohle [MWh]"},
     "EG": {"name": "Erdgas", "color": "#5D5D5D", "colname": "Erdgas [MWh]"},
     "SOE": {"name": "Sonstige Erneuerbare", "color": "#ADFF2F", "colname": "Sonstige Erneuerbare [MWh]"},
-    "SOE": {"name": "Sonstige Erneuerbare", "color": "#ADFF2F", "colname": "Sonstige Erneuerbare [MWh]"},
+    "SOK": {"name": "Sonstige Konventionelle", "color": "#272727", "colname": "Sonstige Konventionelle [MWh]"},
     "BIO": {"name": "Biomasse", "color": "#00A51B", "colname": "Biomasse [MWh]"},
     "PS": {"name": "Pumpspeicher", "color": "#090085", "colname": "Pumpspeicher [MWh]"},
     "WAS": {"name": "Wasserkraft", "color": "#1E90FF", "colname": "Wasserkraft [MWh]"},
