@@ -21,11 +21,8 @@ def main():
     
         print("\nLoaded Datasets:")
         print(cfg.list_dataframes())
-        add_total_generation(dm.get("SMARD_2020-2025_Erzeugung"))
-        add_total_renewable_generation(dm.get("SMARD_2020-2025_Erzeugung"))
-        add_total_conventional_generation(dm.get("SMARD_2020-2025_Erzeugung"))
-        save_data(dm.get("SMARD_2020-2025_Erzeugung"), Path("output/processed_generation_data.csv"))
-        
+
+        plot_ee_consumption_histogram(cfg, dm.get("SMARD_2020-2025_Erzeugung"), dm.get("SMARD_2020-2025_Verbrauch"), "EE-Anteil am Verbrauch Deutschland\n(2020-2025) Optimized") 
 
     # --- Handle controlled application errors
     except AppError as e:

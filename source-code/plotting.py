@@ -4,6 +4,7 @@ import matplotlib.image as mpimg
 import pandas as pd
 import warnings
 import os
+import numpy as np
 
 from datetime import datetime
 from pathlib import Path
@@ -209,12 +210,14 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
         
         # Generate histogram
         plt.figure(figsize=(16, 9))
-        
-        # Define bins from 0 to 100 with a step of 10
-        bins = range(0, 160, 10)
-        
-        plt.hist(df_merged['EE_Anteil_Verbrauch'], bins=bins, edgecolor='black')
-        
+
+        # Define bins from 0 to 120 with a step of 10
+        bins = np.arange(0, 120, 10)
+
+        histogramm_value = np.clip(df_merged['EE_Anteil_Verbrauch'], bins[0], bins[-1])
+
+        plt.hist(histogramm_value, bins=bins, edgecolor='black')
+
         plt.title(f"Histogramm: {title}", fontsize=24)
         plt.xlabel("Anteil Erneuerbare Energien am Verbrauch (%)", fontsize=14)
         plt.ylabel("Anzahl der Viertelstunden", fontsize=14)
