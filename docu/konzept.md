@@ -44,3 +44,10 @@ ___
     - Interpolationsberechnung von Daten
 - magic 3
 - 
+
+Berechnung von aktuellen Werten und wneiger oder mehr als 100% EEs um Speicher zu laden oder zu entladen, wieviel Speicher werden bemötigt? Verlustberechnung (Effizienz). Testberechnung der Kosten von Speichersystemen
+(Werte erstmal als instant entladen und aufladen aus und ins Netz, danach vielleicht zeitliche Näherung, wie lang dauert es pro MWh zu laden oder entladen?)
+wie verhalten sich Speicherparks bezüglich der Ladekurven / Effizienz?
+Berechnung der Netto-EE-Erzeugung, dann bei Überschuss Speicher als nutzbare Energiequelle mit Einberechnung des Wirkungsgrads mit einberechnen.
+berechnungsseitig alles in MWh oder besser in Wh?
+Einbeziehung Wasserstoff -> schauen, was wo zuerst reinkommt -> Slider 50/50, 80/20 etc.
