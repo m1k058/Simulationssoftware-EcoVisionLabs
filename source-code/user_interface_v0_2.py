@@ -37,6 +37,7 @@ from plotting import (
     plot_stacked_bar,
     plot_line_chart,
     plot_balance,
+    plot_ee_consumption_histogram,
 )
 from data_processing import (
     add_total_generation,
@@ -191,9 +192,18 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
     if not df_ids:
         print("Plot has no assigned DataFrames.")
         return
-    if len(df_ids) > 1:
+    
+    plot_type = plot_cfg.get("plot_type", "stacked_bar")
+    
+    # Histogram requires exactly 2 DataFrames
+    if plot_type == "histogram":
+        if len(df_ids) != 2:
+            print("Histogram plot type requires exactly 2 DataFrames (generation + consumption).")
+            return
+    elif len(df_ids) > 1:
         print("Multiple DataFrames per plot are currently not supported.")
         return
+    
     df_id = df_ids[0]
     try:
         df = data_manager.get(df_id)
@@ -212,8 +222,8 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
     if df_f.empty:
         print("No data in selected time range.")
         return
+    
     try:
-        plot_type = plot_cfg.get("plot_type", "stacked_bar")
         outdir = config_manager.get_global("output_dir")
         if plot_type == "stacked_bar":
             plot_stacked_bar(df_f, plot_cfg, show=show, save=save, output_dir=outdir)
@@ -226,6 +236,22 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
             col2 = plot_cfg.get("column2")
             title = plot_cfg.get("name", "Balance plot")
             plot_balance(config_manager, df_f, column1=col1, column2=col2, title=title, show=show, save=save, output_dir=outdir)
+        elif plot_type == "histogram":
+            # Load second DataFrame for consumption data
+            df_id_2 = df_ids[1]
+            try:
+                df_2 = data_manager.get(df_id_2)
+            except Exception as e:
+                print(f"Consumption dataset {df_id_2} not found: {e}")
+                return
+            
+            df_2_f = df_2[(df_2["Zeitpunkt"] >= start) & (df_2["Zeitpunkt"] <= end)]
+            if df_2_f.empty:
+                print("No consumption data in selected time range.")
+                return
+            
+            title = plot_cfg.get("name", "Renewable Energy Share Histogram")
+            plot_ee_consumption_histogram(config_manager, df_f, df_2_f, title=title, show=show, save=save, output_dir=outdir)
         else:
             print(f"Unsupported plot type: {plot_type}")
     except Exception as e:
@@ -268,47 +294,65 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
 
     if choice == "1":
         datasets = cm.get_dataframes()
-        sel_ds = select_from_list(datasets, "Datasets")
-        if not sel_ds:
-            return
-        date_start = input_date("Start date")
-        date_end = input_date("End date")
-        # Choose plot type and gather type-specific params
+        
+        # Choose plot type first to determine dataset requirements
         print("\nPlot type:")
         print("1) Stacked area (generation by sources)")
         print("2) Line chart (select columns)")
         print("3) Balance plot (column1 - column2)")
+        print("4) Histogram (renewable energy share)")
         print("0) Cancel")
         pt_choice = input("> ").strip()
         if pt_choice == "0":
             return
 
-        plot_type = "stacked_bar" if pt_choice == "1" else ("line" if pt_choice == "2" else ("balance" if pt_choice == "3" else None))
+        plot_type = "stacked_bar" if pt_choice == "1" else ("line" if pt_choice == "2" else ("balance" if pt_choice == "3" else ("histogram" if pt_choice == "4" else None)))
         if not plot_type:
             print("Invalid selection.")
             pause()
             return
+        
+        # For histogram, we need 2 datasets (generation + consumption)
+        if plot_type == "histogram":
+            print("\nHistogram requires 2 datasets: generation and consumption data")
+            sel_ds_gen = select_from_list(datasets, "Generation Dataset")
+            if not sel_ds_gen:
+                return
+            sel_ds_cons = select_from_list(datasets, "Consumption Dataset")
+            if not sel_ds_cons:
+                return
+            selected_dataframes = [sel_ds_gen["id"], sel_ds_cons["id"]]
+            # For histogram, we don't need column selection
+            type_specific = {}
+        else:
+            # Other plot types use single dataset
+            sel_ds = select_from_list(datasets, "Datasets")
+            if not sel_ds:
+                return
+            selected_dataframes = [sel_ds["id"]]
+            
+            # Fetch DataFrame columns for selection if needed
+            try:
+                df_for_cols = dm.get(sel_ds["id"])  # get loaded DataFrame
+            except Exception as e:
+                print(f"Dataset could not be loaded for column selection: {e}")
+                pause()
+                return
 
-        # Fetch DataFrame columns for selection if needed
-        try:
-            df_for_cols = dm.get(sel_ds["id"])  # get loaded DataFrame
-        except Exception as e:
-            print(f"Dataset could not be loaded for column selection: {e}")
-            pause()
-            return
-
-        type_specific = {}
-        if plot_type == "stacked_bar":
-            type_specific["energy_sources"] = choose_energy_sources()
-        elif plot_type == "line":
-            cols = choose_columns_from_df(df_for_cols, multi=True, exclude=["Zeitpunkt"], prompt_text="Select columns for line chart")
-            type_specific["columns"] = cols
-        elif plot_type == "balance":
-            col1 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Select column1 (minuend)")
-            col2 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Select column2 (subtrahend)")
-            type_specific["column1"] = col1
-            type_specific["column2"] = col2
-
+            type_specific = {}
+            if plot_type == "stacked_bar":
+                type_specific["energy_sources"] = choose_energy_sources()
+            elif plot_type == "line":
+                cols = choose_columns_from_df(df_for_cols, multi=True, exclude=["Zeitpunkt"], prompt_text="Select columns for line chart")
+                type_specific["columns"] = cols
+            elif plot_type == "balance":
+                col1 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Select column1 (minuend)")
+                col2 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Select column2 (subtrahend)")
+                type_specific["column1"] = col1
+                type_specific["column2"] = col2
+        
+        date_start = input_date("Start date")
+        date_end = input_date("End date")
         name = input_nonempty("Plot name")
         desc = input("Description (optional): ").strip()
         save_flag = prompt_yes_no("Save plot to config.json?")
@@ -316,7 +360,7 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
         plot_cfg = {
             "id": state.next_session_plot_id() if not save_flag else None,
             "name": name,
-            "dataframes": [sel_ds["id"]],
+            "dataframes": selected_dataframes,
             "date_start": date_start,
             "date_end": date_end,
             "plot_type": plot_type,
@@ -326,7 +370,7 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
 
         if save_flag:
             payload = {
-                "dataset": sel_ds,
+                "dataframes": selected_dataframes,
                 "date_start": date_start,
                 "date_end": date_end,
                 "plot_name": name,
@@ -344,6 +388,7 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
                 try:
                     plot_auto(cm, dm, new_id, show=True, save=save_img)
                 except Exception as e:
+                    print(f"Rendering failed: {e}")
                     print(f"Rendering failed: {e}")
         else:
             state.session_plots.append(plot_cfg)

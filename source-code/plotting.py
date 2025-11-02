@@ -57,13 +57,21 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
         df_ids = plot_cfg.get("dataframes", [])
         if not df_ids:
             raise DataProcessingError(f"Plot '{plot_cfg['name']}' has no DataFrames assigned.")
-        if len(df_ids) > 1:
+        
+        # Histogram plot type requires exactly 2 DataFrames (generation + consumption)
+        plot_type = plot_cfg.get("plot_type", "stacked_bar")
+        if plot_type == "histogram":
+            if len(df_ids) != 2:
+                raise DataProcessingError(
+                    f"Plot '{plot_cfg['name']}' requires exactly 2 DataFrames (generation + consumption) for histogram."
+                )
+        elif len(df_ids) > 1:
             raise NotImplementedError(
                 f"Plot '{plot_cfg['name']}' defines multiple datasets ({df_ids}). "
                 "Combining multiple DataFrames is not yet supported."
             )
 
-        # Load dataset
+        # Load dataset(s)
         df_id = df_ids[0]
         df = manager.get(df_id)
         if df is None:
@@ -83,7 +91,6 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
             raise DataProcessingError(f"No data found in the given time range for plot '{plot_cfg['name']}'.")
 
         # Choose plot type
-        plot_type = plot_cfg.get("plot_type", "stacked_bar")
         if plot_type == "stacked_bar":
             plot_stacked_bar(df_filtered, plot_cfg, show=show, save=save, output_dir=output_dir)
         elif plot_type == "line":
@@ -97,6 +104,21 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
                 raise DataProcessingError(f"Plot '{plot_cfg['name']}' missing 'column1' or 'column2' for balance plot.")
             title = plot_cfg.get("name", "Balance plot")
             plot_balance(config_manager, df_filtered, column1=col1, column2=col2, title=title, show=show, save=save, output_dir=output_dir)
+        elif plot_type == "histogram":
+            # Load second DataFrame for consumption data
+            df_id_2 = df_ids[1]
+            df_2 = manager.get(df_id_2)
+            if df_2 is None:
+                raise DataProcessingError(
+                    f"DataFrame with ID '{df_id_2}' not found for plot '{plot_cfg['name']}'."
+                )
+            # Filter second DataFrame by date range
+            df_2_filtered = df_2[(df_2["Zeitpunkt"] >= date_start) & (df_2["Zeitpunkt"] <= date_end)]
+            if df_2_filtered.empty:
+                raise DataProcessingError(f"No consumption data found in the given time range for plot '{plot_cfg['name']}'.")
+            
+            title = plot_cfg.get("name", "Renewable Energy Share Histogram")
+            plot_ee_consumption_histogram(config_manager, df_filtered, df_2_filtered, title=title, show=show, save=save, output_dir=output_dir)
         else:
             raise NotImplementedError(f"Plot type '{plot_type}' is not implemented.")
 
@@ -176,7 +198,7 @@ def plot_stacked_bar(df, plot_cfg, show=True, save=False, output_dir=None):
     finally:
         plt.close()
 
-def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df_verbrauch: pd.DataFrame, title: str, show=True, save=False, output_dir=None):
+def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df_verbrauch: pd.DataFrame, title: str = "Renewable Energy Share Histogram", show=True, save=False, output_dir=None):
     """
     Generates and saves a histogram showing the percentage of renewable energy
     in total consumption over the provided time range. If 'Gesamterzeugung Erneuerbare [MWh]' is not present,
@@ -187,13 +209,14 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
         df_erzeugung (pd.DataFrame): DataFrame with generation data (must include column 'Gesamterzeugung Erneuerbare [MWh]')
             or it will be calculated automatically.
         df_verbrauch (pd.DataFrame): DataFrame with consumption data (must include column "Netzlast [MWh]").
-        title (str): Title for the plot and filename.
+        title (str, optional): Title for the plot and filename (default = "Renewable Energy Share Histogram").
         show (bool, optional): Whether to display the plot interactively (default = True).
         save (bool, optional): Whether to save the plot image (default = False).
         output_dir (Path, optional): Directory to save the plot. If None, uses config_manager's output_dir.
     """
     output_dir = output_dir or config_manager.get_global("output_dir")
     try:
+        # Check if renewable generation column exists, otherwise calculate it
         if 'Gesamterzeugung Erneuerbare [MWh]' not in df_erzeugung.columns:
             df_erzeugung_processed = add_total_renewable_generation(df_erzeugung.copy())
         else:
@@ -206,14 +229,14 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
             
         verbrauch = df_verbrauch['Netzlast [MWh]']
 
-        # combine into a single DataFrame for easier handling
+        # Combine into a single DataFrame for easier handling
         df_merged = pd.DataFrame({
             'Erzeugung_EE': erzeugung_ee,
             'Verbrauch': verbrauch
-        }).dropna() # Delete rows with NaN values to avoid issues in calculations
+        }).dropna()  # Remove rows with NaN values to avoid calculation issues
 
         # Calculate percentage of renewable energy in consumption
-        # Avoid division by zero by setting percentage to 0 where Verbrauch is 0
+        # Avoid division by zero by setting percentage to 0 where consumption is 0
         df_merged['EE_Anteil_Verbrauch'] = 0.0
         mask_verbrauch_pos = df_merged['Verbrauch'] > 0
         
@@ -223,10 +246,11 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
         # Generate histogram
         plt.figure(figsize=(16, 9))
 
-        # Define bins from 0 to 120 with a step of 10
-        bins = np.arange(0, 120, 10)
+        # Define bins from 0 to 100 with a step of 10, plus overflow bin (100+)
+        bins = np.arange(0, 110, 10)  # 0, 10, 20, ..., 90, 100
 
-        histogramm_value = np.clip(df_merged['EE_Anteil_Verbrauch'], bins[0], bins[-1])
+        # Clip values above 100 to 100 to put them in the overflow bin
+        histogramm_value = np.clip(df_merged['EE_Anteil_Verbrauch'], bins[0], bins[-1] - 0.001)
 
         plt.hist(histogramm_value, bins=bins, edgecolor='black')
 
@@ -240,7 +264,10 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
                 fontsize=11,
                 color='gray'
             )
-        plt.xticks(bins)
+        # Custom x-tick labels with "100+" for overflow bin
+        tick_positions = bins[:-1]  # Position labels at the start of each bin
+        tick_labels = [str(int(x)) for x in bins[:-2]] + ['100+']
+        plt.xticks(tick_positions, tick_labels)
         plt.grid(axis='y', alpha=0.75)
 
         # Save or display

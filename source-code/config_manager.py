@@ -162,15 +162,26 @@ class ConfigManager:
         # Determine plot type and optional parameters
         plot_type = ui_selections.get("plot_type", "stacked_bar")
 
+        # Determine dataframes list
+        # For histogram, we might have multiple datasets in ui_selections
+        if "dataframes" in ui_selections:
+            # Direct list of dataframe IDs (used by new UI v2)
+            dataframes_list = ui_selections["dataframes"]
+        elif "dataset" in ui_selections:
+            # Single dataset (legacy format)
+            dataframes_list = [ui_selections["dataset"]["id"]]
+        else:
+            raise ValueError("UI selections must contain either 'dataframes' or 'dataset'")
+
         # Create new plot configuration (base)
         new_plot = {
             "id": new_id,
             "name": ui_selections.get("plot_name", f"plot_{new_id}"),
-            "dataframes": [ui_selections["dataset"]["id"]],
+            "dataframes": dataframes_list,
             "date_start": ui_selections.get("date_start"),
             "date_end": ui_selections.get("date_end"),
             "plot_type": plot_type,
-            "description": ui_selections.get("description", f"Plot created from {ui_selections['dataset']['name']} dataset"),
+            "description": ui_selections.get("description", f"Plot created with ID {new_id}"),
         }
 
         # Attach type-specific fields
@@ -182,6 +193,9 @@ class ConfigManager:
         elif plot_type == "balance":
             new_plot["column1"] = ui_selections.get("column1")
             new_plot["column2"] = ui_selections.get("column2")
+        elif plot_type == "histogram":
+            # No extra fields required for histogram
+            pass
         elif plot_type == "table":
             # No extra fields required for table
             pass

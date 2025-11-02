@@ -85,6 +85,18 @@
             "description": "Plot for testing Balanced plot function",
             "column1": "Braunkohle [MWh]",
             "column2": "Photovoltaik [MWh]"
+        },
+        {
+            "id": 3,
+            "name": "Test Plot Renewable Energy Histogram",
+            "dataframes": [
+                1,
+                2
+            ],
+            "date_start": "01.01.2020 00:00",
+            "date_end": "31.10.2025 23:59",
+            "plot_type": "histogram",
+            "description": "Plot for testing Histogram of renewable energy share in consumption"
         }
     ]
 }
