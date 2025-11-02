@@ -89,3 +89,15 @@ def add_energy_source_generation_sum(df: pd.DataFrame, sources="All", name="Summ
     except Exception as e:
         print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
         return df
+    
+def generate_df_with_col_sums(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generates a DataFrame with sums for each column from the input DataFrame.
+    Args:
+        df: The input DataFrame.
+        Returns:
+        A DataFrame containing the sums of each column.
+    """
+    col_sums = df.sum(numeric_only=True)
+    sums_df = pd.DataFrame(col_sums).transpose()
+    return sums_df

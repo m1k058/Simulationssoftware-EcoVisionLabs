@@ -32,7 +32,12 @@ from constants import ENERGY_SOURCES as CONST_ENERGY_SOURCES
 from config_manager import ConfigManager
 from data_manager import DataManager
 from io_handler import save_data, save_data_excel
-from plotting import plot_auto, plot_stacked_bar
+from plotting import (
+    plot_auto,
+    plot_stacked_bar,
+    plot_line_chart,
+    plot_balance,
+)
 from data_processing import (
     add_total_generation,
     add_total_renewable_generation,
@@ -99,6 +104,42 @@ def select_from_list(items: List[Dict[str, Any]], title: str, key_label: str = "
             if it.get(key_label) == sel_id:
                 return it
         print("ID not found. Please try again.")
+
+
+def choose_columns_from_df(df: pd.DataFrame, multi: bool = True, exclude: Optional[List[str]] = None, prompt_text: str = "Select columns") -> List[str] | str:
+    """Interactive column picker for a DataFrame.
+
+    Args:
+        df: DataFrame to list columns from.
+        multi: Allow picking multiple columns if True; otherwise returns a single string.
+        exclude: Optional list of column names to exclude from choices.
+        prompt_text: Prompt text for input.
+
+    Returns:
+        List of selected column names or a single column name (str) if multi=False.
+    """
+    cols = list(df.columns)
+    if exclude:
+        cols = [c for c in cols if c not in exclude]
+    if not cols:
+        print("No selectable columns available.")
+        return [] if multi else ""
+
+    print("\nAvailable columns:")
+    for i, c in enumerate(cols):
+        print(f"[{i}] {c}")
+
+    while True:
+        raw = input(f"{prompt_text} (indices separated by spaces){' [multiple allowed]' if multi else ''}: ").strip()
+        try:
+            idxs = [int(x) for x in raw.split() if x != ""]
+            picked = [cols[i] for i in idxs if 0 <= i < len(cols)]
+            if not picked:
+                print("Please select at least one valid index.")
+                continue
+            return picked if multi else picked[0]
+        except Exception:
+            print("Invalid input. Please use numeric indices.")
 
 
 def input_date(prompt_text: str, default: Optional[str] = None) -> str:
@@ -172,7 +213,21 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
         print("No data in selected time range.")
         return
     try:
-        plot_stacked_bar(df_f, plot_cfg, show=show, save=save, output_dir=config_manager.get_global("output_dir"))
+        plot_type = plot_cfg.get("plot_type", "stacked_bar")
+        outdir = config_manager.get_global("output_dir")
+        if plot_type == "stacked_bar":
+            plot_stacked_bar(df_f, plot_cfg, show=show, save=save, output_dir=outdir)
+        elif plot_type == "line":
+            cols = plot_cfg.get("columns")
+            title = plot_cfg.get("name", "Line chart")
+            plot_line_chart(config_manager, df_f, columns=cols, title=title, show=show, save=save, output_dir=outdir)
+        elif plot_type == "balance":
+            col1 = plot_cfg.get("column1")
+            col2 = plot_cfg.get("column2")
+            title = plot_cfg.get("name", "Balance plot")
+            plot_balance(config_manager, df_f, column1=col1, column2=col2, title=title, show=show, save=save, output_dir=outdir)
+        else:
+            print(f"Unsupported plot type: {plot_type}")
     except Exception as e:
         print(f"Plotting failed: {e}")
 
@@ -218,37 +273,88 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
             return
         date_start = input_date("Start date")
         date_end = input_date("End date")
-        energy_sources = choose_energy_sources()
+        # Choose plot type and gather type-specific params
+        print("\nPlot type:")
+        print("1) Stacked area (generation by sources)")
+        print("2) Line chart (select columns)")
+        print("3) Balance plot (column1 - column2)")
+        print("0) Cancel")
+        pt_choice = input("> ").strip()
+        if pt_choice == "0":
+            return
+
+        plot_type = "stacked_bar" if pt_choice == "1" else ("line" if pt_choice == "2" else ("balance" if pt_choice == "3" else None))
+        if not plot_type:
+            print("Invalid selection.")
+            pause()
+            return
+
+        # Fetch DataFrame columns for selection if needed
+        try:
+            df_for_cols = dm.get(sel_ds["id"])  # get loaded DataFrame
+        except Exception as e:
+            print(f"Dataset could not be loaded for column selection: {e}")
+            pause()
+            return
+
+        type_specific = {}
+        if plot_type == "stacked_bar":
+            type_specific["energy_sources"] = choose_energy_sources()
+        elif plot_type == "line":
+            cols = choose_columns_from_df(df_for_cols, multi=True, exclude=["Zeitpunkt"], prompt_text="Select columns for line chart")
+            type_specific["columns"] = cols
+        elif plot_type == "balance":
+            col1 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Select column1 (minuend)")
+            col2 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Select column2 (subtrahend)")
+            type_specific["column1"] = col1
+            type_specific["column2"] = col2
+
         name = input_nonempty("Plot name")
         desc = input("Description (optional): ").strip()
         save_flag = prompt_yes_no("Save plot to config.json?")
 
         plot_cfg = {
-            "id": state.next_session_plot_id() if not save_flag else None,  # may be overridden by save
+            "id": state.next_session_plot_id() if not save_flag else None,
             "name": name,
             "dataframes": [sel_ds["id"]],
             "date_start": date_start,
             "date_end": date_end,
-            "energy_sources": energy_sources,
-            "plot_type": "stacked_bar",
+            "plot_type": plot_type,
             "description": desc,
+            **type_specific,
         }
 
         if save_flag:
-            new_id = cm.create_plot_from_ui({
+            payload = {
                 "dataset": sel_ds,
                 "date_start": date_start,
                 "date_end": date_end,
-                "energy_sources": energy_sources,
                 "plot_name": name,
                 "save_plot": True,
                 "description": desc,
-            })
+                "plot_type": plot_type,
+                **type_specific,
+            }
+            new_id = cm.create_plot_from_ui(payload)
             cm.save()
             print(f"Saved (ID {new_id}).")
+            # Ask to generate now
+            if prompt_yes_no("Generate this plot now?"):
+                save_img = prompt_yes_no("Save image as PNG?")
+                try:
+                    plot_auto(cm, dm, new_id, show=True, save=save_img)
+                except Exception as e:
+                    print(f"Rendering failed: {e}")
         else:
             state.session_plots.append(plot_cfg)
             print("Created as session plot.")
+            # Ask to generate now
+            if prompt_yes_no("Generate this plot now?"):
+                save_img = prompt_yes_no("Save image as PNG?")
+                try:
+                    run_plot_from_cfg_like(cm, dm, plot_cfg, show=True, save=save_img)
+                except Exception as e:
+                    print(f"Rendering failed: {e}")
         pause()
 
     elif choice == "2":
@@ -266,8 +372,40 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
         name = input_nonempty("Name", default=base.get("name"))
         date_start = input_date("Start date", default=base.get("date_start"))
         date_end = input_date("End date", default=base.get("date_end"))
-        energy_sources = choose_energy_sources(default=base.get("energy_sources"))
         desc = input("Description (optional)") or base.get("description", "")
+
+        plot_type = base.get("plot_type", "stacked_bar")
+        print(f"Plot type: {plot_type}")
+        updates: Dict[str, Any] = {}
+        if plot_type == "stacked_bar":
+            energy_sources = choose_energy_sources(default=base.get("energy_sources"))
+            updates["energy_sources"] = energy_sources
+        elif plot_type == "line":
+            try:
+                df_for_cols = dm.get(base["dataframes"][0])
+            except Exception:
+                df_for_cols = None
+            default_cols = base.get("columns") or []
+            if df_for_cols is not None:
+                columns = choose_columns_from_df(df_for_cols, multi=True, exclude=["Zeitpunkt"], prompt_text="Update columns (line chart)")
+            else:
+                # Fallback to simple input when DF not available
+                print("Dataset not available for column selection. Keeping existing columns.")
+                columns = default_cols
+            updates["columns"] = columns
+        elif plot_type == "balance":
+            try:
+                df_for_cols = dm.get(base["dataframes"][0])
+            except Exception:
+                df_for_cols = None
+            if df_for_cols is not None:
+                col1 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Column1 (minuend)")
+                col2 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Column2 (subtrahend)")
+            else:
+                col1 = base.get("column1")
+                col2 = base.get("column2")
+            updates["column1"] = col1
+            updates["column2"] = col2
 
         as_copy = prompt_yes_no("Save as session copy (instead of overwriting config)?")
         if as_copy:
@@ -277,16 +415,30 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
                 "name": name,
                 "date_start": date_start,
                 "date_end": date_end,
-                "energy_sources": energy_sources,
                 "description": desc,
             })
+            new_plot.update(updates)
             state.session_plots.append(new_plot)
             print("Session copy created.")
+            # Ask to generate now
+            if prompt_yes_no("Generate this plot now?"):
+                save_img = prompt_yes_no("Save image as PNG?")
+                try:
+                    run_plot_from_cfg_like(cm, dm, new_plot, show=True, save=save_img)
+                except Exception as e:
+                    print(f"Rendering failed: {e}")
         else:
             cm.edit_plot(base["id"], name=name, date_start=date_start, date_end=date_end,
-                         energy_sources=energy_sources, description=desc)
+                         description=desc, **updates)
             cm.save()
             print("Saved plot updated.")
+            # Ask to generate now
+            if prompt_yes_no("Generate this plot now?"):
+                save_img = prompt_yes_no("Save image as PNG?")
+                try:
+                    plot_auto(cm, dm, base["id"], show=True, save=save_img)
+                except Exception as e:
+                    print(f"Rendering failed: {e}")
         pause()
 
 
@@ -313,12 +465,47 @@ def menu_manage_plots(cm: ConfigManager, dm: DataManager, state: SessionState):
         name = input_nonempty("Name", default=base.get("name"))
         date_start = input_date("Start date", default=base.get("date_start"))
         date_end = input_date("End date", default=base.get("date_end"))
-        energy_sources = choose_energy_sources(default=base.get("energy_sources"))
         desc = input("Description (optional)") or base.get("description", "")
-        cm.edit_plot(base["id"], name=name, date_start=date_start, date_end=date_end,
-                     energy_sources=energy_sources, description=desc)
+
+        plot_type = base.get("plot_type", "stacked_bar")
+        updates: Dict[str, Any] = {}
+        if plot_type == "stacked_bar":
+            energy_sources = choose_energy_sources(default=base.get("energy_sources"))
+            updates["energy_sources"] = energy_sources
+        elif plot_type == "line":
+            try:
+                df_for_cols = dm.get(base["dataframes"][0])
+            except Exception:
+                df_for_cols = None
+            if df_for_cols is not None:
+                columns = choose_columns_from_df(df_for_cols, multi=True, exclude=["Zeitpunkt"], prompt_text="Update columns (line chart)")
+            else:
+                columns = base.get("columns", [])
+            updates["columns"] = columns
+        elif plot_type == "balance":
+            try:
+                df_for_cols = dm.get(base["dataframes"][0])
+            except Exception:
+                df_for_cols = None
+            if df_for_cols is not None:
+                col1 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Column1 (minuend)")
+                col2 = choose_columns_from_df(df_for_cols, multi=False, exclude=["Zeitpunkt"], prompt_text="Column2 (subtrahend)")
+            else:
+                col1 = base.get("column1")
+                col2 = base.get("column2")
+            updates["column1"] = col1
+            updates["column2"] = col2
+
+        cm.edit_plot(base["id"], name=name, date_start=date_start, date_end=date_end, description=desc, **updates)
         cm.save()
         print("Plot updated.")
+        # Ask to generate now
+        if prompt_yes_no("Generate this plot now?"):
+            save_img = prompt_yes_no("Save image as PNG?")
+            try:
+                plot_auto(cm, dm, base["id"], show=True, save=save_img)
+            except Exception as e:
+                print(f"Rendering failed: {e}")
         pause()
 
     elif choice == "2":
@@ -377,11 +564,13 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
 
     while True:
         clear_screen()
+
         print("=== CSV Calculation Mode: Choose Operation ===\n")
         print("1) Sum of selected energy sources as new column")
         print("2) Add total generation (all sources)")
         print("3) Add total renewable generation")
         print("4) Add total conventional generation")
+        print("5) Generate DataFrame with column sums (one row)")
         print("0) Back")
         choice = input("> ").strip()
 
@@ -400,6 +589,9 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                 df_mod = add_total_renewable_generation(df_mod)
             elif choice == "4":
                 df_mod = add_total_conventional_generation(df_mod)
+            elif choice == "5":
+                from data_processing import generate_df_with_col_sums
+                df_mod = generate_df_with_col_sums(df_mod)
             else:
                 print("Invalid selection.")
                 pause()
@@ -409,41 +601,34 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             pause()
             continue
 
-        print("\nCalculation completed. Preview of last columns:")
+        print("\nCalculation completed. Full DataFrame preview:\n")
         try:
-            tail_cols = df_mod.columns[-5:]
-            print(df_mod[tail_cols].head(3).to_string(index=False))
+            print(df_mod.to_string(index=False))
         except Exception:
             print("Preview not available.")
 
-        only_session = prompt_yes_no("Keep for this session only?")
-        if only_session:
-            # Replace in DataManager memory
-            dm.dataframes[sel_ds["id"]] = df_mod
-            print("Changes applied in memory (session only).")
-            pause()
-            return
-        else:
-            # Save as new file
+        # For the column-sum DataFrame (option 5), display table in terminal and ask for save format
+        if choice == "5":
             clear_screen()
-            print("=== Export Format ===\n")
+            print("=== Column Sum Result ===\n")
+            # Display the single-row table in terminal
+            print(df_mod.to_string(index=False))
+            print()
+            
+            print("=== Save Result ===\n")
             print("1) CSV (.csv)")
             print("2) Excel (.xlsx)")
             print("0) Cancel")
-            format_choice = input("> ").strip()
-            
-            if format_choice == "0":
-                return
-            elif format_choice not in ["1", "2"]:
-                print("Invalid selection.")
+            save_choice = input("> ").strip()
+
+            if save_choice == "0":
                 pause()
                 return
-            
+
             outdir = Path(cm.get_global("output_dir") or "output")
             outdir.mkdir(parents=True, exist_ok=True)
-            
-            if format_choice == "1":
-                # CSV Export
+
+            if save_choice == "1":
                 filename = input_nonempty("Filename (without extension)") + ".csv"
                 outpath = outdir / filename
                 try:
@@ -451,8 +636,9 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                     print(f"CSV file saved: {outpath}")
                 except Exception as e:
                     print(f"Saving failed: {e}")
-            else:
-                # Excel Export
+                pause()
+                return
+            elif save_choice == "2":
                 filename = input_nonempty("Filename (without extension)") + ".xlsx"
                 outpath = outdir / filename
                 try:
@@ -460,9 +646,54 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                     print(f"Excel file saved: {outpath}")
                 except Exception as e:
                     print(f"Saving failed: {e}")
-            
+                pause()
+                return
+            else:
+                print("Invalid selection.")
+                pause()
+                return
+
+        # For other operations (1-4), keep CSV/Excel export prompt
+        save_now = prompt_yes_no("Do you want to save the result as CSV or Excel now?")
+        if not save_now:
             pause()
             return
+
+        clear_screen()
+        print("=== Export Format ===\n")
+        print("1) CSV (.csv)")
+        print("2) Excel (.xlsx)")
+        print("0) Cancel")
+        format_choice = input("> ").strip()
+
+        if format_choice == "0":
+            return
+        elif format_choice not in ["1", "2"]:
+            print("Invalid selection.")
+            pause()
+            return
+
+        outdir = Path(cm.get_global("output_dir") or "output")
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        if format_choice == "1":
+            filename = input_nonempty("Filename (without extension)") + ".csv"
+            outpath = outdir / filename
+            try:
+                save_data(df_mod, outpath, datatype=sel_ds.get("datatype", "SMARD"))
+                print(f"CSV file saved: {outpath}")
+            except Exception as e:
+                print(f"Saving failed: {e}")
+        else:
+            filename = input_nonempty("Filename (without extension)") + ".xlsx"
+            outpath = outdir / filename
+            try:
+                save_data_excel(df_mod, outpath)
+                print(f"Excel file saved: {outpath}")
+            except Exception as e:
+                print(f"Saving failed: {e}")
+        pause()
+        return
 
 
 def menu_list_overview(cm: ConfigManager, dm: DataManager, state: SessionState):

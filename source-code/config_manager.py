@@ -159,17 +159,32 @@ class ConfigManager:
         # Generate new plot ID
         new_id = max((plot.get('id', -1) for plot in self.plots), default=-1) + 1
 
-        # Create new plot configuration
+        # Determine plot type and optional parameters
+        plot_type = ui_selections.get("plot_type", "stacked_bar")
+
+        # Create new plot configuration (base)
         new_plot = {
             "id": new_id,
             "name": ui_selections.get("plot_name", f"plot_{new_id}"),
             "dataframes": [ui_selections["dataset"]["id"]],
             "date_start": ui_selections.get("date_start"),
             "date_end": ui_selections.get("date_end"),
-            "energy_sources": ui_selections.get("energy_sources", []),
-            "plot_type": "stacked_bar",  # Default plot type
-            "description": ui_selections.get("description", f"Plot created from {ui_selections['dataset']['name']} dataset")
+            "plot_type": plot_type,
+            "description": ui_selections.get("description", f"Plot created from {ui_selections['dataset']['name']} dataset"),
         }
+
+        # Attach type-specific fields
+        if plot_type == "stacked_bar":
+            new_plot["energy_sources"] = ui_selections.get("energy_sources", [])
+        elif plot_type == "line":
+            # list of column names to plot
+            new_plot["columns"] = ui_selections.get("columns", [])
+        elif plot_type == "balance":
+            new_plot["column1"] = ui_selections.get("column1")
+            new_plot["column2"] = ui_selections.get("column2")
+        elif plot_type == "table":
+            # No extra fields required for table
+            pass
 
         # Ensure internal structures exist and append
         if not isinstance(self.plots, list):
@@ -316,7 +331,7 @@ class ConfigManager:
 
     # add/delete/edit plots
     def add_plot(self, name, dataframes, date_start, date_end, energy_sources,
-             plot_type="stacked_bar", description=""):
+             plot_type="stacked_bar", description="", columns=None, column1=None, column2=None):
         """Add a new plot configuration entry.
 
         Args:
@@ -363,17 +378,25 @@ class ConfigManager:
             "dataframes": resolved_df_ids,
             "date_start": date_start,
             "date_end": date_end,
-            "energy_sources": energy_sources,
             "plot_type": plot_type,
             "description": description,
         }
+        # Optional fields depending on type
+        if plot_type == "stacked_bar":
+            new_plot["energy_sources"] = energy_sources or []
+        if plot_type == "line" and columns is not None:
+            new_plot["columns"] = list(columns)
+        if plot_type == "balance":
+            if column1 is not None:
+                new_plot["column1"] = column1
+            if column2 is not None:
+                new_plot["column2"] = column2
 
         self.config["PLOTS"].append(new_plot)
         # Keep self.plots synchronized
         self.plots = self.config["PLOTS"]
         print(f"Added new plot: {name} (ID={new_id})")
         return new_id
-
 
     def delete_plot(self, identifier):
         """Delete a plot configuration by ID or name.
@@ -424,3 +447,4 @@ class ConfigManager:
 
         print(f"Plot '{plot_cfg['name']}' updated:\n{updates}")
         return plot_cfg
+    
