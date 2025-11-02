@@ -50,7 +50,25 @@ class ConfigManager:
         self.plots = self.config.get("PLOTS", [])
         self.global_cfg = self.config.get("GLOBAL", {})
 
+        # Remove duplicate plots (by ID) - can happen from old bugs
+        self._deduplicate_plots()
+
         print(f"Config loaded from {self.config_path}")
+
+    def _deduplicate_plots(self):
+        """Remove duplicate plot entries with the same ID."""
+        seen_ids = set()
+        unique_plots = []
+        for plot in self.plots:
+            plot_id = plot.get("id")
+            if plot_id not in seen_ids:
+                seen_ids.add(plot_id)
+                unique_plots.append(plot)
+        
+        if len(unique_plots) < len(self.plots):
+            print(f"Removed {len(self.plots) - len(unique_plots)} duplicate plot(s)")
+            self.plots = unique_plots
+            self.config["PLOTS"] = unique_plots
 
     def save(self):
         """Save the current configuration back to the JSON file.
@@ -159,8 +177,11 @@ class ConfigManager:
         if "PLOTS" not in self.config:
             self.config["PLOTS"] = []
 
+        # Append only once (self.plots and self.config["PLOTS"] point to the same list)
         self.plots.append(new_plot)
-        self.config["PLOTS"].append(new_plot)
+        # Make sure they stay synchronized
+        if self.plots is not self.config["PLOTS"]:
+            self.config["PLOTS"] = self.plots
 
         # Save the configuration if plot should be saved
         if ui_selections.get("save_plot"):
@@ -348,6 +369,8 @@ class ConfigManager:
         }
 
         self.config["PLOTS"].append(new_plot)
+        # Keep self.plots synchronized
+        self.plots = self.config["PLOTS"]
         print(f"Added new plot: {name} (ID={new_id})")
         return new_id
 
@@ -367,6 +390,9 @@ class ConfigManager:
         else:
             before = len(self.config["PLOTS"])
             self.config["PLOTS"] = [p for p in self.config["PLOTS"] if p["name"] != identifier]
+
+        # Keep self.plots synchronized
+        self.plots = self.config["PLOTS"]
 
         if len(self.config["PLOTS"]) < before:
             print(f"Deleted plot '{identifier}'")
