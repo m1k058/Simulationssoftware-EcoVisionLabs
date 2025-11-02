@@ -31,7 +31,7 @@ import pandas as pd
 from constants import ENERGY_SOURCES as CONST_ENERGY_SOURCES
 from config_manager import ConfigManager
 from data_manager import DataManager
-from io_handler import save_data
+from io_handler import save_data, save_data_excel
 from plotting import plot_auto, plot_stacked_bar
 from data_processing import (
     add_total_generation,
@@ -40,7 +40,7 @@ from data_processing import (
     add_energy_source_generation_sum,
 )
 
-# We use the existing date validation from v0.1
+# Use the existing date validation from v0.1
 from user_interface import validate_date
 
 
@@ -425,17 +425,78 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             return
         else:
             # Save as new file
+            clear_screen()
+            print("=== Export Format ===\n")
+            print("1) CSV (.csv)")
+            print("2) Excel (.xlsx)")
+            print("0) Cancel")
+            format_choice = input("> ").strip()
+            
+            if format_choice == "0":
+                return
+            elif format_choice not in ["1", "2"]:
+                print("Invalid selection.")
+                pause()
+                return
+            
             outdir = Path(cm.get_global("output_dir") or "output")
             outdir.mkdir(parents=True, exist_ok=True)
-            filename = input_nonempty("Filename (without extension)") + ".csv"
-            outpath = outdir / filename
-            try:
-                save_data(df_mod, outpath, datatype=sel_ds.get("datatype", "SMARD"))
-                print(f"File saved: {outpath}")
-            except Exception as e:
-                print(f"Saving failed: {e}")
+            
+            if format_choice == "1":
+                # CSV Export
+                filename = input_nonempty("Filename (without extension)") + ".csv"
+                outpath = outdir / filename
+                try:
+                    save_data(df_mod, outpath, datatype=sel_ds.get("datatype", "SMARD"))
+                    print(f"CSV file saved: {outpath}")
+                except Exception as e:
+                    print(f"Saving failed: {e}")
+            else:
+                # Excel Export
+                filename = input_nonempty("Filename (without extension)") + ".xlsx"
+                outpath = outdir / filename
+                try:
+                    save_data_excel(df_mod, outpath)
+                    print(f"Excel file saved: {outpath}")
+                except Exception as e:
+                    print(f"Saving failed: {e}")
+            
             pause()
             return
+
+
+def menu_list_overview(cm: ConfigManager, dm: DataManager, state: SessionState):
+    """Display overview of all plots and datasets."""
+    clear_screen()
+    print("=== Overview: Plots & Datasets ===\n")
+    
+    # --- Saved Plots ---
+    saved_plots = cm.list_plots()
+    print(f"📊 SAVED PLOTS ({len(saved_plots)}):")
+    if saved_plots:
+        for plot in saved_plots:
+            print(f"  [{plot['id']}] {plot['name']}")
+    else:
+        print("  (none)")
+    
+    # --- Session Plots ---
+    print(f"\n📊 SESSION PLOTS ({len(state.session_plots)}):")
+    if state.session_plots:
+        for plot in state.session_plots:
+            print(f"  [{plot['id']}] {plot['name']}")
+    else:
+        print("  (none)")
+    
+    # --- Loaded Datasets ---
+    datasets_info = dm.list_datasets()
+    print(f"\n📁 LOADED DATASETS ({len(datasets_info)}):")
+    if datasets_info:
+        for ds in datasets_info:
+            print(f"  [{ds['ID']}] {ds['Name']} ({ds['Rows']} rows, {ds['Datatype']})")
+    else:
+        print("  (none)")
+    
+    pause("\nPress Enter to return to main menu...")
 
 
 def main():
@@ -453,6 +514,7 @@ def main():
         print("2) Configure New Plot")
         print("3) Manage Saved/Session Plots (Edit/Delete)")
         print("4) CSV Calculation Mode")
+        print("5) List Overview (Plots & Datasets)")
         print("0) Exit")
         choice = input("> ").strip()
 
@@ -467,6 +529,8 @@ def main():
             menu_manage_plots(cm, dm, state)
         elif choice == "4":
             menu_csv_calc(cm, dm, state)
+        elif choice == "5":
+            menu_list_overview(cm, dm, state)
         else:
             print("Invalid selection.")
             pause()

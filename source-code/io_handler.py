@@ -165,3 +165,28 @@ def save_data(df: pd.DataFrame, path: Path, datatype: str = "SMARD") -> None:
         )
     except Exception as e:
         raise DataProcessingError(f"Failed to save DataFrame to {path}: {e}")
+
+
+def save_data_excel(df: pd.DataFrame, path: Path) -> None:
+    """Save a DataFrame to Excel format (.xlsx).
+
+    Args:
+        df (pd.DataFrame): DataFrame to save.
+        path (Path | str): Destination file path.
+
+    Raises:
+        DataProcessingError: If saving fails or openpyxl is not installed.
+    """
+    try:
+        df.to_excel(
+            path,
+            index=False,
+            engine='openpyxl'
+        )
+    except ImportError:
+        raise DataProcessingError(
+            "Excel export requires 'openpyxl' library. "
+            "Install it with: pip install openpyxl"
+        )
+    except Exception as e:
+        raise DataProcessingError(f"Failed to save DataFrame to Excel {path}: {e}")
