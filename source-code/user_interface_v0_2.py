@@ -44,6 +44,9 @@ from data_processing import (
     add_total_renewable_generation,
     add_total_conventional_generation,
     add_energy_source_generation_sum,
+    sum_columns,
+    multiply_column,
+    add_column_from_other_df,
 )
 
 # Use the existing date validation from v0.1
@@ -592,153 +595,345 @@ def menu_manage_plots(cm: ConfigManager, dm: DataManager, state: SessionState):
 
 
 def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
+    """CSV Calculation Mode - Work with datasets and perform calculations."""
     clear_screen()
     print("=== CSV Calculation Mode ===\n")
-
-    datasets = cm.get_dataframes()
-    sel_ds = select_from_list(datasets, "Select Dataset")
-    if not sel_ds:
+    print("1) Select CSV and perform operations")
+    print("2) Calculate DataFrame with column sums (quick)")
+    print("0) Back")
+    
+    main_choice = input("> ").strip()
+    
+    if main_choice == "0":
         return
-
-    try:
-        df = dm.get(sel_ds["id"])  # already loaded
-    except Exception as e:
-        print(f"Dataset could not be loaded: {e}")
-        pause()
-        return
-
-    while True:
-        clear_screen()
-
-        print("=== CSV Calculation Mode: Choose Operation ===\n")
-        print("1) Sum of selected energy sources as new column")
-        print("2) Add total generation (all sources)")
-        print("3) Add total renewable generation")
-        print("4) Add total conventional generation")
-        print("5) Generate DataFrame with column sums (one row)")
-        print("0) Back")
-        choice = input("> ").strip()
-
-        if choice == "0":
+    elif main_choice == "2":
+        # Quick column sum calculation
+        datasets = cm.get_dataframes()
+        sel_ds = select_from_list(datasets, "Select Dataset")
+        if not sel_ds:
             return
-
-        df_mod = df.copy()
+        
         try:
-            if choice == "1":
-                sources = choose_energy_sources()
-                colname_base = input_nonempty("Column name base (e.g. 'My Sum')")
-                df_mod = add_energy_source_generation_sum(df_mod, sources=sources, name=colname_base)
-            elif choice == "2":
-                df_mod = add_total_generation(df_mod)
-            elif choice == "3":
-                df_mod = add_total_renewable_generation(df_mod)
-            elif choice == "4":
-                df_mod = add_total_conventional_generation(df_mod)
-            elif choice == "5":
-                from data_processing import generate_df_with_col_sums
-                df_mod = generate_df_with_col_sums(df_mod)
-            else:
-                print("Invalid selection.")
-                pause()
-                continue
+            df = dm.get(sel_ds["id"])
         except Exception as e:
-            print(f"Calculation failed: {e}")
+            print(f"Dataset could not be loaded: {e}")
             pause()
-            continue
-
-        print("\nCalculation completed. Full DataFrame preview:\n")
-        try:
-            print(df_mod.to_string(index=False))
-        except Exception:
-            print("Preview not available.")
-
-        # For the column-sum DataFrame (option 5), display table in terminal and ask for save format
-        if choice == "5":
-            clear_screen()
-            print("=== Column Sum Result ===\n")
-            # Display the single-row table in terminal
-            print(df_mod.to_string(index=False))
-            print()
-            
-            print("=== Save Result ===\n")
-            print("1) CSV (.csv)")
-            print("2) Excel (.xlsx)")
-            print("0) Cancel")
-            save_choice = input("> ").strip()
-
-            if save_choice == "0":
-                pause()
-                return
-
+            return
+        
+        from data_processing import generate_df_with_col_sums
+        df_sums = generate_df_with_col_sums(df)
+        
+        clear_screen()
+        print("=== Column Sum Result ===\n")
+        print(df_sums.to_string(index=False))
+        print()
+        
+        if prompt_yes_no("Save this result?"):
+            save_format = input("Format (1=CSV, 2=Excel): ").strip()
             outdir = Path(cm.get_global("output_dir") or "output")
             outdir.mkdir(parents=True, exist_ok=True)
-
-            if save_choice == "1":
+            
+            if save_format == "1":
                 filename = input_nonempty("Filename (without extension)") + ".csv"
                 outpath = outdir / filename
                 try:
-                    save_data(df_mod, outpath, datatype=sel_ds.get("datatype", "SMARD"))
+                    save_data(df_sums, outpath, datatype=sel_ds.get("datatype", "SMARD"))
                     print(f"CSV file saved: {outpath}")
                 except Exception as e:
                     print(f"Saving failed: {e}")
-                pause()
-                return
-            elif save_choice == "2":
+            elif save_format == "2":
                 filename = input_nonempty("Filename (without extension)") + ".xlsx"
                 outpath = outdir / filename
                 try:
-                    save_data_excel(df_mod, outpath)
+                    save_data_excel(df_sums, outpath)
                     print(f"Excel file saved: {outpath}")
                 except Exception as e:
                     print(f"Saving failed: {e}")
+        pause()
+        return
+    
+    elif main_choice == "1":
+        # Full interactive mode with multiple operations
+        datasets = cm.get_dataframes()
+        sel_ds = select_from_list(datasets, "Select Dataset to Work With")
+        if not sel_ds:
+            return
+        
+        try:
+            df_working = dm.get(sel_ds["id"]).copy()
+            working_name = sel_ds["name"]
+        except Exception as e:
+            print(f"Dataset could not be loaded: {e}")
+            pause()
+            return
+        
+        # Interactive operation loop
+        while True:
+            clear_screen()
+            print(f"=== Working with: {working_name} ===")
+            print(f"Rows: {len(df_working)}, Columns: {len(df_working.columns)}\n")
+            
+            print("Operations:")
+            print("1) Sum columns (custom selection)")
+            print("2) Sum energy sources (predefined)")
+            print("3) Multiply column by factor")
+            print("4) Add column from another DataFrame")
+            print("5) Add total generation (all sources)")
+            print("6) Add total renewable generation")
+            print("7) Add total conventional generation")
+            print("8) View current columns")
+            print("9) Preview data (first 10 rows)")
+            print()
+            print("S) Save result (Session/Permanent/Copy)")
+            print("0) Back to main menu")
+            
+            op_choice = input("> ").strip().upper()
+            
+            if op_choice == "0":
+                break
+            
+            elif op_choice == "1":
+                # Sum custom columns
+                print("\nAvailable columns:")
+                for i, col in enumerate(df_working.columns):
+                    print(f"[{i}] {col}")
+                
+                try:
+                    indices_str = input("Enter column indices to sum (space-separated): ").strip()
+                    indices = [int(x) for x in indices_str.split()]
+                    cols_to_sum = [df_working.columns[i] for i in indices if 0 <= i < len(df_working.columns)]
+                    
+                    if not cols_to_sum:
+                        print("No valid columns selected.")
+                        pause()
+                        continue
+                    
+                    new_col_name = input_nonempty("Name for new sum column")
+                    df_working = sum_columns(df_working, cols_to_sum, new_col_name)
+                    print(f"✓ Column '{new_col_name}' created successfully.")
+                    pause()
+                    
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "2":
+                # Sum energy sources
+                sources = choose_energy_sources()
+                colname_base = input_nonempty("Column name base (e.g. 'My Sum')")
+                try:
+                    df_working = add_energy_source_generation_sum(df_working, sources=sources, name=colname_base)
+                    print(f"✓ Column '{colname_base} [MWh]' created successfully.")
+                    pause()
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "3":
+                # Multiply column
+                print("\nAvailable columns:")
+                for i, col in enumerate(df_working.columns):
+                    print(f"[{i}] {col}")
+                
+                try:
+                    col_idx = int(input("Enter column index to multiply: ").strip())
+                    if not (0 <= col_idx < len(df_working.columns)):
+                        print("Invalid index.")
+                        pause()
+                        continue
+                    
+                    col_name = df_working.columns[col_idx]
+                    factor = float(input("Enter multiplication factor: ").strip())
+                    
+                    create_new = prompt_yes_no("Create new column (otherwise overwrite)?")
+                    new_name = None
+                    if create_new:
+                        new_name = input_nonempty("Name for new column")
+                    
+                    df_working = multiply_column(df_working, col_name, factor, new_name)
+                    pause()
+                    
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "4":
+                # Add column from other DataFrame
+                other_datasets = [ds for ds in datasets if ds["id"] != sel_ds["id"]]
+                if not other_datasets:
+                    print("No other datasets available.")
+                    pause()
+                    continue
+                
+                other_ds = select_from_list(other_datasets, "Select Source Dataset")
+                if not other_ds:
+                    continue
+                
+                try:
+                    df_other = dm.get(other_ds["id"])
+                    
+                    print("\nAvailable columns in source DataFrame:")
+                    for i, col in enumerate(df_other.columns):
+                        print(f"[{i}] {col}")
+                    
+                    col_idx = int(input("Enter column index to copy: ").strip())
+                    if not (0 <= col_idx < len(df_other.columns)):
+                        print("Invalid index.")
+                        pause()
+                        continue
+                    
+                    source_col = df_other.columns[col_idx]
+                    
+                    rename = prompt_yes_no("Rename column in target DataFrame?")
+                    new_name = None
+                    if rename:
+                        new_name = input_nonempty("New column name")
+                    
+                    df_working = add_column_from_other_df(df_working, df_other, source_col, new_name)
+                    pause()
+                    
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "5":
+                # Add total generation
+                try:
+                    df_working = add_total_generation(df_working)
+                    print("✓ Total generation column added.")
+                    pause()
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "6":
+                # Add total renewable
+                try:
+                    df_working = add_total_renewable_generation(df_working)
+                    print("✓ Total renewable generation column added.")
+                    pause()
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "7":
+                # Add total conventional
+                try:
+                    df_working = add_total_conventional_generation(df_working)
+                    print("✓ Total conventional generation column added.")
+                    pause()
+                except Exception as e:
+                    print(f"Error: {e}")
+                    pause()
+            
+            elif op_choice == "8":
+                # View columns
+                clear_screen()
+                print(f"=== Columns in {working_name} ===\n")
+                for i, col in enumerate(df_working.columns):
+                    print(f"[{i}] {col}")
                 pause()
-                return
+            
+            elif op_choice == "9":
+                # Preview data
+                clear_screen()
+                print(f"=== Preview: {working_name} (first 10 rows) ===\n")
+                print(df_working.head(10).to_string())
+                pause()
+            
+            elif op_choice == "S":
+                # Save result
+                clear_screen()
+                print("=== Save Result ===\n")
+                print("1) Save to session only (temporary)")
+                print("2) Save permanently (overwrite original dataset)")
+                print("3) Save as new dataset (create copy)")
+                print("4) Export as CSV/Excel file")
+                print("0) Cancel")
+                
+                save_choice = input("> ").strip()
+                
+                if save_choice == "0":
+                    continue
+                
+                elif save_choice == "1":
+                    # Session only - update in DataManager temporarily
+                    dm.dataframes[sel_ds["id"]] = df_working
+                    print(f"✓ Changes saved to session. Will be lost when program closes.")
+                    pause()
+                
+                elif save_choice == "2":
+                    # Permanent - overwrite original file
+                    if prompt_yes_no(f"Really overwrite original file '{sel_ds['name']}'?"):
+                        try:
+                            original_path = Path(sel_ds["path"])
+                            save_data(df_working, original_path, datatype=sel_ds.get("datatype", "SMARD"))
+                            dm.dataframes[sel_ds["id"]] = df_working  # Update in memory too
+                            print(f"✓ Original file overwritten: {original_path}")
+                            pause()
+                        except Exception as e:
+                            print(f"Error saving: {e}")
+                            pause()
+                
+                elif save_choice == "3":
+                    # Save as new dataset
+                    new_name = input_nonempty("New dataset name")
+                    new_filename = input_nonempty("New filename (without extension)") + ".csv"
+                    
+                    outdir = Path(cm.get_global("output_dir") or "output")
+                    outdir.mkdir(parents=True, exist_ok=True)
+                    new_path = outdir / new_filename
+                    
+                    try:
+                        save_data(df_working, new_path, datatype=sel_ds.get("datatype", "SMARD"))
+                        print(f"✓ New dataset saved: {new_path}")
+                        
+                        # Optionally add to config
+                        if prompt_yes_no("Add to config.json as new dataset?"):
+                            new_df_config = {
+                                "id": max([d["id"] for d in cm.get_dataframes()], default=-1) + 1,
+                                "name": new_name,
+                                "path": str(new_path),
+                                "datatype": sel_ds.get("datatype", "SMARD"),
+                                "description": f"Derived from {sel_ds['name']}"
+                            }
+                            cm.config["DATAFRAMES"].append(new_df_config)
+                            cm.save()
+                            print(f"✓ Dataset added to config with ID {new_df_config['id']}")
+                        pause()
+                    except Exception as e:
+                        print(f"Error saving: {e}")
+                        pause()
+                
+                elif save_choice == "4":
+                    # Export as file
+                    export_format = input("Format (1=CSV, 2=Excel): ").strip()
+                    outdir = Path(cm.get_global("output_dir") or "output")
+                    outdir.mkdir(parents=True, exist_ok=True)
+                    
+                    if export_format == "1":
+                        filename = input_nonempty("Filename (without extension)") + ".csv"
+                        outpath = outdir / filename
+                        try:
+                            save_data(df_working, outpath, datatype=sel_ds.get("datatype", "SMARD"))
+                            print(f"✓ CSV file saved: {outpath}")
+                        except Exception as e:
+                            print(f"Error saving: {e}")
+                    elif export_format == "2":
+                        filename = input_nonempty("Filename (without extension)") + ".xlsx"
+                        outpath = outdir / filename
+                        try:
+                            save_data_excel(df_working, outpath)
+                            print(f"✓ Excel file saved: {outpath}")
+                        except Exception as e:
+                            print(f"Error saving: {e}")
+                    else:
+                        print("Invalid format.")
+                    pause()
+            
             else:
                 print("Invalid selection.")
                 pause()
-                return
-
-        # For other operations (1-4), keep CSV/Excel export prompt
-        save_now = prompt_yes_no("Do you want to save the result as CSV or Excel now?")
-        if not save_now:
-            pause()
-            return
-
-        clear_screen()
-        print("=== Export Format ===\n")
-        print("1) CSV (.csv)")
-        print("2) Excel (.xlsx)")
-        print("0) Cancel")
-        format_choice = input("> ").strip()
-
-        if format_choice == "0":
-            return
-        elif format_choice not in ["1", "2"]:
-            print("Invalid selection.")
-            pause()
-            return
-
-        outdir = Path(cm.get_global("output_dir") or "output")
-        outdir.mkdir(parents=True, exist_ok=True)
-
-        if format_choice == "1":
-            filename = input_nonempty("Filename (without extension)") + ".csv"
-            outpath = outdir / filename
-            try:
-                save_data(df_mod, outpath, datatype=sel_ds.get("datatype", "SMARD"))
-                print(f"CSV file saved: {outpath}")
-            except Exception as e:
-                print(f"Saving failed: {e}")
-        else:
-            filename = input_nonempty("Filename (without extension)") + ".xlsx"
-            outpath = outdir / filename
-            try:
-                save_data_excel(df_mod, outpath)
-                print(f"Excel file saved: {outpath}")
-            except Exception as e:
-                print(f"Saving failed: {e}")
-        pause()
-        return
 
 
 def menu_list_overview(cm: ConfigManager, dm: DataManager, state: SessionState):
