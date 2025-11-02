@@ -7,23 +7,30 @@
         {
             "id": 0,
             "name": "SMARD_2015-2020_Erzeugung",
-            "path": "raw-data\\Realisierte_Erzeugung_Jan2015_Dez2020_Viertelstunde.csv",
+            "path": "raw-data\\Realisierte_Erzeugung_2015-2020.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
         },
         {
             "id": 1,
             "name": "SMARD_2020-2025_Erzeugung",
-            "path": "raw-data\\Realisierte_Erzeugung_Jan2020_25Oct2025_Viertelstunde.csv",
+            "path": "raw-data\\Realisierte_Erzeugung_2020-2025.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2020-heute"
         },
         {
             "id": 2,
             "name": "SMARD_2020-2025_Verbrauch",
-            "path": "raw-data\\Realisierter_Stromverbrauch_Jan2020_25Oct2025_Viertelstunde.csv",
+            "path": "raw-data\\Realisierter_Stromverbrauch_2020-2025.csv",
             "datatype": "SMARD-V",
             "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2020-heute"
+        },
+        {
+            "id": 3,
+            "name": "SMARD_2015-2020_Verbrauch",
+            "path": "raw-data\\Realisierter_Stromverbrauch_2015-2020.csv",
+            "datatype": "SMARD-V",
+            "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2015-2020"
         }
     ],
     "PLOTS": [
@@ -51,6 +58,33 @@
             ],
             "plot_type": "stacked_bar",
             "description": "Plot for testing Stacked Bar function"
+        },
+        {
+            "id": 1,
+            "name": "Test Plot Line Chart",
+            "dataframes": [
+                1
+            ],
+            "date_start": "01.05.2023 00:00",
+            "date_end": "07.05.2023 23:59",
+            "plot_type": "line",
+            "description": "Plot for testing Line Chart function",
+            "columns": [
+                "Photovoltaik [MWh]"
+            ]
+        },
+        {
+            "id": 2,
+            "name": "Test Plot Balance Plot",
+            "dataframes": [
+                1
+            ],
+            "date_start": "01.01.2023 00:00",
+            "date_end": "07.01.2023 23:59",
+            "plot_type": "balance",
+            "description": "Plot for testing Balanced plot function",
+            "column1": "Braunkohle [MWh]",
+            "column2": "Photovoltaik [MWh]"
         }
     ]
 }
