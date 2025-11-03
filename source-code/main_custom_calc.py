@@ -32,8 +32,8 @@ def main():
         dm = DataManager(config_manager=cfg)
 
         # Datensätze laden
-        genDf = dm.get(1)  # Erzeugungsdaten
-        conDf = dm.get(2)  # Verbrauchsdaten
+        genDf = dm.get(0)  # Erzeugungsdaten
+        conDf = dm.get(3)  # Verbrauchsdaten
         
         # Spalten für Gesamt-Erzeugung hinzufügen
         add_total_renewable_generation(genDf)
@@ -168,7 +168,7 @@ def main():
 
         # --- Titel ---
         ax.set_title(
-            'Verteilung des Anteils Erneuerbarer Energien\nvon Jan 2020 bis Okt 2025', 
+            'Verteilung des Anteils Erneuerbarer Energien\nvon Jan 2015 bis Dez 2020', 
             fontsize=26, 
             fontweight='bold', 
             fontstyle='italic', 
@@ -220,12 +220,8 @@ def main():
         # --- Achsen-Styling ---
         ax.set_ylim(0, 100)
         ax.grid(axis='y', alpha=0.2, linestyle='--', color=COLOR_GRID)
-        
-        # X-Achsen-Labels mit Sternchen für 2025
-        labels = [str(int(label.get_text())) if label.get_text() != '2025' else '2025*' 
-                  for label in ax.get_xticklabels()]
         ax.set_xticklabels(
-            labels, 
+            ax.get_xticklabels(), 
             rotation=0, 
             color=COLOR_TEXT, 
             fontfamily=FONT_MAIN, 
@@ -244,16 +240,16 @@ def main():
             spine.set_linewidth(1.5)
         
         # --- Sternchen-Erklärung ---
-        plt.figtext(
-            0.01, 0.01, 
-            "* Daten bis Oktober 2025",
-            ha="left",
-            va="bottom",
-            fontsize=14,
-            fontfamily=FONT_MAIN,
-            fontweight=FONT_WEIGHT_MAIN,
-            color=COLOR_TEXT
-        )
+        # plt.figtext(
+        #     0.01, 0.01, 
+        #     "* Daten bis Oktober 2025",
+        #     ha="left",
+        #     va="bottom",
+        #     fontsize=14,
+        #     fontfamily=FONT_MAIN,
+        #     fontweight=FONT_WEIGHT_MAIN,
+        #     color=COLOR_TEXT
+        # )
         
         # --- Copyright ---
         plt.figtext(
@@ -269,7 +265,7 @@ def main():
         
         # --- Plot anzeigen ---
         plt.tight_layout()
-        plt.savefig('output/final_plots/Verteilung EE Anteil Jan2020-Okt2025_dark.png', dpi=600)
+        plt.savefig('output/final_plots/Verteilung EE Anteil Jan2015-Dez2020_dark_HD.png', dpi=600)
         plt.show()
         
 
