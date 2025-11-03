@@ -1,7 +1,7 @@
 {
     "GLOBAL": {
         "max_datasets": 100,
-        "output_dir": "output\\test_plots"
+        "output_dir": "output\\final_plots"
     },
     "DATAFRAMES": [
         {
@@ -97,6 +97,18 @@
             "date_end": "31.10.2025 23:59",
             "plot_type": "histogram",
             "description": "Plot for testing Histogram of renewable energy share in consumption"
+        },
+        {
+            "id": 4,
+            "name": "EE-Anteil am Verbrauch in Deutschland",
+            "dataframes": [
+                1,
+                2
+            ],
+            "date_start": "01.01.2020 00:00",
+            "date_end": "31.10.2025 23:59",
+            "plot_type": "histogram",
+            "description": "aus 2020-2025 Daten | 2025 bis Oktober | Quelle: SMARD.de"
         }
     ]
 }

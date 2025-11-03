@@ -189,7 +189,7 @@ def choose_energy_sources(default: Optional[List[str]] = None) -> List[str]:
             print("Invalid input. Please use numbers or 'all'.")
 
 
-def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataManager, plot_cfg: Dict[str, Any], show: bool, save: bool):
+def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataManager, plot_cfg: Dict[str, Any], show: bool, save: bool, darkmode: bool = False):
     """Plot based on a config dict (for session plots)."""
     df_ids = plot_cfg.get("dataframes", [])
     if not df_ids:
@@ -228,17 +228,18 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
     
     try:
         outdir = config_manager.get_global("output_dir")
+        description = plot_cfg.get("description", "")
         if plot_type == "stacked_bar":
-            plot_stacked_bar(df_f, plot_cfg, show=show, save=save, output_dir=outdir)
+            plot_stacked_bar(df_f, plot_cfg, show=show, save=save, output_dir=outdir, darkmode=darkmode)
         elif plot_type == "line":
             cols = plot_cfg.get("columns")
             title = plot_cfg.get("name", "Line chart")
-            plot_line_chart(config_manager, df_f, columns=cols, title=title, show=show, save=save, output_dir=outdir)
+            plot_line_chart(config_manager, df_f, columns=cols, title=title, description=description, show=show, save=save, output_dir=outdir, darkmode=darkmode)
         elif plot_type == "balance":
             col1 = plot_cfg.get("column1")
             col2 = plot_cfg.get("column2")
             title = plot_cfg.get("name", "Balance plot")
-            plot_balance(config_manager, df_f, column1=col1, column2=col2, title=title, show=show, save=save, output_dir=outdir)
+            plot_balance(config_manager, df_f, column1=col1, column2=col2, title=title, description=description, show=show, save=save, output_dir=outdir, darkmode=darkmode)
         elif plot_type == "histogram":
             # Load second DataFrame for consumption data
             df_id_2 = df_ids[1]
@@ -254,7 +255,7 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
                 return
             
             title = plot_cfg.get("name", "Renewable Energy Share Histogram")
-            plot_ee_consumption_histogram(config_manager, df_f, df_2_f, title=title, show=show, save=save, output_dir=outdir)
+            plot_ee_consumption_histogram(config_manager, df_f, df_2_f, title=title, description=description, show=show, save=save, output_dir=outdir, darkmode=darkmode)
         else:
             print(f"Unsupported plot type: {plot_type}")
     except Exception as e:
@@ -276,14 +277,16 @@ def menu_generate_graph(cm: ConfigManager, dm: DataManager, state: SessionState)
         if not sel:
             return
         save_img = prompt_yes_no("Save image?")
-        plot_auto(cm, dm, sel["id"], show=True, save=save_img)
+        use_dark = prompt_yes_no("Dark mode?")
+        plot_auto(cm, dm, sel["id"], show=True, save=save_img, darkmode=use_dark)
         pause()
     elif choice == "2":
         sel = select_from_list(state.session_plots, "Session Plots")
         if not sel:
             return
         save_img = prompt_yes_no("Save image?")
-        run_plot_from_cfg_like(cm, dm, sel, show=True, save=save_img)
+        use_dark = prompt_yes_no("Dark mode?")
+        run_plot_from_cfg_like(cm, dm, sel, show=True, save=save_img, darkmode=use_dark)
         pause()
 
 
@@ -388,8 +391,9 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
             # Ask to generate now
             if prompt_yes_no("Generate this plot now?"):
                 save_img = prompt_yes_no("Save image as PNG?")
+                use_dark = prompt_yes_no("Dark mode?")
                 try:
-                    plot_auto(cm, dm, new_id, show=True, save=save_img)
+                    plot_auto(cm, dm, new_id, show=True, save=save_img, darkmode=use_dark)
                 except Exception as e:
                     print(f"Rendering failed: {e}")
                     print(f"Rendering failed: {e}")
@@ -399,8 +403,9 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
             # Ask to generate now
             if prompt_yes_no("Generate this plot now?"):
                 save_img = prompt_yes_no("Save image as PNG?")
+                use_dark = prompt_yes_no("Dark mode?")
                 try:
-                    run_plot_from_cfg_like(cm, dm, plot_cfg, show=True, save=save_img)
+                    run_plot_from_cfg_like(cm, dm, plot_cfg, show=True, save=save_img, darkmode=use_dark)
                 except Exception as e:
                     print(f"Rendering failed: {e}")
         pause()
@@ -471,8 +476,9 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
             # Ask to generate now
             if prompt_yes_no("Generate this plot now?"):
                 save_img = prompt_yes_no("Save image as PNG?")
+                use_dark = prompt_yes_no("Dark mode?")
                 try:
-                    run_plot_from_cfg_like(cm, dm, new_plot, show=True, save=save_img)
+                    run_plot_from_cfg_like(cm, dm, new_plot, show=True, save=save_img, darkmode=use_dark)
                 except Exception as e:
                     print(f"Rendering failed: {e}")
         else:
@@ -483,8 +489,9 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
             # Ask to generate now
             if prompt_yes_no("Generate this plot now?"):
                 save_img = prompt_yes_no("Save image as PNG?")
+                use_dark = prompt_yes_no("Dark mode?")
                 try:
-                    plot_auto(cm, dm, base["id"], show=True, save=save_img)
+                    plot_auto(cm, dm, base["id"], show=True, save=save_img, darkmode=use_dark)
                 except Exception as e:
                     print(f"Rendering failed: {e}")
         pause()
@@ -550,8 +557,9 @@ def menu_manage_plots(cm: ConfigManager, dm: DataManager, state: SessionState):
         # Ask to generate now
         if prompt_yes_no("Generate this plot now?"):
             save_img = prompt_yes_no("Save image as PNG?")
+            use_dark = prompt_yes_no("Dark mode?")
             try:
-                plot_auto(cm, dm, base["id"], show=True, save=save_img)
+                plot_auto(cm, dm, base["id"], show=True, save=save_img, darkmode=use_dark)
             except Exception as e:
                 print(f"Rendering failed: {e}")
         pause()
