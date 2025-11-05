@@ -72,41 +72,103 @@ def main():
         
         
         # ============================================================
-        # KATEGORISIERUNG IN PROZENT-BINS
+        # KATEGORISIERUNG IN PROZENT-BINS (0-10%, 10-20%, ..., 90-100%, >100%)
         # ============================================================
-        
-#         bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, float('inf')]
-#         labels = ['0-10%', '10-20%', '20-30%', '30-40%', '40-50%', 
-#                   '50-60%', '60-70%', '70-80%', '80-90%', '90-100%', '>100%']
-        
-#         genDf["Anteil EE Kategorie"] = pd.cut(
-#             genDf["Anteil Erneuerbare"], 
-#             bins=bins, 
-#             labels=labels, 
-#             include_lowest=True, 
-#             right=False
-#         )
-        
-#         # ============================================================
-#         # PIVOT-TABELLEN ERSTELLEN
-#         # ============================================================
-        
-#         # Anzahl der Viertelstunden pro Kategorie und Jahr
-#         ee_verteilung = pd.crosstab(genDf["Anteil EE Kategorie"], genDf["Jahr"], dropna=False)
-        
-#         print("\nVerteilung Anteil Erneuerbare Energien nach Jahr (Anzahl):")
-#         print(ee_verteilung)
-        
-#         # Summe pro Jahr berechnen
-#         summe_pro_jahr = ee_verteilung.sum(axis=0)
-#         print("\n\nSumme Viertelstunden pro Jahr:")
-#         print(summe_pro_jahr)
-        
-#         # Prozentuale Verteilung berechnen
-#         ee_verteilung_prozent = ee_verteilung.div(summe_pro_jahr, axis=1) * 100
-        
-#         print("\n\nVerteilung Anteil Erneuerbare Energien nach Jahr (in %):")
-#         print(ee_verteilung_prozent.round(2))
+        # Ensure the total renewable generation column is present in genDf
+        # plotting functions in this repo expect the column name
+        # 'Gesamterzeugung Erneuerbare [MWh]'. We'll add it to plotDF
+        # so we can compute the Anteil Erneuerbare am Verbrauch.
+        add_column_from_other_df(plotDF, genDf, 'Gesamterzeugung Erneuerbare [MWh]')
+
+        # Compute Anteil Erneuerbare in percent: (Erneuerbare / Netzlast) * 100
+        # Avoid division by zero and keep NaN where Netzlast is zero or missing.
+        if 'Netzlast [MWh]' in plotDF.columns and 'Gesamterzeugung Erneuerbare [MWh]' in plotDF.columns:
+            netz = plotDF['Netzlast [MWh]'].replace({0: np.nan})
+            plotDF['Anteil Erneuerbare'] = (plotDF['Gesamterzeugung Erneuerbare [MWh]'] / netz) * 100
+        else:
+            raise ValueError("Required columns for computing Anteil Erneuerbare are missing: 'Netzlast [MWh]' or 'Gesamterzeugung Erneuerbare [MWh]'.")
+
+        # Define decade-percent bins 0-10, 10-20, ..., 90-100 and a final >100 bin
+        bins = list(range(0, 101, 10)) + [float('inf')]  # [0,10,20,...,100, inf]
+        labels = [f"{i}-{i+10}%" for i in range(0,100,10)] + ['>100%']
+
+        # Use right=True so intervals are (a, b] and include_lowest ensures 0 is included
+        plotDF['Anteil EE Kategorie'] = pd.cut(plotDF['Anteil Erneuerbare'], bins=bins, labels=labels, include_lowest=True)
+
+        # Crosstab / counts per category (overall and per year if Jahr available)
+        ee_verteilung = pd.crosstab(plotDF['Anteil EE Kategorie'], plotDF.get('Jahr', pd.Series([], dtype='int')), dropna=False)
+
+        print("\nVerteilung Anteil Erneuerbare Energien nach Jahr (Anzahl):")
+        print(ee_verteilung)
+
+        # Gesamtsumme über alle Jahre
+        summe_pro_jahr = ee_verteilung.sum(axis=0)
+        print("\n\nSumme Viertelstunden pro Jahr:")
+        print(summe_pro_jahr)
+
+        # Prozentuale Verteilung berechnen
+        # handle division by zero for years with no entries
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ee_verteilung_prozent = ee_verteilung.div(summe_pro_jahr.replace(0, np.nan), axis=1) * 100
+
+        print("\n\nVerteilung Anteil Erneuerbare Energien nach Jahr (in %):")
+        print(ee_verteilung_prozent.round(2))
+
+        # --- Plot histogram (bar) similar to example image ---
+        counts = plotDF['Anteil EE Kategorie'].value_counts(sort=False)
+        counts = counts.reindex(labels, fill_value=0)
+
+        # Ensure color and font variables are defined before plotting the histogram
+        fm.fontManager.__init__()
+        DARKMODE = False
+        if DARKMODE:
+            COLOR_BG = "#1a1a1a"
+            COLOR_BORDER = "#3B3B3B"
+            COLOR_GRID = "#FFFFFF"
+            COLOR_TEXT = "#FFFFFF"
+        else:
+            COLOR_BG = "#ffffff"
+            COLOR_BORDER = "#3B3B3B"
+            COLOR_GRID = "#000000"
+            COLOR_TEXT = "#000000"
+        FONT_MAIN = 'Open Sans'
+        FONT_WEIGHT_MAIN = 'normal'
+        FONT_TITLE = 'Druk Wide Trial'
+        plt.rcParams.update({
+            'font.family': 'sans-serif',
+            'font.sans-serif': [FONT_MAIN, 'Arial'],
+            'font.size': 16,
+            'font.weight': FONT_WEIGHT_MAIN
+        })
+
+        fig_hist, ax_hist = plt.subplots(figsize=(10, 8), facecolor=COLOR_BG)
+        ax_hist.set_facecolor(COLOR_BG)
+        bar_colors = [color_ee]* (len(labels)-1) + ['#637CEF'] if 'color_ee' in locals() else ['#637CEF'] * len(labels)
+        # Draw bars
+        x_pos = np.arange(len(labels))
+        ax_hist.bar(x_pos, counts.values, color='#637CEF', edgecolor=COLOR_BORDER)
+        # Labels and title
+        fig_hist.text(0.135, 0.85, "Jan 2020 - Okt 2025 | korrigierte Version | Quelle: SMARD.de", fontsize=16, fontfamily=FONT_MAIN, fontweight=FONT_WEIGHT_MAIN, color=COLOR_TEXT, verticalalignment='top', bbox=dict(boxstyle='square,pad=0.6', facecolor=COLOR_BG, edgecolor=COLOR_BORDER, linewidth=1.5))
+        ax_hist.set_xticks(x_pos)
+        ax_hist.set_xticklabels(labels, rotation=45, ha='right', color=COLOR_TEXT, fontfamily=FONT_MAIN)
+        ax_hist.set_ylabel('Anzahl 15-Minuten-Intervalle', fontsize=14, color=COLOR_TEXT, fontfamily=FONT_MAIN)
+        ax_hist.set_xlabel('Anteil erneuerbarer Energien am Verbrauch (%)', fontsize=14, color=COLOR_TEXT, fontfamily=FONT_MAIN)
+        ax_hist.set_title('Verteilung des EE-Anteils am\nStromverbrauch von 2020-2025', fontsize=26, fontweight='bold', fontstyle='italic', pad=60, fontfamily=FONT_TITLE, loc='left', color=COLOR_TEXT)
+        ax_hist.yaxis.grid(True, linestyle='--', color=COLOR_GRID, alpha=0.5)
+        for spine in ax_hist.spines.values():
+            spine.set_edgecolor(COLOR_BORDER)
+            spine.set_linewidth(1.2)
+        for label in ax_hist.get_yticklabels():
+            label.set_color(COLOR_TEXT)
+            label.set_fontfamily(FONT_MAIN)
+        plt.figtext(0.99, 0.001, "© EcoVision Labs Team", ha="right", va="bottom", fontsize=14, fontfamily=FONT_MAIN, fontweight=FONT_WEIGHT_MAIN, color=COLOR_TEXT)
+
+        plt.tight_layout()
+        out_plot_dir = Path('output/final_plots')
+        out_plot_dir.mkdir(parents=True, exist_ok=True)
+        plt.savefig(out_plot_dir / 'Histogram_Anteil_Erneuerbare_Prozent_bins_.png', dpi=300, bbox_inches='tight')
+        print(f"Plot gespeichert: {out_plot_dir / 'Histogram_Anteil_Erneuerbare_Prozent_bins_dark.png'}")
+        plt.close(fig_hist)
         
         # ============================================================
         # STACKED BAR: Monatliche Erzeugung nach Quelle (EE grün, Rest grau)
@@ -204,8 +266,8 @@ def main():
         plt.subplots_adjust(bottom=0.08)
         out_plot_dir = Path('output/final_plots')
         out_plot_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(out_plot_dir / 'Monatliche_Erzeugung_EE_Konv_2020-2025_light.png', dpi=300, bbox_inches="tight")
-        print(f"Plot gespeichert: {out_plot_dir / 'Monatliche_Erzeugung_EE_Konv_2020-2025_dark.png'}")
+        #plt.savefig(out_plot_dir / 'Monatliche_Erzeugung_EE_Konv_2020-2025_light.png', dpi=300, bbox_inches="tight")
+       # print(f"Plot gespeichert: {out_plot_dir / 'Monatliche_Erzeugung_EE_Konv_2020-2025_dark.png'}")
         plt.close(fig2)
 
         
