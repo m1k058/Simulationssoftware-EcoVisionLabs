@@ -63,6 +63,8 @@ def validate_date(date_str: str) -> bool:
 @dataclass
 class SessionState:
     session_plots: List[Dict[str, Any]] = field(default_factory=list)
+    # Selected scenario for Simulation menu (placeholder structure)
+    selected_scenario: Optional[Dict[str, Any]] = None
 
     def next_session_plot_id(self) -> int:
         # Negative IDs for session plots to avoid collisions with config IDs
@@ -984,6 +986,92 @@ def menu_list_overview(cm: ConfigManager, dm: DataManager, state: SessionState):
     pause("\nPress Enter to return to main menu...")
 
 
+def menu_simulation(cm: ConfigManager, dm: DataManager, state: SessionState):
+    """Simulation (Base Programm) - placeholders for scenario workflow."""
+    while True:
+        clear_screen()
+        print("=== Simulation (Base Programm) ===\n")
+        # Top info about selected scenario
+        if state.selected_scenario:
+            print(f"Ausgewähltes Scenario: {state.selected_scenario.get('name', '<unnamed>')}")
+            print(f"Beschreibung: {state.selected_scenario.get('description', '')}\n")
+        else:
+            print("Kein Scenario ausgewählt.\n")
+
+        print("1) Scenario selector")
+        print("2) Scenario editor")
+        print("3) Simulate scenario")
+        print("0) Back")
+        choice = input("> ").strip()
+
+        if choice == "0":
+            break
+        elif choice == "1":
+            # Placeholder: simple selector that toggles a demo scenario
+            print("(Placeholder) Scenario selector")
+            if prompt_yes_no("Set a demo scenario as selected?"):
+                state.selected_scenario = {"id": 1, "name": "Demo Scenario", "description": "Demo (placeholder)"}
+                print("Scenario selected.")
+            pause()
+        elif choice == "2":
+            print("(Placeholder) Scenario editor - not implemented yet.")
+            pause()
+        elif choice == "3":
+            print("(Placeholder) Simulate scenario - not implemented yet.")
+            pause()
+        else:
+            print("Invalid selection.")
+            pause()
+
+
+def menu_analyze_plot(cm: ConfigManager, dm: DataManager, state: SessionState):
+    """Group plotting-related menus under Analyze -> Plot."""
+    while True:
+        clear_screen()
+        print("=== Analyze: Plot ===\n")
+        print("1) Generate Graph (render saved/session plots)")
+        print("2) Configure New Plot")
+        print("3) Manage Saved/Session Plots (Edit/Delete)")
+        print("4) List Overview (Plots & Datasets)")
+        print("0) Back")
+        choice = input("> ").strip()
+
+        if choice == "0":
+            break
+        elif choice == "1":
+            menu_generate_graph(cm, dm, state)
+        elif choice == "2":
+            menu_configure_new_plot(cm, dm, state)
+        elif choice == "3":
+            menu_manage_plots(cm, dm, state)
+        elif choice == "4":
+            menu_list_overview(cm, dm, state)
+        else:
+            print("Invalid selection.")
+            pause()
+
+
+def menu_analyze(cm: ConfigManager, dm: DataManager, state: SessionState):
+    """Analyze (manual visualisation and calculation) - top-level analyze menu."""
+    while True:
+        clear_screen()
+        print("=== Analyze (manual visualisation and calculation) ===\n")
+        print("1) Plot")
+        print("2) Calc (tools)")
+        print("0) Back")
+        choice = input("> ").strip()
+
+        if choice == "0":
+            break
+        elif choice == "1":
+            menu_analyze_plot(cm, dm, state)
+        elif choice == "2":
+            menu_csv_calc(cm, dm, state)
+        else:
+            print("Invalid selection.")
+            pause()
+
+
 def main():
     clear_screen()
     print("=== EcoVisionLabs Interface v0.2 ===\n")
@@ -995,27 +1083,18 @@ def main():
     while True:
         clear_screen()
         print("=== EcoVisionLabs Interface v0.2 ===\n")
-        print("1) Generate Graph")
-        print("2) Configure New Plot")
-        print("3) Manage Saved/Session Plots (Edit/Delete)")
-        print("4) CSV Calculation Mode")
-        print("5) List Overview (Plots & Datasets)")
-        print("0) Exit")
+        print("1) Simulation (Base Programm)")
+        print("2) Analyze (manual visualisation and calculation)")
+        print("0) Stop program")
         choice = input("> ").strip()
 
         if choice == "0":
-            print("Goodbye!")
+            print("Stopping program. Goodbye!")
             break
         elif choice == "1":
-            menu_generate_graph(cm, dm, state)
+            menu_simulation(cm, dm, state)
         elif choice == "2":
-            menu_configure_new_plot(cm, dm, state)
-        elif choice == "3":
-            menu_manage_plots(cm, dm, state)
-        elif choice == "4":
-            menu_csv_calc(cm, dm, state)
-        elif choice == "5":
-            menu_list_overview(cm, dm, state)
+            menu_analyze(cm, dm, state)
         else:
             print("Invalid selection.")
             pause()
