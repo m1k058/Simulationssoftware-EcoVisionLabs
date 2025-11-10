@@ -25,14 +25,14 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict, Optional, Any
-
+from datetime import datetime
 import pandas as pd
 
 from constants import ENERGY_SOURCES as CONST_ENERGY_SOURCES
 from config_manager import ConfigManager
 from data_manager import DataManager
 from io_handler import save_data, save_data_excel
-from plotting_v3 import (
+from plotting_formated import (
     plot_auto,
     plot_stacked_bar,
     plot_line_chart,
@@ -49,8 +49,14 @@ from data_processing import (
     add_column_from_other_df,
 )
 
-# Use the existing date validation from v0.1
-from user_interface import validate_date
+
+def validate_date(date_str: str) -> bool:
+    """Validate if the date string matches the required format."""
+    try:
+        datetime.strptime(date_str, "%d.%m.%Y %H:%M")
+        return True
+    except ValueError:
+        return False
 
 
 # ----------------------------- Session State ------------------------------

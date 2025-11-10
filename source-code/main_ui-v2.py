@@ -2,7 +2,7 @@
 EcoVisionLabs Main UI v2
 Uses the new menu-based interface (user_interface_v0_2)
 """
-from user_interface_v0_2 import main as ui_main
+from user_interface_v2 import main as ui_main
 
 
 def main():
