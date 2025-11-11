@@ -89,11 +89,14 @@ def main():
         
         # Anzeige der ersten Zeilen des skalierten DataFrames
         timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-        outdir = Path("output\\csv\\output.csv")
+        # Erstelle Ausgabeordner (Verzeichnis) und Dateinamen korrekt
+        outdir = Path("output") / "csv"
         outdir.mkdir(parents=True, exist_ok=True)
         filename = outdir / f"Skalierte_Netzlast_2035_{timestamp}.csv"
-        df_simulation.to_csv(outdir, index=False, sep=';', encoding='utf-8')
-        #print(f"\n.csv {filename} gespeichert unter {outdir}\n")
+
+        # Schreibe die CSV in die Datei (pandas akzeptiert Path-Objekte)
+        df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8')
+        print(f"\n{filename} gespeichert unter {outdir}\n")
 
     
     except AppError as e:
