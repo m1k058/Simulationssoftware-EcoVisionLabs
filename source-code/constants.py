@@ -31,6 +31,30 @@ EXPECTED_HEADERS = {
         "Netzlast inkl. Pumpspeicher [MWh]",
         "Pumpspeicher [MWh]",
         "Residuallast [MWh]",
+    ],
+    "CUST_PROG": [
+        "Studie",
+        "Jahr",
+        "Biomasse [TWh]",
+        "Wasserkraft [TWh]",
+        "Wind Offshore [TWh]",
+        "Wind Onshore [TWh]",
+        "Photovoltaik [TWh]",
+        "Abgeregelte EE-Menge [TWh]",
+        "Wasserstoff [TWh]",
+        "Kernenergie [MWh]",
+        "Braunkohle [TWh]",
+        "Steinkohle [TWh]",
+        "Erdgas [TWh]",
+        "Sonstige [TWh]",
+        "Speicher [TWh]",
+        "Summe [TWh]",
+        "Importsaldo [TWh]",
+        "Gesamterzeugung Erneuerbare [TWh]",
+        "Gesamterzeugung Konventionelle [TWh]",
+        "Gesamterzeugung [TWh]",
+        "Bruttostromverbrauch [TWh]",
+        "Anteil Erneuerbare",
     ]
 }
 
@@ -46,6 +70,14 @@ FILE_FORMAT_OPTIONS = {
     },
     "SMARD-V": {
         "sep": ";",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+        "na_values": ["-", "NaN", "n/a", ""]
+    },
+    "CUST_PROG": {
+        "sep": "\t",
         "decimal": ",",
         "thousands": ".",
         "date_format": "%d.%m.%Y %H:%M",

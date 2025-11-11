@@ -31,6 +31,13 @@
             "path": "raw-data\\Realisierter_Stromverbrauch_2015-2020.csv",
             "datatype": "SMARD-V",
             "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2015-2020"
+        },
+        {
+            "id": 4,
+            "name": "Erzeugungs/Verbrauchs Prognose Daten",
+            "path": "raw-data\\Prognosedaten_Studien.csv",
+            "datatype": "CUST_PROG",
+            "description": "Daten für Erzeugungs- und Verbrauchsprognosen verschiedener Studien"
         }
     ],
     "PLOTS": [
