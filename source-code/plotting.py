@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from constants import ENERGY_SOURCES
 from errors import PlotNotFoundError, DataProcessingError, WarningMessage
-from data_processing import add_total_renewable_generation
+from data_processing import gen
 
 
 def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, output_dir=None):
@@ -218,7 +218,7 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
     try:
         # Check if renewable generation column exists, otherwise calculate it
         if 'Gesamterzeugung Erneuerbare [MWh]' not in df_erzeugung.columns:
-            df_erzeugung_processed = add_total_renewable_generation(df_erzeugung.copy())
+            df_erzeugung_processed = gen.add_total_renewable_generation(df_erzeugung.copy())
         else:
             df_erzeugung_processed = df_erzeugung
 

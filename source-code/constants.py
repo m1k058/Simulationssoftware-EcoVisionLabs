@@ -1,4 +1,4 @@
-from enum import Enum
+
 
 # Words that should be cleaed from columns
 HEADER_CLEAN_PATTERNS = [

@@ -19,7 +19,7 @@ New menu-based interface with the following features:
 Note: Session plots are not saved in config.json and will be lost after program termination.
 """
 
-from __future__ import annotations
+# from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
@@ -39,15 +39,7 @@ from plotting_formated import (
     plot_balance,
     plot_ee_consumption_histogram,
 )
-from data_processing import (
-    add_total_generation,
-    add_total_renewable_generation,
-    add_total_conventional_generation,
-    add_energy_source_generation_sum,
-    sum_columns,
-    multiply_column,
-    add_column_from_other_df,
-)
+from data_processing import gen, col
 
 
 def validate_date(date_str: str) -> bool:
@@ -725,7 +717,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                         continue
                     
                     new_col_name = input_nonempty("Name for new sum column")
-                    df_working = sum_columns(df_working, cols_to_sum, new_col_name)
+                    df_working = col.sum_columns(df_working, cols_to_sum, new_col_name)
                     print(f"✓ Column '{new_col_name}' created successfully.")
                     pause()
                     
@@ -738,7 +730,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                 sources = choose_energy_sources()
                 colname_base = input_nonempty("Column name base (e.g. 'My Sum')")
                 try:
-                    df_working = add_energy_source_generation_sum(df_working, sources=sources, name=colname_base)
+                    df_working = gen.sum_energy_sources(df_working, sources=sources, name=colname_base)
                     print(f"✓ Column '{colname_base} [MWh]' created successfully.")
                     pause()
                 except Exception as e:
@@ -766,7 +758,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                     if create_new:
                         new_name = input_nonempty("Name for new column")
                     
-                    df_working = multiply_column(df_working, col_name, factor, new_name)
+                    df_working = col.multiply_column(df_working, col_name, factor, new_name)
                     pause()
                     
                 except Exception as e:
@@ -805,7 +797,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                     if rename:
                         new_name = input_nonempty("New column name")
                     
-                    df_working = add_column_from_other_df(df_working, df_other, source_col, new_name)
+                    df_working = col.add_column_from_other_df(df_working, df_other, source_col, new_name)
                     pause()
                     
                 except Exception as e:
@@ -815,7 +807,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             elif op_choice == "5":
                 # Add total generation
                 try:
-                    df_working = add_total_generation(df_working)
+                    df_working = gen.add_total_generation(df_working)
                     print("✓ Total generation column added.")
                     pause()
                 except Exception as e:
@@ -825,7 +817,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             elif op_choice == "6":
                 # Add total renewable
                 try:
-                    df_working = add_total_renewable_generation(df_working)
+                    df_working = gen.add_total_renewable_generation(df_working)
                     print("✓ Total renewable generation column added.")
                     pause()
                 except Exception as e:
@@ -835,7 +827,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             elif op_choice == "7":
                 # Add total conventional
                 try:
-                    df_working = add_total_conventional_generation(df_working)
+                    df_working = gen.add_total_conventional_generation(df_working)
                     print("✓ Total conventional generation column added.")
                     pause()
                 except Exception as e:
