@@ -47,11 +47,16 @@ def main():
         # Ziehe ein Referenzjahr aus der den Dataframe
         df_refJahr = conDf[(conDf["Zeitpunkt"] >= "01.01.2023 00:00") & (conDf["Zeitpunkt"] <= "31.12.2023 23:59")]
         
-        Gesammtenergie_RefJahr = col.sum_all(df_refJahr)
+        # Berechne die Gesammtenergie im Referenzjahr
+        Gesammtenergie_RefJahr = col.get_column_total(df_refJahr, "Netzlast inkl. Pumpspeicher [MWh]") / 1_000_000  # in TWh
 
         formatierte_zahl = locale.format_string("%.2f", Gesammtenergie_RefJahr, grouping=True)
 
         print(f"Gesamter Energieverbrauch im Referenzjahr: {formatierte_zahl} [TWh]")
+
+        # Hol Ziel-Wert aus Prognosedaten
+        zielWert_verbrauch = 1
+
 
     
     except AppError as e:

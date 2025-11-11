@@ -43,7 +43,7 @@ def add_total_conventional_generation(df: pd.DataFrame) -> pd.DataFrame:
     df = sum_energy_sources(df, "Conventional", "Gesamterzeugung Konventionelle")
     return df
 
-def sum_energy_sources(df: pd.DataFrame, sources="All", name="Summe Erzeugung") -> pd.DataFrame:
+def sum_energy_sources(df: pd.DataFrame, sources: str="All", name="Summe Erzeugung") -> pd.DataFrame:
     """
     Calculates the sum of energy sources specified in the 'sources' argument
     for each timestamp and adds it as a new column to the DataFrame.
