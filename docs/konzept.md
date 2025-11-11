@@ -51,3 +51,6 @@ wie verhalten sich Speicherparks bezüglich der Ladekurven / Effizienz?
 Berechnung der Netto-EE-Erzeugung, dann bei Überschuss Speicher als nutzbare Energiequelle mit Einberechnung des Wirkungsgrads mit einberechnen.
 berechnungsseitig alles in MWh oder besser in Wh?
 Einbeziehung Wasserstoff -> schauen, was wo zuerst reinkommt -> Slider 50/50, 80/20 etc.
+
+Baue Methode: Studie auswählen, Referenzjahr(e) eingeben können, mit der prognose für 2030 bis 2045 (je nachdem was verfügbar ist) ich das haben will und als dataframe ausspucken. Ins UI einbauen danach.
+später einbauen: im winter mehr stromverbrauch wegen wärmepumpen, E-Autos sollen über Nacht geladen werden bisher ist der mehrverbrauch nur gemittelt über das gesamte jahr. Haben wir sowas wie eine Glockenkurve, die man über den Winter oder die Nacht legen kann? Steht dazu etwas in den Studien oder müssen wir selber eine solche Funktion modellieren?
