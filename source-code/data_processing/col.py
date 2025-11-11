@@ -27,13 +27,32 @@ def sum_columns(df: pd.DataFrame, columns: list, new_column_name: str) -> pd.Dat
         
         # Calculate sum
         df[new_column_name] = df[valid_cols].sum(axis=1)
-        print(f"Successfully created column '{new_column_name}' as sum of {len(valid_cols)} columns.")
+        # print(f"Successfully created column '{new_column_name}' as sum of {len(valid_cols)} columns.")
         
         return df
     
     except Exception as e:
         print(f"Error in sum_columns: {e}")
         return df
+
+def sum_columns_all(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sums up all valid numeric values from each column.
+
+    Args:
+        df: The input DataFrame.
+
+        Returns: 
+        A DataFrame containing the sums of each column.
+    """
+    try:
+        col_sums = df.sum(numeric_only=True)
+        sums_df = pd.DataFrame(col_sums).transpose()
+        print("Successfully generated DataFrame with column sums.")
+        return sums_df
+    except Exception as e:
+        print(f"Error in sum_columns_all: {e}")
+        return pd.DataFrame()
 
 def multiply_column(df: pd.DataFrame, column: str, factor: float, new_column_name: str = None) -> pd.DataFrame:
     """
@@ -105,6 +124,48 @@ def add_column_from_other_df(df_target: pd.DataFrame, df_source: pd.DataFrame,
         print(f"Error in add_column_from_other_df: {e}")
         return df_target
     
+def sum_rows(df: pd.DataFrame, new_column_name: str = None) -> pd.DataFrame:
+    """
+    Returns a new DataFrame containing the row-wise sums computed from the numeric
+    columns of the input DataFrame.
+
+    Args:
+        df: The input DataFrame.
+        new_column_name: Name for the new column containing the row sums.
+
+    Returns:
+        A new DataFrame with a single column named `new_column_name` that holds
+        the sum of numeric values for each row. The original `df` is not modified.
+    """
+    try:
+        sums = df.sum(axis=1, numeric_only=True)
+        if not new_column_name:
+            new_column_name = "Row_Sum"
+        result_df = pd.DataFrame({new_column_name: sums})
+        # print(f"Successfully generated new DataFrame with column '{new_column_name}' as sum of rows.")
+        return result_df
+    except Exception as e:
+        print(f"Error in sum_rows: {e}")
+        return pd.DataFrame()
+
+def sum_all(df: pd.DataFrame) -> float:
+    """
+    Sums up all numeric values in the DataFrame.
+
+    Args:
+        df: The input DataFrame.
+
+    Returns:
+        The total sum of all numeric values in the DataFrame.
+    """
+    try:
+        total_sum = df.select_dtypes(include='number').to_numpy().sum()
+        # print(f"Successfully calculated total sum: {total_sum}")
+        return total_sum
+    except Exception as e:
+        print(f"Error in sum_all: {e}")
+        return 0.0
+
 def generate_df_with_col_sums(df: pd.DataFrame) -> pd.DataFrame:
     """
     Generates a DataFrame with sums for each column from the input DataFrame.

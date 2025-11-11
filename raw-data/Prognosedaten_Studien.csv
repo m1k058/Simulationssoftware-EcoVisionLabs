@@ -1,4 +1,4 @@
-﻿Studie;Jahr;Biomasse [TWh];Wasserkraft [TWh];Wind Offshore [TWh];Wind Onshore [TWh];Photovoltaik [TWh];Abgeregelte EE-Menge [TWh];Wassertstoff [TWh];Kernenergie [TWh];Braunkohle [TWh];Steinkohle [TWh];Erdgas [TWh];Sonstige [TWh];Speicher [TWh];Summe [TWh];Importsaldo [TWh];Gesamterzeugung Erneuerbare [TWh];Gesamterzeugung Konventionelle [TWh];Gesamterzeugung [TWh];Bruttostromverbrauch [TWh];Anteil Erneuerbare
+﻿Studie;Jahr;Biomasse [TWh];Wasserkraft [TWh];Wind Offshore [TWh];Wind Onshore [TWh];Photovoltaik [TWh];Abgeregelte EE-Menge [TWh];Wasserstoff [TWh];Kernenergie [TWh];Braunkohle [TWh];Steinkohle [TWh];Erdgas [TWh];Sonstige [TWh];Speicher [TWh];Summe [TWh];Importsaldo [TWh];Gesamterzeugung Erneuerbare [TWh];Gesamterzeugung Konventionelle [TWh];Gesamterzeugung [TWh];Bruttostromverbrauch [TWh];Anteil Erneuerbare
 Agora;2018;42;18;20;91;46;0;0;72;135;75;79;28;6;611;-49;216;395;611;595;0,363193277
 Agora;2025;44;21;37;118;86;0;0;0;69;37;102;25;3;541;14;306;235;541;574;0,533101045
 Agora;2030;38;21;90;151;140;-4;9;0;3;11;135;20;4;614;17;439;176;614;643;0,682270607

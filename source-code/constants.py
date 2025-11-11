@@ -42,7 +42,7 @@ EXPECTED_HEADERS = {
         "Photovoltaik [TWh]",
         "Abgeregelte EE-Menge [TWh]",
         "Wasserstoff [TWh]",
-        "Kernenergie [MWh]",
+        "Kernenergie [TWh]",
         "Braunkohle [TWh]",
         "Steinkohle [TWh]",
         "Erdgas [TWh]",
@@ -77,7 +77,7 @@ FILE_FORMAT_OPTIONS = {
         "na_values": ["-", "NaN", "n/a", ""]
     },
     "CUST_PROG": {
-        "sep": "\t",
+        "sep": ";",
         "decimal": ",",
         "thousands": ".",
         "date_format": "%d.%m.%Y %H:%M",
