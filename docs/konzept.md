@@ -54,3 +54,11 @@ Einbeziehung Wasserstoff -> schauen, was wo zuerst reinkommt -> Slider 50/50, 80
 
 Baue Methode: Studie auswählen, Referenzjahr(e) eingeben können, mit der prognose für 2030 bis 2045 (je nachdem was verfügbar ist) ich das haben will und als dataframe ausspucken. Ins UI einbauen danach.
 später einbauen: im winter mehr stromverbrauch wegen wärmepumpen, E-Autos sollen über Nacht geladen werden bisher ist der mehrverbrauch nur gemittelt über das gesamte jahr. Haben wir sowas wie eine Glockenkurve, die man über den Winter oder die Nacht legen kann? Steht dazu etwas in den Studien oder müssen wir selber eine solche Funktion modellieren?
+
+### Standardlastprofile Strom BMWK / BDEW
+Welche sich ändernden Verbrauchsquellen gibt es noch und wie wirken sie sich aus auf Tage, WE, Jahreszeiten?
+ 
+Dataframe hinten dran setzen, der mehr als ein Jahr berechnet und prognostiert.
+Speicherort in UI, um dann zu plotten.
+Fehlerbehebung, wenn Daten in einer Studie fehlen -> erneut fragen, was ausgewählt werden soll
+Erklärung Michal Teams Interpolation
