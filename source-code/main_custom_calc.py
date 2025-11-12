@@ -46,57 +46,80 @@ def main():
         # Prognosedaten: config.json uses id 4 for Prognosedaten_Studien
         progDf = dm.get(4) # Prognosedaten
 
+        # ============================================================
+        # Wähle Daten
+        # ============================================================
+
+        prog_dat_studie = 'Agora'
+        prog_dat_jahr = 2035
+        ref_jahr = 2023
+        simu_jahr = 2030
+        # ============================================================
+
+        # nach jahr im Verbrauchsdatensatz suchen
+        ist_ref_jahr_vorhanden = (conDf['Zeitpunkt'].dt.year == ref_jahr).any()
+
         # Ziehe ein Referenzjahr aus der den Dataframe
-        df_refJahr = conDf[(conDf["Zeitpunkt"] >= "01.01.2023 00:00") & (conDf["Zeitpunkt"] <= "31.12.2023 23:59")]
+        if ist_ref_jahr_vorhanden:
+            df_refJahr = conDf[(conDf["Zeitpunkt"] >= f"01.01.{ref_jahr} 00:00") & (conDf["Zeitpunkt"] <= f"31.12.{ref_jahr} 23:59")]
+        else:
+            print(f"Referenzjahr {ref_jahr} nicht im Verbrauchsdatensatz gefunden.")
         
         # Berechne die Gesammtenergie im Referenzjahr
-        Gesamtenergie_RefJahr = col.get_column_total(df_refJahr, "Netzlast [MWh]") / 1_000_000  # in TWh
+        Gesamtenergie_RefJahr = col.get_column_total(df_refJahr, "Netzlast [MWh]") / 1000000  # in TWh
 
-        formatierte_zahl = locale.format_string("%.2f", Gesamtenergie_RefJahr, grouping=True)
-
-        print(f"Gesamter Energieverbrauch im Referenzjahr: {formatierte_zahl} [TWh]")
-
-        # --- Vorbereitung Prognosedaten: Spalten säubern und Typen sicherstellen
-        progDf.columns = progDf.columns.str.strip()
-        if 'Studie' in progDf.columns:
-            progDf['Studie'] = progDf['Studie'].astype(str).str.strip()
-        else:
-            raise DataProcessingError("Prognosedaten enthalten keine Spalte 'Studie'.")
-
-        if 'Jahr' in progDf.columns:
-            # Falls Jahr als String eingelesen wurde, sauber nach Int konvertieren
-            progDf['Jahr'] = pd.to_numeric(progDf['Jahr'], errors='coerce').astype('Int64')
-        else:
-            raise DataProcessingError("Prognosedaten enthalten keine Spalte 'Jahr'.")
+        formatierte_zahl = locale.format_string("%.8f", Gesamtenergie_RefJahr, grouping=True)
+        print(f"Gesamter Energieverbrauch im Referenzjahr: {formatierte_zahl} [TWh]\n")
 
         # Hol Ziel-Wert aus Prognosedaten (robuste Auswahl + klare Fehlermeldung)
-        sel = progDf.loc[(progDf['Jahr'] == 2035) & (progDf['Studie'] == 'Agora'), 'Bruttostromverbrauch [TWh]']
+        sel = progDf.loc[(progDf['Jahr'] == prog_dat_jahr) & (progDf['Studie'] == prog_dat_studie), 'Bruttostromverbrauch [TWh]']
         if sel.empty:
-            raise DataProcessingError("Keine Prognose-Zeile gefunden für Studie='Agora' und Jahr=2035")
+            print(f"Keine Prognose-Zeile gefunden für Studie='{prog_dat_studie}' und Jahr={prog_dat_jahr}")
         try:
             zielWert_Studie = float(sel.iat[0])
         except Exception as e:
-            raise DataProcessingError(f"Fehler beim Lesen des Zielwerts aus Prognosedaten: {e}")
+            print(f"Fehler beim Lesen des Zielwerts aus Prognosedaten: {e}")
 
-        # Faktor berechnen
-        faktor = zielWert_Studie / Gesamtenergie_RefJahr
+        formatierte_zahl = locale.format_string("%.8f", zielWert_Studie, grouping=True)
+        print(f"Gesamter Energieverbrauch im Prognosejahr: {formatierte_zahl} [TWh]\n")
+
+        # Berechne Gesamtenergie Simualtionjahr (interpoliert, falls nötig)
+        if simu_jahr != prog_dat_jahr:
+            Gesamtenergie_simu_jahr = np.interp(simu_jahr, [ref_jahr, prog_dat_jahr], [Gesamtenergie_RefJahr, zielWert_Studie])
+        else:
+            Gesamtenergie_simu_jahr = zielWert_Studie
+
+        formatierte_zahl = locale.format_string("%.8f", Gesamtenergie_simu_jahr, grouping=True)
+        print(f"Gesamter Energieverbrauch im Simulationsjahr: {formatierte_zahl} [TWh]\n")
+        
+        # Berechne den Skalierungsfaktor
+        faktor = zielWert_Studie / Gesamtenergie_simu_jahr
+
+        formatierte_zahl = locale.format_string("%.14f", faktor, grouping=True)
+        print(f"Berechneter Faktor: {formatierte_zahl}\n")
 
         # Skaliere den Energieverbrauch im Referenzjahr mit dem Faktor
+        jahr_offset = simu_jahr - ref_jahr
         df_simulation = pd.DataFrame({
-            'Zeitpunkt': pd.to_datetime(df_refJahr['Zeitpunkt']) + pd.DateOffset(years=12),
+            'Datum von': pd.to_datetime(df_refJahr['Datum von']) + pd.DateOffset(years=jahr_offset),
+            'Datum bis': pd.to_datetime(df_refJahr['Datum bis']) + pd.DateOffset(years=jahr_offset),
+            'Zeitpunkt': pd.to_datetime(df_refJahr['Zeitpunkt']) + pd.DateOffset(years=jahr_offset),
             'Skalierter Netzlast [MWh]': df_refJahr['Netzlast [MWh]'] * faktor
             })
         
-        # Anzeige der ersten Zeilen des skalierten DataFrames
-        timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-        # Erstelle Ausgabeordner (Verzeichnis) und Dateinamen korrekt
+        col.show_first_rows(df_simulation)
+
+        #vorbereitung des Dateinamens mit Zeitstempel
+        timestamp = datetime.now().strftime("%d%m%Y_%H%M")
         outdir = Path("output") / "csv"
         outdir.mkdir(parents=True, exist_ok=True)
-        filename = outdir / f"Skalierte_Netzlast_2035_{timestamp}.csv"
+        filename = outdir / f"Skalierte_Netzlast_{simu_jahr} (ref-{ref_jahr}, prog-{prog_dat_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
 
         # Schreibe die CSV in die Datei (pandas akzeptiert Path-Objekte)
-        df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8')
-        print(f"\n{filename} gespeichert unter {outdir}\n")
+        if df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8', decimal=',') is None:
+            print(f"\n{filename} gespeichert unter {outdir}\n")
+        else:
+            print(f"Fehler beim Speichern der Datei {filename}")
 
     
     except AppError as e:
