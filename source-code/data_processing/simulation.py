@@ -5,7 +5,7 @@ import locale
 
 def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
                             prog_dat_studie: str, simu_jahr_start: int, simu_jahr_ende: int,
-                            prog_dat_jahr: int = -1, ref_jahr: int = 2023) -> pd.DataFrame:
+                            ref_jahr: int = 2023, prog_dat_jahr: int = -1) -> pd.DataFrame:
     """
     Skaliert den Energieverbrauch eines Referenzjahres basierend auf Prognosedaten für mehrere
     Simulationsjahre und eine ausgewählte Studie.
@@ -164,9 +164,11 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
 
     # Skaliere den Energieverbrauch im Referenzjahr mit dem Faktor
     jahr_offset = simu_jahr - ref_jahr
-    return pd.DataFrame({
+    df_simu = pd.DataFrame({
         'Datum von': pd.to_datetime(df_refJahr['Datum von']) + pd.DateOffset(years=jahr_offset),
         'Datum bis': pd.to_datetime(df_refJahr['Datum bis']) + pd.DateOffset(years=jahr_offset),
         'Zeitpunkt': pd.to_datetime(df_refJahr['Zeitpunkt']) + pd.DateOffset(years=jahr_offset),
         'Skalierter Netzlast [MWh]': df_refJahr['Netzlast [MWh]'] * faktor
         })
+    col.show_first_rows(df_simu)
+    return df_simu

@@ -51,10 +51,9 @@ def main():
         # Wähle Daten
         # ============================================================
 
-        prog_dat_studie = 'Ariadne - REMod-Mix'   # 'Agora' | 'BDI - Klimapfade 2.0' | 'dena - KN100' | 'BMWK - LFS TN-Strom'
+        prog_dat_studie = 'Agora'   # 'Agora' | 'BDI - Klimapfade 2.0' | 'dena - KN100' | 'BMWK - LFS TN-Strom'
                                     # 'Ariadne - REMIND-Mix' | 'Ariadne - REMod-Mix' | 'Ariadne - TIMES PanEU-Mix'
-        prog_dat_jahr = 2045        # Jahr der Prognose
-        ref_jahr = 2023             # Referenzjahr im Verbrauchsdatensatz
+        ref_jahr = 2024             # Referenzjahr im Verbrauchsdatensatz
         simu_jahr_von = 2024            # Simulationsjahr von
         simu_jahr_bis = 2045            # Simulationsjahr bis
 
@@ -62,15 +61,15 @@ def main():
         # ============================================================
 
         df_simulation = sim.calc_scaled_consumption_multiyear(conDf, progDf,
-                                            prog_dat_studie, simu_jahr_von, simu_jahr_bis)
+                                            prog_dat_studie, simu_jahr_von, simu_jahr_bis,
+                                            ref_jahr=ref_jahr)
         
-        col.show_first_rows(df_simulation)
 
         #vorbereitung des Dateinamens mit Zeitstempel
         timestamp = datetime.now().strftime("%d%m%Y_%H%M")
         outdir = Path("output") / "csv"
         outdir.mkdir(parents=True, exist_ok=True)
-        filename = outdir / f"Skalierte_Netzlast_{simu_jahr_von}-{simu_jahr_bis} (ref-{ref_jahr}, prog-{prog_dat_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
+        filename = outdir / f"Skalierte_Netzlast_{simu_jahr_von}-{simu_jahr_bis} (ref-{ref_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
 
         # Schreibe die CSV in die Datei (pandas akzeptiert Path-Objekte)
         if df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8', decimal=',') is None:
