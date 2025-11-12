@@ -50,10 +50,13 @@ def main():
         # Wähle Daten
         # ============================================================
 
-        prog_dat_studie = 'Agora'
-        prog_dat_jahr = 2035
-        ref_jahr = 2023
-        simu_jahr = 2030
+        prog_dat_studie = 'Ariadne - REMod-Mix'   # 'Agora' | 'BDI - Klimapfade 2.0' | 'dena - KN100' | 'BMWK - LFS TN-Strom'
+                                    # 'Ariadne - REMIND-Mix' | 'Ariadne - REMod-Mix' | 'Ariadne - TIMES PanEU-Mix'
+        prog_dat_jahr = 2045        # Jahr der Prognose
+        ref_jahr = 2023             # Referenzjahr im Verbrauchsdatensatz
+        simu_jahr = 2045            # Simulationsjahr
+
+
         # ============================================================
 
         # nach jahr im Verbrauchsdatensatz suchen
@@ -63,7 +66,7 @@ def main():
         if ist_ref_jahr_vorhanden:
             df_refJahr = conDf[(conDf["Zeitpunkt"] >= f"01.01.{ref_jahr} 00:00") & (conDf["Zeitpunkt"] <= f"31.12.{ref_jahr} 23:59")]
         else:
-            print(f"Referenzjahr {ref_jahr} nicht im Verbrauchsdatensatz gefunden.")
+            raise ValueError(f"Referenzjahr {ref_jahr} nicht im Verbrauchsdatensatz gefunden.")
         
         # Berechne die Gesammtenergie im Referenzjahr
         Gesamtenergie_RefJahr = col.get_column_total(df_refJahr, "Netzlast [MWh]") / 1000000  # in TWh
@@ -74,26 +77,28 @@ def main():
         # Hol Ziel-Wert aus Prognosedaten (robuste Auswahl + klare Fehlermeldung)
         sel = progDf.loc[(progDf['Jahr'] == prog_dat_jahr) & (progDf['Studie'] == prog_dat_studie), 'Bruttostromverbrauch [TWh]']
         if sel.empty:
-            print(f"Keine Prognose-Zeile gefunden für Studie='{prog_dat_studie}' und Jahr={prog_dat_jahr}")
+            raise ValueError(f"Keine Prognose-Zeile gefunden für Studie='{prog_dat_studie}' und Jahr={prog_dat_jahr}")        
         try:
             zielWert_Studie = float(sel.iat[0])
         except Exception as e:
-            print(f"Fehler beim Lesen des Zielwerts aus Prognosedaten: {e}")
+            raise ValueError(f"Fehler beim Lesen des Zielwerts aus Prognosedaten: {e}")
+        if zielWert_Studie == 0:
+            raise ValueError(f"Prognose-Zeile gefunden, aber der Wert ist 0 für Studie='{prog_dat_studie}' und Jahr={prog_dat_jahr}")
 
         formatierte_zahl = locale.format_string("%.8f", zielWert_Studie, grouping=True)
         print(f"Gesamter Energieverbrauch im Prognosejahr: {formatierte_zahl} [TWh]\n")
 
         # Berechne Gesamtenergie Simualtionjahr (interpoliert, falls nötig)
         if simu_jahr != prog_dat_jahr:
-            Gesamtenergie_simu_jahr = np.interp(simu_jahr, [ref_jahr, prog_dat_jahr], [Gesamtenergie_RefJahr, zielWert_Studie])
+            Gesamtenergie_ziel_jahr = np.interp(simu_jahr, [ref_jahr, prog_dat_jahr], [Gesamtenergie_RefJahr, zielWert_Studie])
         else:
-            Gesamtenergie_simu_jahr = zielWert_Studie
+            Gesamtenergie_ziel_jahr = zielWert_Studie
 
-        formatierte_zahl = locale.format_string("%.8f", Gesamtenergie_simu_jahr, grouping=True)
+        formatierte_zahl = locale.format_string("%.8f", Gesamtenergie_ziel_jahr, grouping=True)
         print(f"Gesamter Energieverbrauch im Simulationsjahr: {formatierte_zahl} [TWh]\n")
         
         # Berechne den Skalierungsfaktor
-        faktor = zielWert_Studie / Gesamtenergie_simu_jahr
+        faktor = Gesamtenergie_ziel_jahr /  Gesamtenergie_RefJahr
 
         formatierte_zahl = locale.format_string("%.14f", faktor, grouping=True)
         print(f"Berechneter Faktor: {formatierte_zahl}\n")
@@ -119,7 +124,7 @@ def main():
         if df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8', decimal=',') is None:
             print(f"\n{filename} gespeichert unter {outdir}\n")
         else:
-            print(f"Fehler beim Speichern der Datei {filename}")
+            raise RuntimeError(f"Fehler beim Speichern der Datei {filename}")
 
     
     except AppError as e:

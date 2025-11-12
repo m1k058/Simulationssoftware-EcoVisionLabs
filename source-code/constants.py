@@ -48,6 +48,7 @@ EXPECTED_HEADERS = {
         "Erdgas [TWh]",
         "Sonstige [TWh]",
         "Speicher [TWh]",
+        "Abfall [TWh]",
         "Summe [TWh]",
         "Importsaldo [TWh]",
         "Gesamterzeugung Erneuerbare [TWh]",
