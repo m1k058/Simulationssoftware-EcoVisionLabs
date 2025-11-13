@@ -175,3 +175,26 @@ class DataManager:
         del self.metadata[ds_id]
         print(f"Deleted dataset '{identifier}' (ID={ds_id}).")
         return True
+
+    # -------------------------------------------------------------------------
+    def add(self, df, name, description="", datatype="Custom"):
+        """Add an existing DataFrame to the DataManager.
+
+        Args:
+            df (pd.DataFrame): The DataFrame to add.
+            name (str): Name for the dataset.            
+            description (str, optional): Optional description text.
+            datatype (str, optional): Type of the dataset. Defaults to "Custom".
+
+        Returns:
+            int: The ID assigned to the added dataset.
+        """
+        dataset_id = max(self.dataframes.keys(), default=-1) + 1
+        self.dataframes[dataset_id] = df
+        self.metadata[dataset_id] = {
+            "name": name,
+            "path": "N/A",
+            "datatype": datatype,
+            "description": description,
+        }
+        return dataset_id

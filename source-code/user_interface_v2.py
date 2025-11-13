@@ -189,6 +189,37 @@ def choose_energy_sources(default: Optional[List[str]] = None) -> List[str]:
             print("Invalid input. Please use numbers or 'all'.")
 
 
+def get_all_available_datasets(cm: ConfigManager, dm: DataManager) -> List[Dict[str, Any]]:
+    """Get all available datasets from both ConfigManager and DataManager.
+    
+    Returns a unified list of datasets that can be used for selection,
+    including both config-defined and dynamically added datasets.
+    """
+    # Start with config datasets
+    config_datasets = cm.get_dataframes()
+    
+    # Get all datasets from DataManager
+    dm_info = dm.list_datasets()
+    
+    # Create a set of IDs that are already in config
+    config_ids = {ds["id"] for ds in config_datasets}
+    
+    # Add datasets from DataManager that aren't in config
+    combined = list(config_datasets)
+    for dm_ds in dm_info:
+        if dm_ds["ID"] not in config_ids:
+            # Format to match config dataset structure
+            combined.append({
+                "id": dm_ds["ID"],
+                "name": dm_ds["Name"],
+                "path": dm_ds.get("Path", "N/A"),
+                "datatype": dm_ds.get("Datatype", "Custom"),
+                "description": ""
+            })
+    
+    return combined
+
+
 def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataManager, plot_cfg: Dict[str, Any], show: bool, save: bool, darkmode: bool = False):
     """Plot based on a config dict (for session plots)."""
     df_ids = plot_cfg.get("dataframes", [])
@@ -239,7 +270,7 @@ def run_plot_from_cfg_like(config_manager: ConfigManager, data_manager: DataMana
             col1 = plot_cfg.get("column1")
             col2 = plot_cfg.get("column2")
             title = plot_cfg.get("name", "Balance plot")
-            plot_balance(config_manager, df_f, column1=col1, column2=col2, title=title, description=description, show=show, save=save, output_dir=outdir, darkmode=darkmode)
+            plot_balance(config_manager, df_f, column1=col1, column2=col2, title=title, description=description, show=show, save=save, output_dir=outdir, darkmode=darkmode) # type: ignore
         elif plot_type == "histogram":
             # Load second DataFrame for consumption data
             df_id_2 = df_ids[1]
@@ -299,7 +330,7 @@ def menu_configure_new_plot(cm: ConfigManager, dm: DataManager, state: SessionSt
     choice = input("> ").strip()
 
     if choice == "1":
-        datasets = cm.get_dataframes()
+        datasets = get_all_available_datasets(cm, dm)
         
         # Choose plot type first to determine dataset requirements
         print("\nPlot type:")
@@ -616,7 +647,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
         return
     elif main_choice == "2":
         # Quick column sum calculation
-        datasets = cm.get_dataframes()
+        datasets = get_all_available_datasets(cm, dm)
         sel_ds = select_from_list(datasets, "Select Dataset")
         if not sel_ds:
             return
@@ -627,9 +658,8 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             print(f"Dataset could not be loaded: {e}")
             pause()
             return
-        
-        from data_processing import generate_df_with_col_sums
-        df_sums = generate_df_with_col_sums(df)
+        from data_processing import col
+        df_sums = col.generate_df_with_col_sums(df)
         
         clear_screen()
         print("=== Column Sum Result ===\n")
@@ -662,7 +692,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
     
     elif main_choice == "1":
         # Full interactive mode with multiple operations
-        datasets = cm.get_dataframes()
+        datasets = get_all_available_datasets(cm, dm)
         sel_ds = select_from_list(datasets, "Select Dataset to Work With")
         if not sel_ds:
             return
@@ -717,6 +747,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                         continue
                     
                     new_col_name = input_nonempty("Name for new sum column")
+                    from data_processing import col
                     df_working = col.sum_columns(df_working, cols_to_sum, new_col_name)
                     print(f"✓ Column '{new_col_name}' created successfully.")
                     pause()
@@ -730,7 +761,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                 sources = choose_energy_sources()
                 colname_base = input_nonempty("Column name base (e.g. 'My Sum')")
                 try:
-                    df_working = gen.sum_energy_sources(df_working, sources=sources, name=colname_base)
+                    df_working = gen.sum_energy_sources(df_working, sources=sources, name=colname_base) # type: ignore
                     print(f"✓ Column '{colname_base} [MWh]' created successfully.")
                     pause()
                 except Exception as e:
@@ -758,6 +789,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                     if create_new:
                         new_name = input_nonempty("Name for new column")
                     
+                    from data_processing import col
                     df_working = col.multiply_column(df_working, col_name, factor, new_name)
                     pause()
                     
@@ -797,6 +829,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
                     if rename:
                         new_name = input_nonempty("New column name")
                     
+                    from data_processing import col
                     df_working = col.add_column_from_other_df(df_working, df_other, source_col, new_name)
                     pause()
                     
@@ -807,6 +840,7 @@ def menu_csv_calc(cm: ConfigManager, dm: DataManager, state: SessionState):
             elif op_choice == "5":
                 # Add total generation
                 try:
+                    df_working = gen.add_total_generation(df_working)
                     df_working = gen.add_total_generation(df_working)
                     print("✓ Total generation column added.")
                     pause()
@@ -980,15 +1014,26 @@ def menu_list_overview(cm: ConfigManager, dm: DataManager, state: SessionState):
 
 def menu_simulation(cm: ConfigManager, dm: DataManager, state: SessionState):
     """Simulation (Base Programm) - placeholders for scenario workflow."""
+
+    scenarios = [
+        {"id": 1, "name": "Agora", "description": "Agora Study Scenario"},
+        {"id": 2, "name": "BDI - Klimapfade 2.0", "description": "BDI Klimapfade 2.0 Study Scenario"},
+        {"id": 3, "name": "dena - KN100", "description": "dena Klimaneutrales 100% Study Scenario"},
+        {"id": 4, "name": "BMWK - LFS TN-Strom", "description": "BMWK Langfristszenario Treibhausneutraler Stromsektor Study Scenario"},
+        {"id": 5, "name": "Ariadne - REMIND-Mix", "description": "Ariadne REMIND-Mix Study Scenario"},
+        {"id": 6, "name": "Ariadne - REMod-Mix", "description": "Ariadne REMod-Mix Study Scenario"},
+        {"id": 7, "name": "Ariadne - TIMES PanEU-Mix", "description": "Ariadne TIMES PanEU-Mix Study Scenario"},
+    ]
+
     while True:
         clear_screen()
         print("=== Simulation (Base Programm) ===\n")
         # Top info about selected scenario
         if state.selected_scenario:
-            print(f"Ausgewähltes Scenario: {state.selected_scenario.get('name', '<unnamed>')}")
-            print(f"Beschreibung: {state.selected_scenario.get('description', '')}\n")
+            print(f"Selected scenario: {state.selected_scenario.get('name', '<unnamed>')}")
+            print(f"Description: {state.selected_scenario.get('description', '')}\n")
         else:
-            print("Kein Scenario ausgewählt.\n")
+            print("No scenario selected.\n")
 
         print("1) Scenario selector")
         print("2) Scenario editor")
@@ -999,21 +1044,170 @@ def menu_simulation(cm: ConfigManager, dm: DataManager, state: SessionState):
         if choice == "0":
             break
         elif choice == "1":
-            # Placeholder: simple selector that toggles a demo scenario
-            print("(Placeholder) Scenario selector")
-            if prompt_yes_no("Set a demo scenario as selected?"):
-                state.selected_scenario = {"id": 1, "name": "Demo Scenario", "description": "Demo (placeholder)"}
-                print("Scenario selected.")
+            # Scenario selector
+            clear_screen()
+            print("=== Scenario Selector ===\n")
+            print("Available study scenarios:")
+            for i, scenario in enumerate(scenarios, 1):
+                print(f"{i}) {scenario['name']}")
+            print("0) Back")
+            
+            scenario_choice = input("> ").strip()
+            
+            if scenario_choice == "0":
+                continue
+            elif scenario_choice in ["1", "2", "3", "4", "5", "6", "7"]:
+                idx = int(scenario_choice) - 1
+                state.selected_scenario = scenarios[idx]
+                print(f"\n✓ Scenario '{scenarios[idx]['name']}' selected.")
+            else:
+                print("Invalid selection.")
             pause()
+
         elif choice == "2":
             print("(Placeholder) Scenario editor - not implemented yet.")
             pause()
+
         elif choice == "3":
-            print("(Placeholder) Simulate scenario - not implemented yet.")
-            pause()
-        else:
-            print("Invalid selection.")
-            pause()
+            # Simulate scenario
+            if not state.selected_scenario:
+                print("No scenario selected. Please select a scenario first.")
+                pause()
+                continue
+            
+            clear_screen()
+            print("=== Simulate Scenario ===\n")
+            print(f"Selected scenario: {state.selected_scenario.get('name', '<unnamed>')}")
+            print(f"Description: {state.selected_scenario.get('description', '')}\n")
+            
+            print("1) Simulate one year consumption scaling")
+            print("2) Simulate multi-year consumption scaling")
+            print("0) Back")
+            sim_choice = input("> ").strip()
+
+            if sim_choice == "0":
+                continue
+            elif sim_choice == "1":
+
+                # Single year simulation
+                # Dataset for consumption scaling
+                datasets = get_all_available_datasets(cm, dm)
+                sel_ds = select_from_list(datasets, "Select Dataset for consumption scaling:")
+                if not sel_ds:
+                    pause()
+                    continue
+                try:
+                    conDf = dm.get(sel_ds["id"])
+                except Exception as e:
+                    print(f"Dataset could not be loaded: {e}")
+                    pause()
+                    continue
+
+                # Dataset for prognosis
+                sel_ds = select_from_list(datasets, "Select Dataset for prognosis:")
+                if not sel_ds:
+                    pause()
+                    continue
+                try:
+                    proDf = dm.get(sel_ds["id"])
+                except Exception as e:
+                    print(f"Dataset could not be loaded: {e}")
+                    pause()
+                    continue
+                
+                ref_jahr = input_nonempty("Enter year for consumption scaling reference (e.g., 2023):", "2023")
+                simu_jahr = input_nonempty("Enter year to simulate (e.g., 2030):")
+
+                import data_processing.simulation as sim
+                df_simulation = sim.calc_scaled_consumption(
+                    conDf, proDf,
+                    state.selected_scenario.get("name", "Agora"),  # type: ignore
+                    int(simu_jahr),
+                    ref_jahr=int(ref_jahr)
+                )
+                dataset_id = dm.add(
+                    df_simulation,
+                    name=f"Simulation {state.selected_scenario.get('name', 'Scenario')} {simu_jahr}",  # type: ignore
+                    description=f"Scaled consumption for {state.selected_scenario.get('name', 'Scenario')} in year {simu_jahr} based on prognosis data."  # type: ignore
+                )
+                
+                print(f"\n✓ Added dataset with ID={dataset_id}.")
+
+                if prompt_yes_no("Do you want to save the simulation result to a file?"):
+                    filename = input_nonempty("Enter filename (without extension):")
+                    outdir = Path(cm.get_global("output_dir_csv") or "output")
+                    outdir.mkdir(parents=True, exist_ok=True)
+                    outpath = outdir / f"{filename}.csv"
+                    from io_handler import save_data
+                    try:
+                        save_data(df_simulation, outpath)
+                        print(f"✓ File saved: {outpath}")
+                    except Exception as e:
+                        print(f"Error saving file: {e}")
+                pause()
+        
+            elif sim_choice == "2":
+                # Multi-year simulation
+                # Dataset for consumption scaling
+                datasets = get_all_available_datasets(cm, dm)
+                sel_ds = select_from_list(datasets, "Select Dataset for consumption scaling:")
+                if not sel_ds:
+                    pause()
+                    continue
+                try:
+                    conDf = dm.get(sel_ds["id"])
+                except Exception as e:
+                    print(f"Dataset could not be loaded: {e}")
+                    pause()
+                    continue
+
+                # Dataset for prognosis
+                sel_ds = select_from_list(datasets, "Select Dataset for prognosis:")
+                if not sel_ds:
+                    pause()
+                    continue
+                try:
+                    proDf = dm.get(sel_ds["id"])
+                except Exception as e:
+                    print(f"Dataset could not be loaded: {e}")
+                    pause()
+                    continue
+                
+                ref_jahr = input_nonempty("Enter year for consumption scaling reference (e.g., 2023):", "2023")
+                simu_jahr_von = input_nonempty("Enter year to simulate from (e.g., 2030):")
+                simu_jahr_bis = input_nonempty("Enter year to simulate to (e.g., 2040):")
+
+                import data_processing.simulation as sim
+                df_simulation = sim.calc_scaled_consumption_multiyear(
+                    conDf, proDf,
+                    state.selected_scenario.get("name", "Agora"),  # type: ignore
+                    int(simu_jahr_von), int(simu_jahr_bis),
+                    ref_jahr=int(ref_jahr)
+                )
+                dataset_id = dm.add(
+                    df_simulation,
+                    name=f"Simulation {state.selected_scenario.get('name', 'Scenario')} {simu_jahr_von}-{simu_jahr_bis}",  # type: ignore
+                    description=f"Scaled consumption for {state.selected_scenario.get('name', 'Scenario')} from year {simu_jahr_von} to {simu_jahr_bis} based on prognosis data."  # type: ignore
+                )
+                
+                print(f"\n✓ Added dataset with ID={dataset_id}.")
+
+                if prompt_yes_no("Do you want to save the simulation result to a file?"):
+                    filename = input_nonempty("Enter filename (without extension):")
+                    outdir = Path(cm.get_global("output_dir_csv") or "output")
+                    outdir.mkdir(parents=True, exist_ok=True)
+                    outpath = outdir / f"{filename}.csv"
+                    from io_handler import save_data
+                    try:
+                        save_data(df_simulation, outpath)
+                        print(f"✓ File saved: {outpath}")
+                    except Exception as e:
+                        print(f"Error saving file: {e}")
+                pause()
+            
+            else:
+                print("Invalid selection.")
+                pause()
 
 
 def menu_analyze_plot(cm: ConfigManager, dm: DataManager, state: SessionState):

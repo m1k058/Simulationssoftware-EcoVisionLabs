@@ -1,7 +1,9 @@
 {
     "GLOBAL": {
         "max_datasets": 100,
-        "output_dir": "output\\final_plots"
+        "output_dir_plots": "output\\final_plots",
+        "output_dir_csv": "output\\csv",
+        "output_dir_plots_tests": "output\\test_plots"
     },
     "DATAFRAMES": [
         {
