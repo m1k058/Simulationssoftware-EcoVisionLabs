@@ -62,3 +62,26 @@ Dataframe hinten dran setzen, der mehr als ein Jahr berechnet und prognostiert.
 Speicherort in UI, um dann zu plotten.
 Fehlerbehebung, wenn Daten in einer Studie fehlen -> erneut fragen, was ausgewählt werden soll
 Erklärung Michal Teams Interpolation
+
+Wetter: typisches Jahr, bestes / schlechtestes Jahr
+Veränderung des Wetters in Zukunft 
+
+___
+Prognosedaten_Studien.csv
+
+was sind sonstige Energiequellen?
+was sind Speicher? Lithium / Wasserkraft?
+Abgeregelte Erneuerbare außen vor lassen
+
+Berechnung Prognose 15-Min-Berechnung für Wasserstoff Jahr-Tage-Stunden-Viertelstunden
+wenn alles null, dann existieren keine Werte / Prognosen in dieser Studie
+wenn Gesamtverbrauch/-erzeugung, dann "dieses Jahr existiert nicht"
+
+"Prognosejahre" < 25 rausnehmen
+
+___
+Lastprofile
+BMWK Tabelle umformatieren / extrahieren, über die Verbrauchs
+Methode zur Berechnung der Faktoren, um prozentuale Werte zu erhalten und damit zu rechnen
+expected headers ergänzen zum reinladen und welcher Separator
+Kombinationsprofil hat alles mit drin?
