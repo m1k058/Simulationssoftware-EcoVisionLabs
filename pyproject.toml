@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simulationssoftware-ecovisionlabs"
+version = "0.1.0"
+description = "EcoVisionLabs simulations software"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "EcoVisionLabs" }]
+license = { text = "MIT" }
+
+[tool.setuptools]
+package-dir = {"" = "source-code"}
+py-modules = [
+  "config_manager",
+  "constants",
+  "data_manager",
+  "data_processing",
+  "errors",
+  "io_handler",
+  "main_demo",
+  "main",
+  "plotting",
+  "user_interface"
+]
+
+# If you later convert to package directories under source-code/, enable discovery instead:
+# [tool.setuptools.packages.find]
+# where = ["source-code"]
