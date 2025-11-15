@@ -56,13 +56,16 @@ def main():
         ref_jahr = 2024             # Referenzjahr im Verbrauchsdatensatz
         simu_jahr_von = 2024            # Simulationsjahr von
         simu_jahr_bis = 2045            # Simulationsjahr bis
+        use_load_profile = True     # Lastprofil S25 verwenden (empfohlen für realistische Lastkurven)
+                                    # True = Lastprofil S25 mit realistischen Tages-/Monatsschwankungen
+                                    # False = Einfache lineare Skalierung (alte Methode)
 
 
         # ============================================================
 
         df_simulation = sim.calc_scaled_consumption_multiyear(conDf, progDf,
                                             prog_dat_studie, simu_jahr_von, simu_jahr_bis,
-                                            ref_jahr=ref_jahr)
+                                            ref_jahr=ref_jahr, use_load_profile=use_load_profile)
         
 
         #vorbereitung des Dateinamens mit Zeitstempel

@@ -1117,13 +1117,17 @@ def menu_simulation(cm: ConfigManager, dm: DataManager, state: SessionState):
                 
                 ref_jahr = input_nonempty("Enter year for consumption scaling reference (e.g., 2023):", "2023")
                 simu_jahr = input_nonempty("Enter year to simulate (e.g., 2030):")
+                
+                # Option für Lastprofil
+                use_load_profile = prompt_yes_no("Use load profile S25 for realistic load patterns? (Recommended)", default=True)
 
                 import data_processing.simulation as sim
                 df_simulation = sim.calc_scaled_consumption(
                     conDf, proDf,
                     state.selected_scenario.get("name", "Agora"),  # type: ignore
                     int(simu_jahr),
-                    ref_jahr=int(ref_jahr)
+                    ref_jahr=int(ref_jahr),
+                    use_load_profile=use_load_profile
                 )
                 dataset_id = dm.add(
                     df_simulation,
@@ -1176,13 +1180,17 @@ def menu_simulation(cm: ConfigManager, dm: DataManager, state: SessionState):
                 ref_jahr = input_nonempty("Enter year for consumption scaling reference (e.g., 2023):", "2023")
                 simu_jahr_von = input_nonempty("Enter year to simulate from (e.g., 2030):")
                 simu_jahr_bis = input_nonempty("Enter year to simulate to (e.g., 2040):")
+                
+                # Option für Lastprofil
+                use_load_profile = prompt_yes_no("Use load profile S25 for realistic load patterns? (Recommended)", default=True)
 
                 import data_processing.simulation as sim
                 df_simulation = sim.calc_scaled_consumption_multiyear(
                     conDf, proDf,
                     state.selected_scenario.get("name", "Agora"),  # type: ignore
                     int(simu_jahr_von), int(simu_jahr_bis),
-                    ref_jahr=int(ref_jahr)
+                    ref_jahr=int(ref_jahr),
+                    use_load_profile=use_load_profile
                 )
                 dataset_id = dm.add(
                     df_simulation,
