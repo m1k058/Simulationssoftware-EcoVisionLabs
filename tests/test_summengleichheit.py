@@ -4,7 +4,8 @@ Kritische Überprüfung: Summengleichheit und realistische Verteilung
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'source-code'))
+# Da wir im tests/ Verzeichnis sind, gehe ein Level hoch und dann zu source-code
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'source-code'))
 
 import pandas as pd
 import locale

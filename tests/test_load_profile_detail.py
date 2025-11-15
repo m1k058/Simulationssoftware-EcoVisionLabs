@@ -4,7 +4,8 @@ Detaillierter Test: Zeigt, dass Lastprofil-Faktoren korrekt viertelstündlich an
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'source-code'))
+# Da wir im tests/ Verzeichnis sind, gehe ein Level hoch und dann zu source-code
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'source-code'))
 
 import pandas as pd
 from data_processing.load_profile import load_standard_load_profile, parse_profile_header, normalize_load_profile
