@@ -172,3 +172,39 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
         })
     col.show_first_rows(df_simu)
     return df_simu
+
+def calc_scaled_production(conDf: pd.DataFrame, prodDf: pd.DataFrame,
+                            prod_dat_studie: str, simu_jahr: int, prod_dat_jahr: int = -1,
+                            ref_jahr: int = 2023) -> pd.DataFrame:
+    """
+    Skaliert die Energieproduktion eines Referenzjahres basierend auf Prognosedaten für ein
+    Simulationsjahr und eine ausgewählte Studie.
+    
+    Args:
+        conDf: DataFrame mit Produktionsdaten, muss eine Spalte 'Erzeugung [MWh]' und 'Zeitpunkt' enthalten.
+        prodDf: DataFrame mit Prognosedaten, muss Spalten 'Jahr', 'Studie' und 'Bruttostromerzeugung [TWh]' enthalten.
+        prod_dat_studie: Die Studie, aus der der Zielwert entnommen wird.
+        simu_jahr: Das Simulationsjahr, für das die Produktion skaliert werden soll.
+        prod_dat_jahr: Das Jahr der Prognose.
+        ref_jahr: Das Referenzjahr im Produktionsdatensatz.
+        
+    Returns:
+        DataFrame mit skalierter Energieproduktion für das Simulationsjahr.
+    """
+
+    # nach jahr im Produktionsdatensatz suchen
+    ist_ref_jahr_vorhanden = (conDf['Zeitpunkt'].dt.year == ref_jahr).any()
+
+    # Ziehe ein Referenzjahr aus der den Dataframe
+    if ist_ref_jahr_vorhanden:
+        df_refJahr = conDf[(conDf["Zeitpunkt"] >= f"01.01.{ref_jahr} 00:00") & (conDf["Zeitpunkt"] <= f"31.12.{ref_jahr} 23:59")]
+    else:
+        raise ValueError(f"Referenzjahr {ref_jahr} nicht im Produktionsdatensatz gefunden.")
+    
+    # Berechne die Gesammtenergie im Referenzjahr
+    Gesamtenergie_RefJahr = col.get_column_total(df_refJahr, "Erzeugung [MWh]") / 1000000  # in TWh
+
+    formatierte_zahl = locale.format_string("%.8f", Gesamtenergie_RefJahr, grouping=True)
+    print(f"Gesamter Energieproduktion im Referenzjahr: {formatierte_zahl} [TWh]\n")
+
+    # Hol Ziel-Wert aus Prognosedaten
