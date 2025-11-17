@@ -54,14 +54,14 @@ def main():
         prog_dat_studie = 'Agora'   # 'Agora' | 'BDI - Klimapfade 2.0' | 'dena - KN100' | 'BMWK - LFS TN-Strom'
                                     # 'Ariadne - REMIND-Mix' | 'Ariadne - REMod-Mix' | 'Ariadne - TIMES PanEU-Mix'
         ref_jahr = 2023             # Referenzjahr im Verbrauchsdatensatz
-        simu_jahr_von = 2031            # Simulationsjahr von
+        simu_jahr_von = 2030            # Simulationsjahr von
         simu_jahr_bis = 2045            # Simulationsjahr bis
 
 
         # ============================================================
 
-        df_simulation = sim.calc_scaled_production(genDf, progDf,
-                                            prog_dat_studie, simu_jahr_von, ref_jahr)
+        df_simulation = sim.calc_scaled_production_multiyear(genDf, progDf,
+                                            prog_dat_studie, simu_jahr_von, simu_jahr_bis, ref_jahr)
         
 
 

@@ -52,23 +52,59 @@ def show_dataset_analysis() -> None:
 
     sidebar = st.sidebar
     sidebar.title("Einstellungen")
-    sidebar.segmented_control("Bitte Wählen", ["Verbrauch", "Erzeugung"], key="dataset_mode", default="Erzeugung")
 
-    dm = st.session_state.get("dm")
-    cfg = st.session_state.get("cfg")
-
-    if dm is None or cfg is None:
+    if st.session_state.dm is None or st.session_state.cfg is None:
         sidebar.warning("DataManager/ConfigManager ist nicht initialisiert.")
         sidebar.button(
             "Datenmanager/ConfigManager laden",
             on_click=lambda: load_data_manager(),
             use_container_width=True,
         )
+        st.info("Bitte lade zuerst den DataManager über die Seitenleiste.")
     else:
         sidebar.success("DataManager geladen.")
-    
-    st.session_state.dm
-    edited_df = st.data_editor(st.session_state.dm.get(1), num_rows="dynamic")
+        
+        # Debug-Informationen anzeigen
+        with st.expander("🐛 Debug Informationen", expanded=False):
+            st.write("**DataManager Infos:**")
+            st.write(f"- Anzahl geladener DataFrames: {len(st.session_state.dm.dataframes)}")
+            st.write(f"- DataFrame IDs: {list(st.session_state.dm.dataframes.keys())}")
+            
+            st.write("\n**Metadata:**")
+            for ds_id, meta in st.session_state.dm.metadata.items():
+                st.write(f"ID {ds_id}: {meta}")
+            
+            st.write("\n**Config Dataframes:**")
+            for df_cfg in st.session_state.cfg.get_dataframes():
+                st.write(f"- ID {df_cfg['id']}: {df_cfg['name']}")
+                st.write(f"  Path: {df_cfg['path']}")
+                st.write(f"  Exists: {df_cfg['path'].exists()}")
+        
+        # Liste verfügbarer Datasets anzeigen
+        datasets = st.session_state.dm.list_datasets()
+        
+        if not datasets:
+            st.warning("Keine Datasets verfügbar.")
+            st.info("Prüfe die Debug-Informationen oben, um zu sehen, warum keine Datasets geladen wurden.")
+        else:
+            # Dataset-Auswahl
+            dataset_options = {f"{ds['Name']} (ID: {ds['ID']})": ds['ID'] for ds in datasets}
+            selected_dataset_name = sidebar.selectbox(
+                "Wähle einen Dataset",
+                options=list(dataset_options.keys())
+            )
+            selected_dataset_id = dataset_options[selected_dataset_name]
+            
+            # Zeige Dataset-Info
+            selected_info = next(ds for ds in datasets if ds['ID'] == selected_dataset_id)
+            st.info(f"**Dataset:** {selected_info['Name']} | **Zeilen:** {selected_info['Rows']} | **Typ:** {selected_info['Datatype']}")
+            
+            # Data Editor anzeigen
+            edited_df = st.data_editor(
+                st.session_state.dm.get(selected_dataset_id), 
+                num_rows="dynamic",
+                use_container_width=True
+            )
     
     st.button("Zurück", on_click=set_mode, args=("main",))
 
@@ -133,15 +169,38 @@ def show_standard_simulation() -> None:
 
 def load_data_manager() -> None:
     try:
+        # Get the project root (parent of source-code)
+        project_root = Path(__file__).parent.parent
         cfg_path = Path(__file__).parent / "config.json"
+        
+        st.info(f"📂 Project Root: {project_root}")
+        st.info(f"📄 Config Path: {cfg_path}")
+        
         cfg = ConfigManager(cfg_path)
+        
+        # Resolve relative paths in config to absolute paths from project root
+        for df_cfg in cfg.config.get("DATAFRAMES", []):
+            if "path" in df_cfg and not df_cfg["path"].is_absolute():
+                original_path = df_cfg["path"]
+                df_cfg["path"] = project_root / df_cfg["path"]
+                st.write(f"Resolved: {original_path} → {df_cfg['path']}")
+        
         dm = DataManager(config_manager=cfg)
-        dm.load_from_config()
+        
         st.session_state.cfg = cfg
         st.session_state.dm = dm
-        st.success("DataManager erfolgreich geladen.")
+        
+        # Zeige Lade-Ergebnisse
+        datasets = dm.list_datasets()
+        if datasets:
+            st.success(f"✅ DataManager erfolgreich geladen. {len(datasets)} Datasets verfügbar.")
+        else:
+            st.warning("⚠️ DataManager geladen, aber keine Datasets wurden geladen. Prüfe die Pfade!")
+            
     except Exception as e:
-        st.error(f"Fehler beim Laden des DataManagers: {e}")
+        st.error(f"❌ Fehler beim Laden des DataManagers: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return
 
 

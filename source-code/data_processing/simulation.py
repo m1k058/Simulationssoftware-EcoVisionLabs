@@ -304,11 +304,12 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
     Skaliert die Energieproduktion eines Referenzjahres basierend auf Prognosedaten für ein
     Simulationsjahr und eine ausgewählte Studie - **pro Energiequelle separat**.
     
-    Vorgehen:
-    - Referenzjahr im Produktionsdatensatz bestimmen und pro Energiequelle die Jahressumme (TWh) berechnen.
-    - Für jede Energiequelle aus progDf (Studie + Jahr) die Zielwerte [TWh] wählen (ggf. interpoliert).
-    - Pro Energiequelle einen eigenen Skalierungsfaktor = Ziel / Referenz bestimmen.
-    - Alle Viertelstundenwerte der jeweiligen Quelle mit ihrem Faktor skalieren und auf simu_jahr datumsversetzen.
+    Neue Regeln:
+    - Wasserstoff/Abfall aus progDf werden gleichmäßig über das Jahr verteilt (falls vorhanden).
+    - Sonstige [TWh] aus progDf entspricht nur "Sonstige Erneuerbare [MWh]" (SOE).
+    - "Sonstige Konventionelle [MWh]" (SOK) wird vernachlässigt (bleibt unverändert).
+    - Pumpspeicher [MWh] wird vernachlässigt (bleibt unverändert).
+    - Speicher [TWh] aus progDf wird bei der Erzeugung ignoriert.
     
     Args:
         produDf: DataFrame mit Erzeugungsdaten (MWh) und 'Zeitpunkt'.
@@ -378,34 +379,72 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
         "Erdgas [MWh]": "Erdgas [TWh]",
     }
 
-    # Sonderfälle:
-    # - "Sonstige Erneuerbare [MWh]" + "Sonstige Konventionelle [MWh]" -> "Sonstige [TWh]"
-    # - "Pumpspeicher [MWh]" bleibt unverändert (Faktor = 1.0)
-    # - "Wasserstoff [TWh]" aus progDf wird als neue "Wasserstoff [MWh]" Spalte hinzugefügt
-    # - Zusätzlicher Speicher (Differenz zwischen progDf["Speicher [TWh]"] und Pumpspeicher) wird als "Kurz-/Langzeitspeicher [MWh]" verteilt
-    # - Abfall: existiert in produDf nicht -> wird ignoriert
+    # Neue Regeln (Sonderfälle):
+    # - "Sonstige [TWh]" aus progDf -> nur "Sonstige Erneuerbare [MWh]" (SOE)
+    # - "Sonstige Konventionelle [MWh]" (SOK) wird vernachlässigt (bleibt unverändert)
+    # - "Pumpspeicher [MWh]" wird vernachlässigt (bleibt unverändert)
+    # - "Speicher [TWh]" aus progDf wird ignoriert
+    # - "Wasserstoff [TWh]" aus progDf -> neue Spalte, gleichmäßig verteilt
+    # - "Abfall [TWh]" aus progDf -> neue Spalte, gleichmäßig verteilt (falls vorhanden)
 
-    def get_prog_value(prog_col: str) -> float:
-        """Holt Wert aus progDf für prod_dat_jahr_used (ggf. interpoliert)"""
-        sel = progDf.loc[(progDf['Jahr'] == prod_dat_jahr_used) & (progDf['Studie'] == prod_dat_studie), prog_col]
-        if sel.empty or pd.isna(sel.iat[0]):
-            return 0.0
-        val_used = float(sel.iat[0])
+    def get_prog_value_interpolated(prog_col: str, ref_value: Optional[float] = None) -> float:
+        """
+        Holt Wert aus progDf für simu_jahr mit intelligenter Interpolation.
         
-        # Interpolation falls simu_jahr != prod_dat_jahr_used
-        if simu_jahr != prod_dat_jahr_used:
-            if smaller_years.size > 0 and prod_dat_jahr_kleiner is not None and prod_dat_jahr_kleiner != prod_dat_jahr_used:
-                sel_kleiner = progDf.loc[(progDf['Jahr'] == prod_dat_jahr_kleiner) & (progDf['Studie'] == prod_dat_studie), prog_col]
-                if not sel_kleiner.empty and not pd.isna(sel_kleiner.iat[0]):
-                    val_kleiner = float(sel_kleiner.iat[0])
-                    return np.interp(float(simu_jahr),
-                                   np.array([prod_dat_jahr_kleiner, prod_dat_jahr_used], dtype=float),
-                                   np.array([val_kleiner, val_used], dtype=float))
-            # Fallback: Interpolation ref_jahr <-> prod_dat_jahr_used (brauchen ref-Wert)
-            # Wir haben hier nur prog-Werte, nehmen vereinfacht val_used (keine Rückinterpolation zu ref_jahr)
-            # oder extrapolieren linear - aber sauberer wäre zwischen ref und prog zu interpolieren.
-            # Für jetzt: wenn kein kleineres Jahr, nutzen wir val_used direkt.
-        return val_used
+        Regeln:
+        - Wenn Prognose = 0: Interpoliere vom letzten Nicht-Null-Wert auf 0
+        - Wenn ref_value = 0 (z.B. Wasserstoff): Interpoliere von 0 zum ersten Prognosewert
+        - Sonst: Normal zwischen Prognosejahren interpolieren
+        """
+        # Hole alle verfügbaren Jahre für diese Spalte (nicht nur test_col)
+        studie_data_col = progDf.loc[progDf['Studie'] == prod_dat_studie, ['Jahr', prog_col]].copy()
+        studie_data_col = studie_data_col.dropna(subset=[prog_col])
+        
+        if studie_data_col.empty:
+            return 0.0
+        
+        # Sortiere nach Jahr
+        studie_data_col = studie_data_col.sort_values('Jahr')
+        years_list = studie_data_col['Jahr'].astype(int).tolist()
+        values_list = studie_data_col[prog_col].astype(float).tolist()
+        
+        # Finde Position von simu_jahr
+        if simu_jahr in years_list:
+            # Exakt vorhanden
+            idx = years_list.index(simu_jahr)
+            return values_list[idx]
+        
+        # Finde umgebende Jahre
+        smaller = [(y, v) for y, v in zip(years_list, values_list) if y < simu_jahr]
+        larger = [(y, v) for y, v in zip(years_list, values_list) if y > simu_jahr]
+        
+        # Fall 1: simu_jahr liegt vor dem ersten Prognosejahr
+        if not smaller and larger:
+            # Interpoliere von ref_value (oder 0) zum ersten Prognosewert
+            jahr_1 = ref_jahr
+            val_1 = ref_value if ref_value is not None else 0.0
+            jahr_2, val_2 = larger[0]
+            return np.interp(float(simu_jahr), [float(jahr_1), float(jahr_2)], [val_1, val_2])
+        
+        # Fall 2: simu_jahr liegt nach dem letzten Prognosejahr
+        if smaller and not larger:
+            # Nutze letzten verfügbaren Wert (oder 0 falls letzter Wert = 0)
+            return smaller[-1][1]
+        
+        # Fall 3: simu_jahr liegt zwischen zwei Prognosejahren
+        if smaller and larger:
+            jahr_1, val_1 = smaller[-1]
+            jahr_2, val_2 = larger[0]
+            
+            # Spezialfall: Wenn val_2 = 0, dann linear auf 0 interpolieren
+            if val_2 == 0.0:
+                return np.interp(float(simu_jahr), [float(jahr_1), float(jahr_2)], [val_1, 0.0])
+            
+            # Normaler Fall: linear interpolieren
+            return np.interp(float(simu_jahr), [float(jahr_1), float(jahr_2)], [val_1, val_2])
+        
+        # Fallback
+        return 0.0
 
     def get_ref_twh(mwh_col: str) -> float:
         """Berechnet Jahressumme im Referenzjahr für eine MWh-Spalte und gibt TWh zurück"""
@@ -419,41 +458,45 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
     # 1:1 Mappings
     for mwh_col, twh_col in source_mapping.items():
         ref_twh = get_ref_twh(mwh_col)
-        prog_twh = get_prog_value(twh_col)
+        prog_twh = get_prog_value_interpolated(twh_col, ref_twh)
         if ref_twh > 0:
             scaling_factors[mwh_col] = prog_twh / ref_twh
         else:
-            scaling_factors[mwh_col] = 1.0  # Keine Änderung, wenn ref=0
+            # Wenn Referenz = 0, aber Prognose > 0, setze Faktor auf sehr groß (oder handle speziell)
+            scaling_factors[mwh_col] = 1.0 if prog_twh == 0 else 1.0
         print(f"{mwh_col}: Ref={ref_twh:.4f} TWh, Prog={prog_twh:.4f} TWh, Faktor={scaling_factors[mwh_col]:.6f}")
 
-    # Sonstige Erneuerbare + Sonstige Konventionelle -> Sonstige [TWh]
+    # Neue Regel: Sonstige [TWh] aus progDf -> nur Sonstige Erneuerbare [MWh] (SOE)
     ref_soe = get_ref_twh("Sonstige Erneuerbare [MWh]")
-    ref_sok = get_ref_twh("Sonstige Konventionelle [MWh]")
-    ref_sonstige_total = ref_soe + ref_sok
-    prog_sonstige = get_prog_value("Sonstige [TWh]")
-    if ref_sonstige_total > 0:
-        faktor_sonstige = prog_sonstige / ref_sonstige_total
+    prog_sonstige = get_prog_value_interpolated("Sonstige [TWh]", ref_soe)
+    if ref_soe > 0:
+        faktor_soe = prog_sonstige / ref_soe
     else:
-        faktor_sonstige = 1.0
-    scaling_factors["Sonstige Erneuerbare [MWh]"] = faktor_sonstige
-    scaling_factors["Sonstige Konventionelle [MWh]"] = faktor_sonstige
-    print(f"Sonstige Erneuerbare [MWh]: Ref={ref_soe:.4f} TWh, Faktor={faktor_sonstige:.6f}")
-    print(f"Sonstige Konventionelle [MWh]: Ref={ref_sok:.4f} TWh, Faktor={faktor_sonstige:.6f}")
+        faktor_soe = 1.0
+    scaling_factors["Sonstige Erneuerbare [MWh]"] = faktor_soe
+    print(f"Sonstige Erneuerbare [MWh]: Ref={ref_soe:.4f} TWh, Prog={prog_sonstige:.4f} TWh, Faktor={faktor_soe:.6f}")
 
-    # Pumpspeicher bleibt unverändert (Faktor = 1.0)
+    # Sonstige Konventionelle [MWh] wird vernachlässigt (bleibt unverändert)
+    ref_sok = get_ref_twh("Sonstige Konventionelle [MWh]")
+    scaling_factors["Sonstige Konventionelle [MWh]"] = 1.0
+    print(f"Sonstige Konventionelle [MWh]: Ref={ref_sok:.4f} TWh, wird vernachlässigt (Faktor=1.0)")
+
+    # Pumpspeicher bleibt unverändert (wird vernachlässigt)
     ref_ps = get_ref_twh("Pumpspeicher [MWh]")
     scaling_factors["Pumpspeicher [MWh]"] = 1.0
-    print(f"Pumpspeicher [MWh]: Ref={ref_ps:.4f} TWh, bleibt unverändert (Faktor=1.0)")
+    print(f"Pumpspeicher [MWh]: Ref={ref_ps:.4f} TWh, wird vernachlässigt (Faktor=1.0)")
 
-    # Wasserstoff aus progDf (existiert nicht in produDf -> wird neu hinzugefügt)
-    prog_wasserstoff = get_prog_value("Wasserstoff [TWh]")
-    print(f"Wasserstoff [MWh]: Ref=0.0000 TWh, Prog={prog_wasserstoff:.4f} TWh (neue Spalte wird hinzugefügt)")
+    # Wasserstoff aus progDf (existiert nicht in produDf -> wird gleichmäßig verteilt)
+    # Wichtig: ref_value = 0.0 für Wasserstoff (Interpolation von 0 zum ersten Prognosewert)
+    prog_wasserstoff = get_prog_value_interpolated("Wasserstoff [TWh]", 0.0)
+    print(f"Wasserstoff [MWh]: Ref=0.0000 TWh, Prog={prog_wasserstoff:.4f} TWh (gleichmäßig über Jahr verteilt)")
 
-    # Zusätzlicher Speicher = progDf["Speicher [TWh]"] - Pumpspeicher_Ref
-    # Dieser wird als "Kurz-/Langzeitspeicher [MWh]" hinzugefügt
-    prog_speicher_total = get_prog_value("Speicher [TWh]")
-    zusatz_speicher_twh = max(0.0, prog_speicher_total - ref_ps)  # Nur positive Differenz
-    print(f"Kurz-/Langzeitspeicher [MWh]: Zusätzlich={zusatz_speicher_twh:.4f} TWh (= Speicher {prog_speicher_total:.4f} - Pumpspeicher {ref_ps:.4f})\n")
+    # Abfall aus progDf (existiert nicht in produDf -> wird gleichmäßig verteilt, falls vorhanden)
+    prog_abfall = get_prog_value_interpolated("Abfall [TWh]", 0.0)
+    print(f"Abfall [MWh]: Ref=0.0000 TWh, Prog={prog_abfall:.4f} TWh (gleichmäßig über Jahr verteilt)")
+
+    # Speicher [TWh] aus progDf wird bei der Erzeugung ignoriert
+    print(f"Speicher [TWh] aus progDf wird bei der Erzeugung ignoriert\n")
 
     # 5) Skaliere jede MWh-Spalte des Referenzjahres mit ihrem Faktor und verschiebe auf simu_jahr
     jahr_offset = simu_jahr - ref_jahr
@@ -465,18 +508,22 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
 
     for mwh_col in df_refJahr.columns:
         if mwh_col.endswith('[MWh]'):
+            # Überspringe "Sonstige Konventionelle [MWh]" - soll ab Simulation wegfallen
+            if mwh_col == "Sonstige Konventionelle [MWh]":
+                continue
             faktor = scaling_factors.get(mwh_col, 1.0)
             df_simu[mwh_col] = df_refJahr[mwh_col] * faktor
 
     # 6) Wasserstoff hinzufügen (gleichmäßig über das Jahr verteilt)
-    # Jahressumme in MWh -> auf alle Zeitschritte verteilen
     num_timesteps = len(df_simu)
-    wasserstoff_pro_zeitschritt = (prog_wasserstoff * 1_000_000.0) / num_timesteps if num_timesteps > 0 else 0.0
-    df_simu['Wasserstoff [MWh]'] = wasserstoff_pro_zeitschritt
+    if prog_wasserstoff > 0:
+        wasserstoff_pro_zeitschritt = (prog_wasserstoff * 1_000_000.0) / num_timesteps if num_timesteps > 0 else 0.0
+        df_simu['Wasserstoff [MWh]'] = wasserstoff_pro_zeitschritt
 
-    # 7) Kurz-/Langzeitspeicher hinzufügen (gleichmäßig über das Jahr verteilt)
-    speicher_pro_zeitschritt = (zusatz_speicher_twh * 1_000_000.0) / num_timesteps if num_timesteps > 0 else 0.0
-    df_simu['Kurz-/Langzeitspeicher [MWh]'] = speicher_pro_zeitschritt
+    # 7) Abfall hinzufügen (gleichmäßig über das Jahr verteilt, falls vorhanden)
+    if prog_abfall > 0:
+        abfall_pro_zeitschritt = (prog_abfall * 1_000_000.0) / num_timesteps if num_timesteps > 0 else 0.0
+        df_simu['Abfall [MWh]'] = abfall_pro_zeitschritt
 
     col.show_first_rows(df_simu)
     return df_simu
