@@ -1,31 +1,48 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "simulationssoftware-ecovisionlabs"
 version = "0.1.0"
 description = "EcoVisionLabs simulations software"
 readme = "README.md"
-requires-python = ">=3.9"
-authors = [{ name = "EcoVisionLabs" }]
-license = { text = "MIT" }
+authors = ["EcoVisionLabs"]
+license = "MIT"
+# Minimal erforderliche Python-Version
+packages = [
+    # Hier definierst du, wo Poetry den Quellcode findet.
+    # Es geht davon aus, dass der Paketname 'simulationssoftware_ecovisionlabs'
+    # in einem Ordner namens 'source-code' liegt.
+        { include = "simulationssoftware_ecovisionlabs", from = "source-code" }
+    ]
 
-[tool.setuptools]
-package-dir = {"" = "source-code"}
-py-modules = [
-  "config_manager",
-  "constants",
-  "data_manager",
-  "data_processing",
-  "errors",
-  "io_handler",
-  "main_demo",
-  "main",
-  "plotting",
-  "user_interface"
+    # Zusätzliche Metadaten (optional aber nützlich)
+    homepage = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
+    repository = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
+    keywords = ["energy", "simulations", "visualization", "streamlit", "plotly"]
 ]
 
-# If you later convert to package directories under source-code/, enable discovery instead:
-# [tool.setuptools.packages.find]
-# where = ["source-code"]
+[tool.poetry.dependencies]
+python = ">=3.9"
+pandas = "^2.0"
+numpy = "^1.25"
+matplotlib = "^3.7"
+plotly = "^5.15"
+streamlit = "^1.20"
+
+[tool.poetry.extras]
+dev = ["pytest", "ruff", "black", "isort", "mypy"]
+
+[tool.poetry.dev-dependencies]
+# Test & linting
+pytest = "^7.0"
+pytest-cov = "^4.0"
+ruff = "^0.1"
+black = "^24.0"
+isort = "^6.0"
+mypy = "^1.0"
+
+[tool.poetry.scripts]
+# Convenience CLI (Rufe dann: `poetry run ecovision`)
+ecovision = "main_custom_calc:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
