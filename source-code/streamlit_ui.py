@@ -4,6 +4,21 @@ import data_processing.simulation as sim
 from data_manager import DataManager
 from config_manager import ConfigManager
 from pathlib import Path
+import os
+import sys
+
+# WICHTIG: Setze Working Directory auf Projektverzeichnis (parent von source-code)
+# Dies muss VOR allen anderen Operationen passieren und bei JEDEM Rerun
+project_root = Path(__file__).parent.parent.resolve()
+
+# Prüfe ob wir im falschen Verzeichnis sind
+current_wd = Path(os.getcwd()).resolve()
+if current_wd != project_root:
+    os.chdir(project_root)
+    # Füge source-code zum Python-Path hinzu, damit Imports funktionieren
+    source_code_dir = project_root / "source-code"
+    if str(source_code_dir) not in sys.path:
+        sys.path.insert(0, str(source_code_dir))
 
 # Session-state initialisieren (persistente Objekte über Reruns)
 if "dm" not in st.session_state:
@@ -79,6 +94,12 @@ def show_dataset_analysis() -> None:
                 st.write(f"- ID {df_cfg['id']}: {df_cfg['name']}")
                 st.write(f"  Path: {df_cfg['path']}")
                 st.write(f"  Exists: {df_cfg['path'].exists()}")
+                # Zeige auch den absoluten Pfad
+                st.write(f"  Absolute Path: {df_cfg['path'].absolute()}")
+            
+            # Zeige aktuelles Working Directory
+            import os
+            st.write(f"\n**Current Working Directory:** {os.getcwd()}")
         
         # Liste verfügbarer Datasets anzeigen
         datasets = st.session_state.dm.list_datasets()
@@ -170,32 +191,34 @@ def show_standard_simulation() -> None:
 def load_data_manager() -> None:
     try:
         # Get the project root (parent of source-code)
-        project_root = Path(__file__).parent.parent
+        project_root = Path(__file__).parent.parent.resolve()
         cfg_path = Path(__file__).parent / "config.json"
         
         st.info(f"📂 Project Root: {project_root}")
         st.info(f"📄 Config Path: {cfg_path}")
+        st.info(f"🔧 Current Working Directory: {os.getcwd()}")
         
-        cfg = ConfigManager(cfg_path)
+        # Wechsle Working Directory
+        old_wd = os.getcwd()
+        os.chdir(project_root)
+        st.info(f"✅ Changed to: {os.getcwd()}")
         
-        # Resolve relative paths in config to absolute paths from project root
-        for df_cfg in cfg.config.get("DATAFRAMES", []):
-            if "path" in df_cfg and not df_cfg["path"].is_absolute():
-                original_path = df_cfg["path"]
-                df_cfg["path"] = project_root / df_cfg["path"]
-                st.write(f"Resolved: {original_path} → {df_cfg['path']}")
-        
-        dm = DataManager(config_manager=cfg)
-        
-        st.session_state.cfg = cfg
-        st.session_state.dm = dm
-        
-        # Zeige Lade-Ergebnisse
-        datasets = dm.list_datasets()
-        if datasets:
-            st.success(f"✅ DataManager erfolgreich geladen. {len(datasets)} Datasets verfügbar.")
-        else:
-            st.warning("⚠️ DataManager geladen, aber keine Datasets wurden geladen. Prüfe die Pfade!")
+        try:
+            cfg = ConfigManager(cfg_path)
+            dm = DataManager(config_manager=cfg)
+            
+            st.session_state.cfg = cfg
+            st.session_state.dm = dm
+            
+            # Zeige Lade-Ergebnisse
+            datasets = dm.list_datasets()
+            if datasets:
+                st.success(f"✅ DataManager erfolgreich geladen. {len(datasets)} Datasets verfügbar.")
+            else:
+                st.warning("⚠️ DataManager geladen, aber keine Datasets wurden geladen. Prüfe die Pfade!")
+        finally:
+            # Wechsle zurück (falls nötig)
+            pass  # Lassen wir im neuen Directory
             
     except Exception as e:
         st.error(f"❌ Fehler beim Laden des DataManagers: {e}")
