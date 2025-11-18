@@ -128,6 +128,28 @@ class DataManager:
         return info
 
     # -------------------------------------------------------------------------
+    def list_dataset_names(self):
+        """Return a list of all loaded dataset names.
+
+        Returns:
+            list[str]: List of dataset names.
+        """
+        return [meta["name"] for meta in self.metadata.values()]
+
+    def get_dataset_id(self, name):
+        """Get the dataset ID for a given dataset name.
+
+        Args:
+            name (str): The name of the dataset.
+        Returns:
+            int: The ID of the dataset.
+        """
+        for ds_id, meta in self.metadata.items():
+            if meta["name"] == name:
+                return ds_id
+        raise DataframeNotFoundError(f"Dataset with name '{name}' not found.")
+
+    # -------------------------------------------------------------------------
     def get(self, identifier):
         """Retrieve a DataFrame by its ID or name.
 
