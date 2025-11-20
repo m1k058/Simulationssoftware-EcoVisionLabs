@@ -6,12 +6,7 @@ readme = "README.md"
 authors = ["EcoVisionLabs"]
 license = "MIT"
 # Minimal erforderliche Python-Version
-packages = [
-    # Hier definierst du, wo Poetry den Quellcode findet.
-    # Es geht davon aus, dass der Paketname 'simulationssoftware_ecovisionlabs'
-    # in einem Ordner namens 'source-code' liegt.
-        { include = "simulationssoftware_ecovisionlabs", from = "source-code" }
-    ]
+
 
     # Zusätzliche Metadaten (optional aber nützlich)
     homepage = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
@@ -20,7 +15,7 @@ packages = [
 
 
 [tool.poetry.dependencies]
-python = ">=3.9"
+python = ">=3.9, !=3.9.7"
 pandas = "^2.0"
 numpy = "^1.25"
 matplotlib = "^3.7"
