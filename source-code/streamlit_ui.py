@@ -246,8 +246,8 @@ def show_dataset_analysis() -> None:
         st.button("Zurück", on_click=set_mode, args=("main",))
     
     elif datentyp == "SMARD-V":
-        st.info("Verbrauchs-Daten können derzeit nur mit Matplotlib geplottet werden.")
-        plot_engine = "Matplotlib"
+        # st.info("Verbrauchs-Daten können derzeit nur mit Matplotlib geplottet werden.")
+        # plot_engine = "Matplotlib"
 
         if plot_engine == "Matplotlib":
             fig, ax = plt.subplots(figsize=(10, 5))
