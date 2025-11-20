@@ -1,20 +1,14 @@
 [tool.poetry]
 name = "simulationssoftware-ecovisionlabs"
 version = "0.1.0"
-package-mode = false      <-- DIESE ZEILE EINFÜGEN
 description = "EcoVisionLabs simulations software"
+package-mode = false
 readme = "README.md"
 authors = ["EcoVisionLabs"]
 license = "MIT"
-# ... Rest der Datei
-# Minimal erforderliche Python-Version
-
-
-    # Zusätzliche Metadaten (optional aber nützlich)
-    homepage = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
-    repository = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
-    keywords = ["energy", "simulations", "visualization", "streamlit", "plotly"]
-
+homepage = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
+repository = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
+keywords = ["energy", "simulations", "visualization", "streamlit", "plotly"]
 
 [tool.poetry.dependencies]
 python = ">=3.9, !=3.9.7"
@@ -28,7 +22,6 @@ streamlit = "^1.20"
 dev = ["pytest", "ruff", "black", "isort", "mypy"]
 
 [tool.poetry.dev-dependencies]
-# Test & linting
 pytest = "^7.0"
 pytest-cov = "^4.0"
 ruff = "^0.1"
@@ -37,7 +30,6 @@ isort = "^6.0"
 mypy = "^1.0"
 
 [tool.poetry.scripts]
-# Convenience CLI (Rufe dann: `poetry run ecovision`)
 ecovision = "main_custom_calc:main"
 
 [build-system]
