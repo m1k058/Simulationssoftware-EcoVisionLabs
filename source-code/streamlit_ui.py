@@ -322,8 +322,8 @@ def load_data_manager() -> bool:
     """
         
     try:
-        
-        cfg = ConfigManager(Path("config.json"))
+        config_path = Path(__file__).parent / "config.json"
+        cfg = ConfigManager(config_path=config_path)
         dm = DataManager(config_manager=cfg)
         
         st.session_state.cfg = cfg
