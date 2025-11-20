@@ -53,9 +53,9 @@ def main():
 
         prog_dat_studie = 'Agora'   # 'Agora' | 'BDI - Klimapfade 2.0' | 'dena - KN100' | 'BMWK - LFS TN-Strom'
                                     # 'Ariadne - REMIND-Mix' | 'Ariadne - REMod-Mix' | 'Ariadne - TIMES PanEU-Mix'
-        ref_jahr = 2024             # Referenzjahr im Verbrauchsdatensatz
-        simu_jahr_von = 2024            # Simulationsjahr von
-        simu_jahr_bis = 2045            # Simulationsjahr bis
+        ref_jahr = 2023             # Referenzjahr im Verbrauchsdatensatz
+        simu_jahr_von = 2026            # Simulationsjahr von
+        simu_jahr_bis = 2030            # Simulationsjahr bis
         use_load_profile = True     # Lastprofil S25 verwenden (empfohlen für realistische Lastkurven)
                                     # True = Lastprofil S25 mit realistischen Tages-/Monatsschwankungen
                                     # False = Einfache lineare Skalierung (alte Methode)
@@ -67,12 +67,16 @@ def main():
                                             prog_dat_studie, simu_jahr_von, simu_jahr_bis,
                                             ref_jahr=ref_jahr, use_load_profile=use_load_profile)
         
-
+        
         #vorbereitung des Dateinamens mit Zeitstempel
         timestamp = datetime.now().strftime("%d%m%Y_%H%M")
         outdir = Path("output") / "csv"
         outdir.mkdir(parents=True, exist_ok=True)
-        filename = outdir / f"Skalierte_Netzlast_{simu_jahr_von}-{simu_jahr_bis} (ref-{ref_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
+        if use_load_profile:
+            lp = "mit_lastprofil"
+        else:
+            lp = ""
+        filename = outdir / f"Skalierte_Netzlast_{lp}_{simu_jahr_von}-{simu_jahr_bis} (ref-{ref_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
 
         # Schreibe die CSV in die Datei (pandas akzeptiert Path-Objekte)
         if df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8', decimal=',') is None:
