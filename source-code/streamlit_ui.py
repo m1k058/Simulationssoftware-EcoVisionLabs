@@ -331,7 +331,7 @@ def load_data_manager() -> bool:
         return True
         
     except Exception as e:
-        print(f"❌ Fehler beim Laden: {e}")
+        st.error(f"❌ Fehler beim Laden: {e}")
         import traceback
         print(traceback.format_exc())
         return False
