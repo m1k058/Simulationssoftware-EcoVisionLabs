@@ -259,7 +259,7 @@ def show_dataset_analysis() -> None:
 def show_custom_simulation() -> None:
     st.title("Eigene Simulation")
     st.caption("Führe eine Simulation mit benutzerdefinierten Parametern durch.")
-    st.warning("🏗️ Diese Funktion ist noch in der Entwicklung und dient nur Demonstrationszwecken.")
+    st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung und dient nur Demonstrationszwecken.")
     sidebar = st.sidebar
     sidebar.title("Simulationseinstellungen")
 
@@ -283,18 +283,16 @@ def show_custom_simulation() -> None:
             f"Simulation abgeschlossen für den Zeitraum :blue[***{jahr_von}***] bis :blue[***{jahr_bis}***] "
             f"mit Referenzjahr :blue[***{referenz_jahr}***] und Studie :green[***{studie_auswahl}***]."
         )
-        st.info("🏗️ Hinweis: Dies ist eine Demo-Simulation. Die eigentliche Simulationslogik ist noch nicht implementiert.")
     st.button("Zurück", on_click=set_mode, args=("main",))
 
 
 def show_standard_simulation() -> None:
     st.title("Standard Simulation")
     st.caption("Starte eine Simulation mit Standardparametern.")
+    st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung und dient nur Demonstrationszwecken.")
 
     sidebar = st.sidebar
     sidebar.title("Schnellstart")
-    if sidebar.button("← Zurück zum Menü", use_container_width=True):
-        set_mode("main")
 
     # Feste (beispielhafte) Standardwerte
     jahr_von = 2030
@@ -312,6 +310,7 @@ def show_standard_simulation() -> None:
         st.success(
             f"Standard-Simulation abgeschlossen für {jahr_von}-{jahr_bis} (Ref {referenz_jahr}) – Studie {studie_auswahl}."
         )
+    st.button("Zurück", on_click=set_mode, args=("main",))
 
 def load_data_manager() -> bool:
     """Lädt den DataManager und ConfigManager und speichert sie im Session-State.
