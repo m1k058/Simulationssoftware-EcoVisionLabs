@@ -168,6 +168,10 @@ def show_dataset_analysis() -> None:
                                             max_value=max_date)
         selected_time_to = right.time_input("Uhrzeit bis", value=pd.to_datetime("23:59").time())
 
+    # Kombiniere Datum und Uhrzeit wenn gesetzt
+    if st.session_state.set_time:
+        selected_date_from = pd.to_datetime(f"{selected_date_from} {selected_time_from}")
+        selected_date_to = pd.to_datetime(f"{selected_date_to} {selected_time_to}")
     
     # Filter DataFrame nach ausgewähltem Zeitraum
     df_filtered = df[
