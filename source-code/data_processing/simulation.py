@@ -476,20 +476,15 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
     scaling_factors["Sonstige Erneuerbare [MWh]"] = faktor_soe
     print(f"Sonstige Erneuerbare [MWh]: Ref={ref_soe:.4f} TWh, Prog={prog_sonstige:.4f} TWh, Faktor={faktor_soe:.6f}")
 
-    # Sonstige Konventionelle [MWh] wird vernachlässigt (bleibt unverändert)
+    # Sonstige Konventionelle [MWh] komplett entfernen (nicht in Ergebnis aufnehmen)
     ref_sok = get_ref_twh("Sonstige Konventionelle [MWh]")
-    scaling_factors["Sonstige Konventionelle [MWh]"] = 1.0
-    print(f"Sonstige Konventionelle [MWh]: Ref={ref_sok:.4f} TWh, wird vernachlässigt (Faktor=1.0)")
+    print(f"Sonstige Konventionelle [MWh]: Ref={ref_sok:.4f} TWh, wird aus Ausgabe entfernt")
 
-    # Pumpspeicher bleibt unverändert (wird vernachlässigt)
+    # Pumpspeicher [MWh] komplett entfernen (nicht in Ergebnis aufnehmen)
     ref_ps = get_ref_twh("Pumpspeicher [MWh]")
-    scaling_factors["Pumpspeicher [MWh]"] = 1.0
-    print(f"Pumpspeicher [MWh]: Ref={ref_ps:.4f} TWh, wird vernachlässigt (Faktor=1.0)")
+    print(f"Pumpspeicher [MWh]: Ref={ref_ps:.4f} TWh, wird aus Ausgabe entfernt")
 
-    # Wasserstoff aus progDf (existiert nicht in produDf -> wird gleichmäßig verteilt)
-    # Wichtig: ref_value = 0.0 für Wasserstoff (Interpolation von 0 zum ersten Prognosewert)
-    prog_wasserstoff = get_prog_value_interpolated("Wasserstoff [TWh]", 0.0)
-    print(f"Wasserstoff [MWh]: Ref=0.0000 TWh, Prog={prog_wasserstoff:.4f} TWh (gleichmäßig über Jahr verteilt)")
+    # Wasserstoff nicht mehr hinzufügen (keine Spalte im Ergebnis)
 
     # Abfall aus progDf (existiert nicht in produDf -> wird gleichmäßig verteilt, falls vorhanden)
     prog_abfall = get_prog_value_interpolated("Abfall [TWh]", 0.0)
@@ -508,17 +503,14 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
 
     for mwh_col in df_refJahr.columns:
         if mwh_col.endswith('[MWh]'):
-            # Überspringe "Sonstige Konventionelle [MWh]" - soll ab Simulation wegfallen
-            if mwh_col == "Sonstige Konventionelle [MWh]":
+            # Überspringe ausgewählte Spalten, sie sollen in der Ausgabe fehlen
+            if mwh_col in {"Sonstige Konventionelle [MWh]", "Pumpspeicher [MWh]"}:
                 continue
             faktor = scaling_factors.get(mwh_col, 1.0)
             df_simu[mwh_col] = df_refJahr[mwh_col] * faktor
 
-    # 6) Wasserstoff hinzufügen (gleichmäßig über das Jahr verteilt)
+    # 6) Wasserstoff nicht hinzufügen (keine Spalte mehr)
     num_timesteps = len(df_simu)
-    if prog_wasserstoff > 0:
-        wasserstoff_pro_zeitschritt = (prog_wasserstoff * 1_000_000.0) / num_timesteps if num_timesteps > 0 else 0.0
-        df_simu['Wasserstoff [MWh]'] = wasserstoff_pro_zeitschritt
 
     # 7) Abfall hinzufügen (gleichmäßig über das Jahr verteilt, falls vorhanden)
     if prog_abfall > 0:
