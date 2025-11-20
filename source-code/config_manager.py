@@ -32,17 +32,25 @@ class ConfigManager:
         with open(self.config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Normalize path separators (JSON may contain Windows backslashes) so that
-        # paths work correctly on POSIX systems. Keep them relative to the repo.
+        # Normalize path separators AND resolve relative to config file location
         out_dir = data["GLOBAL"].get("output_dir", "output")
         out_dir = out_dir.replace("\\", "/")
         data["GLOBAL"]["output_dir"] = Path(out_dir)
+
+        # HIER IST DIE ÄNDERUNG:
+        # Wir merken uns, wo die config.json liegt
+        base_dir = self.config_path.parent.resolve()
 
         for df in data.get("DATAFRAMES", []):
             p = df.get("path", "")
             if isinstance(p, str):
                 p = p.replace("\\", "/")
-            df["path"] = Path(p)
+            
+            # Wir bauen den absoluten Pfad zusammen:
+            # Ordner der Config + Relativer Pfad aus der JSON
+            full_path = (base_dir / p).resolve()
+            
+            df["path"] = full_path
 
         self.config = data
 
