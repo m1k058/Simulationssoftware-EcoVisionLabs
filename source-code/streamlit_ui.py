@@ -175,7 +175,7 @@ def show_dataset_analysis() -> None:
         (pd.to_datetime(df["Zeitpunkt"]) <= pd.to_datetime(selected_date_to))
     ]
     date_diff = pd.to_datetime(selected_date_to) - pd.to_datetime(selected_date_from)
-    plot_engine = st.selectbox("Wähle eine Plot Engine", options=["Altair", "Plotly", "Matplotlib", "streamlit-echarts"])
+    plot_engine = st.selectbox("Wähle eine Plot Engine", options=["Altair", "Plotly", "Matplotlib"], index=1)
     
     if datentyp == "SMARD":
         # Optionen & Default aus Konstanten ableiten
@@ -190,7 +190,8 @@ def show_dataset_analysis() -> None:
         # Mapping für spätere Umwandlung der Auswahl in Shortcodes
         colname_to_code = {v["colname"]: k for k, v in ENERGY_SOURCES.items()}
 
-        if plot_engine == "Altair" and (date_diff <= pd.Timedelta(days=7)):
+        if plot_engine == "Altair" and (date_diff <= pd.Timedelta(days=14)):
+            st.warning("⚠️ Altair kann  nur einzelne linien und nicht stacks darstellen.")
             if not energiequellen:
                 st.info("Bitte mindestens eine Energiequelle auswählen.")
             else:
@@ -204,8 +205,10 @@ def show_dataset_analysis() -> None:
                     x_label="Datum",
                     y_label="MWh",
                 )
-        elif plot_engine == "Altair" and (date_diff > pd.Timedelta(days=7)):
-            st.warning("⚠️ Altair unterstützt nur Zeiträume bis zu 7 Tagen da der Ressourcenverbrauch sonst zu hoch ist.\n\nBitte wähle einen kürzeren Zeitraum oder eine andere Plot Engine (empfohlen: Plotly).")
+        elif plot_engine == "Altair" and (date_diff > pd.Timedelta(days=14)):
+            st.warning("⚠️ Altair kann  nur einzelne linien und nicht stacks darstellen.")
+            st.warning("⚠️ Altair unterstützt nur Zeiträume bis zu 14 Tagen da der Ressourcenverbrauch sonst zu hoch ist.\n" +
+            "\nBitte wähle einen kürzeren Zeitraum oder eine andere Plot Engine (empfohlen: Plotly).")
 
         elif plot_engine == "Plotly":
             # Nutze die Auswahl für den Plot (Shortcodes ableiten)
@@ -249,6 +252,29 @@ def show_dataset_analysis() -> None:
             ax.fill_between(pd.to_datetime(df_filtered["Zeitpunkt"]), df_filtered["Netzlast [MWh]"], color="blue", alpha=0.3)
             ax.set_ylim(bottom=0) 
             st.pyplot(fig)
+        
+        elif plot_engine == "Plotly":
+            fig = pltp.create_line_plot(
+                df_filtered,
+                y_axis="Netzlast [MWh]",
+                title="Netzlast über die Zeit",
+                description="Line Plot der Netzlast",
+                darkmode=False,
+            )
+            st.plotly_chart(fig)
+        
+        elif plot_engine == "Altair":
+            st.line_chart(
+                df_filtered,
+                x="Zeitpunkt",
+                y="Netzlast [MWh]",
+                x_label="Datum",
+                y_label="MWh",
+            )
+        
+        else:
+            st.error("Unbekannte Plot Engine ausgewählt.")
+
         st.button("Zurück", on_click=set_mode, args=("main",))
     
     else:
