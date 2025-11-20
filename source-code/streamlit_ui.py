@@ -147,6 +147,7 @@ def show_dataset_analysis() -> None:
         selected_date_from = sidebar.date_input("Datum von", value=min_date,
                                                 format="DD.MM.YYYY", min_value=min_date,
                                                 max_value=max_date)
+        selected_date_from = selected_date_from.replace(hour=0, minute=0, second=0, microsecond=0) # Uhrzeit auf 00:00 setzen
     else:
         left, right = sidebar.columns(2)
         selected_date_from = left.date_input("Datum von", value=min_date,
@@ -155,12 +156,14 @@ def show_dataset_analysis() -> None:
         selected_time_from = right.time_input("Uhrzeit von", value=pd.to_datetime("00:00").time())
 
     maxplot_date = pd.to_datetime(min_date)+ pd.Timedelta(days=1)
+
     # Datum bis
     min_date = pd.to_datetime(selected_date_from)
     if not st.session_state.set_time:
         selected_date_to = sidebar.date_input("Datum bis", value=maxplot_date,
                                                 format="DD.MM.YYYY", min_value=min_date,
                                                 max_value=max_date)
+        selected_date_to = selected_date_to.replace(hour=23, minute=59, second=59, microsecond=999999) # Uhrzeit auf 23:59 setzen
     else:
         left, right = sidebar.columns(2)
         selected_date_to = left.date_input("Datum bis", value=maxplot_date,
