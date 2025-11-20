@@ -1,10 +1,12 @@
 [tool.poetry]
 name = "simulationssoftware-ecovisionlabs"
 version = "0.1.0"
+package-mode = false      <-- DIESE ZEILE EINFÜGEN
 description = "EcoVisionLabs simulations software"
 readme = "README.md"
 authors = ["EcoVisionLabs"]
 license = "MIT"
+# ... Rest der Datei
 # Minimal erforderliche Python-Version
 
 
