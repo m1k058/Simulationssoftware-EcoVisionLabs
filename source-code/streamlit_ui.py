@@ -259,11 +259,9 @@ def show_dataset_analysis() -> None:
 def show_custom_simulation() -> None:
     st.title("Eigene Simulation")
     st.caption("Führe eine Simulation mit benutzerdefinierten Parametern durch.")
-
+    st.warning("🏗️ Diese Funktion ist noch in der Entwicklung und dient nur Demonstrationszwecken.")
     sidebar = st.sidebar
     sidebar.title("Simulationseinstellungen")
-    if sidebar.button("← Zurück zum Menü", use_container_width=True):
-        set_mode("main")
 
     jahr_von = sidebar.number_input("Simulationsjahr von", min_value=2026, max_value=2050, value=2031)
     jahr_bis = sidebar.number_input("Simulationsjahr bis", min_value=2026, max_value=2050, value=2045)
@@ -281,11 +279,12 @@ def show_custom_simulation() -> None:
 
     if st.button("Simulation starten", type="primary"):
         st.write("Simulation wird durchgeführt...")
-        # Beispiel: Hier würde die Simulationsfunktion aufgerufen werden
         st.success(
             f"Simulation abgeschlossen für den Zeitraum :blue[***{jahr_von}***] bis :blue[***{jahr_bis}***] "
             f"mit Referenzjahr :blue[***{referenz_jahr}***] und Studie :green[***{studie_auswahl}***]."
         )
+        st.info("🏗️ Hinweis: Dies ist eine Demo-Simulation. Die eigentliche Simulationslogik ist noch nicht implementiert.")
+    st.button("Zurück", on_click=set_mode, args=("main",))
 
 
 def show_standard_simulation() -> None:
@@ -331,7 +330,7 @@ def load_data_manager() -> bool:
         return True
         
     except Exception as e:
-        st.error(f"❌ Fehler beim Laden: {e}")
+        st.error(f"❌ LOAD DATA -> Fehler beim Laden: {e}")
         import traceback
         print(traceback.format_exc())
         return False
