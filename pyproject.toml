@@ -17,7 +17,7 @@ packages = [
     homepage = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
     repository = "https://github.com/m1k058/Simulationssoftware-EcoVisionLabs"
     keywords = ["energy", "simulations", "visualization", "streamlit", "plotly"]
-]
+
 
 [tool.poetry.dependencies]
 python = ">=3.9"
