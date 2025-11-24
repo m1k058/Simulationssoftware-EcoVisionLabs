@@ -72,6 +72,63 @@ def create_stacked_bar_plot(
         raise DataProcessingError(f"Fehler beim Erstellen des Stacked Bar Plots: {e}")
 
 
+def create_line_plot(
+    df: pd.DataFrame,
+    y_axis: str,
+    title: str = "Line Plot",
+    description: str = "",
+    darkmode: bool = False,
+):
+    """
+    Erstellt einen einfachen Line Plot für eine einzelne Spalte.
+    
+    Args:
+        df: DataFrame mit den Daten
+        y_axis: Name der Spalte für die Y-Achse
+        title: Titel des Plots
+        description: Optionale Beschreibung
+        darkmode: Ob Dark Mode verwendet werden soll
+        
+    Returns:
+        Plotly Figure Objekt
+    """
+    try:
+        if "Zeitpunkt" not in df.columns:
+            raise DataProcessingError("DataFrame muss Spalte 'Zeitpunkt' enthalten.")
+        
+        if y_axis not in df.columns:
+            raise DataProcessingError(f"Spalte '{y_axis}' nicht im DataFrame gefunden.")
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=df["Zeitpunkt"],
+                y=df[y_axis],
+                mode="lines",
+                line=dict(width=2, color="#1f77b4"),
+                fill="tozeroy",
+                fillcolor="rgba(31, 119, 180, 0.3)",
+                hoverinfo="x+y",
+            )
+        )
+
+        subtitle = f"<br><sup>{description}</sup>" if description else ""
+        fig.update_layout(
+            title=f"{title}{subtitle}",
+            xaxis_title="Zeitpunkt",
+            yaxis_title=y_axis,
+            hovermode="x unified",
+            template=_plotly_template(darkmode),
+            xaxis=dict(range=[df["Zeitpunkt"].min(), df["Zeitpunkt"].max()]),
+            yaxis=dict(rangemode="tozero"),
+        )
+
+        return fig
+
+    except Exception as e:
+        raise DataProcessingError(f"Fehler beim Erstellen des Line Plots: {e}")
+
+
 def create_line_chart(
     df: pd.DataFrame,
     columns: Optional[List[str]] = None,

@@ -1,0 +1,22 @@
+[theme]
+# Setze die primäre Akzentfarbe (z.B. für Buttons)
+primaryColor = "#0058aaff" 
+
+# Hintergrundfarbe der gesamten App
+backgroundColor = "#131313ff" 
+
+# Hintergrundfarbe der Seitenleiste/Widgets
+secondaryBackgroundColor = "#000000ff" 
+
+# Standardtextfarbe
+textColor = "#ffffffff" 
+
+# Schriftart
+font = "sans serif" # Optionen: "sans serif", "serif", "monospace"
+
+# Zusätzliche Einstellungen...
+base = "dark" # Oder "dark" für den Streamlit Dark Mode
+
+[server]
+headless = true
+

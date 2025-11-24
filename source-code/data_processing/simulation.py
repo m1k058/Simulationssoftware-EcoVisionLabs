@@ -279,11 +279,11 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
             total_consumption_twh=Gesamtenergie_ziel_jahr
         )
         # Umbenennen für Konsistenz
-        df_simu.rename(columns={'Lastprofil Netzlast [MWh]': 'Skalierter Netzlast [MWh]'}, inplace=True)
+        df_simu.rename(columns={'Lastprofil Netzlast [MWh]': 'Skalierte Netzlast [MWh]'}, inplace=True)
     else:
         # ALTE METHODE: Einfache lineare Skalierung (konstanter Faktor)
         print("→ Verwende einfache lineare Skalierung (konstanter Faktor)")
-        df_simu['Skalierter Netzlast [MWh]'] = df_refJahr['Netzlast [MWh]'] * faktor
+        df_simu['Skalierte Netzlast [MWh]'] = df_refJahr['Netzlast [MWh]'] * faktor
     
     col.show_first_rows(df_simu)
     return df_simu

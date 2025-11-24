@@ -37,6 +37,12 @@ def load_standard_load_profile(csv_path: str | Path = "raw-data/Lastprofile 2024
     """
     csv_path = Path(csv_path)
     
+    # Wenn der Pfad relativ ist, mache ihn relativ zum Projekt-Root
+    if not csv_path.is_absolute():
+        # Gehe von data_processing/ -> source-code/ -> Projekt-Root/
+        script_dir = Path(__file__).parent.parent.parent
+        csv_path = script_dir / csv_path
+    
     if not csv_path.exists():
         raise FileNotFoundError(f"Lastprofil-Datei nicht gefunden: {csv_path}")
     
