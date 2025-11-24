@@ -63,11 +63,17 @@ def main():
 
         # ============================================================
 
-        df_simulation = sim.calc_scaled_consumption_multiyear(conDf, progDf,
+        df_simulation_con = sim.calc_scaled_consumption_multiyear(conDf, progDf,
                                             prog_dat_studie, simu_jahr_von, simu_jahr_bis,
                                             ref_jahr=ref_jahr, use_load_profile=use_load_profile)
         
         
+        df_simulation_pro = sim.calc_scaled_production_multiyear(genDf, progDf,
+                                            prog_dat_studie, simu_jahr_von, simu_jahr_bis, ref_jahr)
+        
+        # Kombiniere Erzeugungs- und Verbrauchsdaten
+        df_simulation = pd.merge(df_simulation_pro, df_simulation_con, on=['Timestamp', 'Jahr'], suffixes=('_Erzeugung', '_Verbrauch'))
+
         #vorbereitung des Dateinamens mit Zeitstempel
         timestamp = datetime.now().strftime("%d%m%Y_%H%M")
         outdir = Path("output") / "csv"
@@ -76,7 +82,7 @@ def main():
             lp = "mit_lastprofil"
         else:
             lp = ""
-        filename = outdir / f"Skalierte_Netzlast_{lp}_{simu_jahr_von}-{simu_jahr_bis} (ref-{ref_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
+        filename = outdir / f"Skalierte_erzeugung_und_verbrauch_{lp}_{simu_jahr_von}-{simu_jahr_bis} (ref-{ref_jahr}, studie-{prog_dat_studie})_{timestamp}.csv"
 
         # Schreibe die CSV in die Datei (pandas akzeptiert Path-Objekte)
         if df_simulation.to_csv(filename, index=False, sep=';', encoding='utf-8', decimal=',') is None:

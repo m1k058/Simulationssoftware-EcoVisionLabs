@@ -9,35 +9,35 @@
         {
             "id": 0,
             "name": "SMARD_2015-2020_Erzeugung",
-            "path": "raw-data\\Realisierte_Erzeugung_2015-2020.csv",
+            "path": "..\\raw-data\\Realisierte_Erzeugung_2015-2020.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
         },
         {
             "id": 1,
             "name": "SMARD_2020-2025_Erzeugung",
-            "path": "raw-data\\Realisierte_Erzeugung_2020-2025.csv",
+            "path": "..\\raw-data\\Realisierte_Erzeugung_2020-2025.csv",
             "datatype": "SMARD",
             "description": "Daten für Stromerzeugung verschiedener Quellen 2020-heute"
         },
         {
             "id": 2,
             "name": "SMARD_2020-2025_Verbrauch",
-            "path": "raw-data\\Realisierter_Stromverbrauch_2020-2025.csv",
+            "path": "..\\raw-data\\Realisierter_Stromverbrauch_2020-2025.csv",
             "datatype": "SMARD-V",
             "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2020-heute"
         },
         {
             "id": 3,
             "name": "SMARD_2015-2020_Verbrauch",
-            "path": "raw-data\\Realisierter_Stromverbrauch_2015-2020.csv",
+            "path": "..\\raw-data\\Realisierter_Stromverbrauch_2015-2020.csv",
             "datatype": "SMARD-V",
             "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2015-2020"
         },
         {
             "id": 4,
             "name": "Erzeugungs/Verbrauchs Prognose Daten",
-            "path": "raw-data\\Prognosedaten_Studien.csv",
+            "path": "..\\raw-data\\Prognosedaten_Studien.csv",
             "datatype": "CUST_PROG",
             "description": "Daten für Erzeugungs- und Verbrauchsprognosen verschiedener Studien"
         }
