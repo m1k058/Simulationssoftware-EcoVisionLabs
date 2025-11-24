@@ -2,10 +2,12 @@ import pandas as pd
 import numpy as np
 import data_processing.col as col
 import locale
+from data_processing.load_profile import apply_load_profile_to_simulation
 
 def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
                             prog_dat_studie: str, simu_jahr_start: int, simu_jahr_ende: int,
-                            ref_jahr: int = 2023, prog_dat_jahr: int = -1) -> pd.DataFrame:
+                            ref_jahr: int = 2023, prog_dat_jahr: int = -1,
+                            use_load_profile: bool = True) -> pd.DataFrame:
     """
     Skaliert den Energieverbrauch eines Referenzjahres basierend auf Prognosedaten für mehrere
     Simulationsjahre und eine ausgewählte Studie.
@@ -19,6 +21,8 @@ def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
         simu_jahr_ende: Das Endjahr der Simulation.
         prog_dat_jahr: Das Jahr der Prognose (default: -1 für automatische Auswahl).
         ref_jahr: Das Referenzjahr im Verbrauchsdatensatz (default: 2023).
+        use_load_profile: Wenn True, wird das Lastprofil S25 verwendet (empfohlen).
+                         Wenn False, wird einfach linear skaliert (alte Methode).
         
     Returns:
         DataFrame mit skaliertem Energieverbrauch für die Simulationsjahre.
@@ -27,14 +31,14 @@ def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
     for simu_jahr in range(simu_jahr_start, simu_jahr_ende + 1):
         df_scaled = calc_scaled_consumption(conDf, progDf,
                                             prog_dat_studie, simu_jahr, prog_dat_jahr,
-                                            ref_jahr)
+                                            ref_jahr, use_load_profile)
         df_list.append(df_scaled)
     
     return pd.concat(df_list).reset_index(drop=True)
 
 def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
                             prog_dat_studie: str, simu_jahr: int, prog_dat_jahr: int = -1,
-                            ref_jahr: int = 2023) -> pd.DataFrame:
+                            ref_jahr: int = 2023, use_load_profile: bool = True) -> pd.DataFrame:
     """
     Skaliert den Energieverbrauch eines Referenzjahres basierend auf Prognosedaten für ein
     Simulationsjahr und eine ausgewählte Studie.
@@ -47,6 +51,8 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
         prog_dat_jahr: Das Jahr der Prognose.
         ref_jahr: Das Referenzjahr im Verbrauchsdatensatz.
         simu_jahr: Das Simulationsjahr, für das der Verbrauch skaliert werden soll.
+        use_load_profile: Wenn True, wird das Lastprofil S25 verwendet (empfohlen).
+                         Wenn False, wird einfach linear skaliert (alte Methode).
         
     Returns:
         DataFrame mit skaliertem Energieverbrauch für das Simulationsjahr.
@@ -162,13 +168,27 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
     formatierte_zahl = locale.format_string("%.14f", faktor, grouping=True)
     print(f"Berechneter Faktor: {formatierte_zahl}\n")
 
-    # Skaliere den Energieverbrauch im Referenzjahr mit dem Faktor
+    # Erstelle Basis-DataFrame mit aktualisierten Zeitstempeln
     jahr_offset = simu_jahr - ref_jahr
     df_simu = pd.DataFrame({
         'Datum von': pd.to_datetime(df_refJahr['Datum von']) + pd.DateOffset(years=jahr_offset),
         'Datum bis': pd.to_datetime(df_refJahr['Datum bis']) + pd.DateOffset(years=jahr_offset),
         'Zeitpunkt': pd.to_datetime(df_refJahr['Zeitpunkt']) + pd.DateOffset(years=jahr_offset),
-        'Skalierter Netzlast [MWh]': df_refJahr['Netzlast [MWh]'] * faktor
         })
+    
+    if use_load_profile:
+        # NEUE METHODE: Verwende Lastprofil S25 für realistische Lastkurve
+        print("→ Verwende Lastprofil S25 für realistische Lastschwankungen")
+        df_simu = apply_load_profile_to_simulation(
+            df_simu,
+            total_consumption_twh=Gesamtenergie_ziel_jahr
+        )
+        # Umbenennen für Konsistenz
+        df_simu.rename(columns={'Lastprofil Netzlast [MWh]': 'Skalierter Netzlast [MWh]'}, inplace=True)
+    else:
+        # ALTE METHODE: Einfache lineare Skalierung (konstanter Faktor)
+        print("→ Verwende einfache lineare Skalierung (konstanter Faktor)")
+        df_simu['Skalierter Netzlast [MWh]'] = df_refJahr['Netzlast [MWh]'] * faktor
+    
     col.show_first_rows(df_simu)
     return df_simu
