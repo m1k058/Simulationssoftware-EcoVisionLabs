@@ -849,9 +849,8 @@ def show_step_simulation() -> None:
         else:
             st.session_state.step_valid = False
 
-    def defizite_ausgleichen():
+    def defizite_anzeigen():
         st.header("4. Defizite Ausgleichen:")
-        st.markdown("### :balance_scale: Energiebilanz Analyse")
 
         # Vorbedingungen prüfen
         if (
@@ -881,7 +880,7 @@ def show_step_simulation() -> None:
 
         # Toggle für Ansicht
         view_mode = st.segmented_control(
-            label="Ansicht wählen:",
+            label="Zeitraum:",
             options=["📅 Zwei Wochen (Winter & Sommer)", "📊 Gesamtes Jahr"],
             key="bilanz_view_mode",
             default="📅 Zwei Wochen (Winter & Sommer)"
@@ -978,7 +977,7 @@ def show_step_simulation() -> None:
                 """
                 st.markdown(html, unsafe_allow_html=True)
 
-            col_a, col_b, col_c, col_d = st.columns(4, gap="small")
+            col_a, col_b, col_c, col_d = st.columns(4, gap="small", border=True)
             with col_a:
                 st.metric("Gesamterzeugung", f"{total_prod/1_000_000:.2f} TWh")
             with col_b:
@@ -993,10 +992,779 @@ def show_step_simulation() -> None:
             st.warning(f"⚠️ Fehler bei Statistikberechnung: {e}")
             st.session_state.step_valid = False
 
+    def speicher_simulieren():
+        st.header("5. Speicher Simulieren:")
+
+        # Prüfe ob Energiebilanz vorhanden
+        if (
+            st.session_state.df_simulation_con is None
+            or st.session_state.df_simulation_prod is None
+            or len(st.session_state.df_simulation_con) == 0
+            or len(st.session_state.df_simulation_prod) == 0
+        ):
+            st.warning("⚠️ Verbrauchs- oder Erzeugungsdaten fehlen. Bitte zuerst Schritte 2 und 3 ausführen.")
+            st.session_state.step_valid = False
+            return
+
+        # Erstelle Energiebilanz
+        try:
+            energie_bilanz = gen.add_total_generation(st.session_state.df_simulation_prod.copy())
+            energie_bilanz = col.add_column_from_other_df(
+                energie_bilanz,
+                st.session_state.df_simulation_con,
+                "Skalierte Netzlast [MWh]",
+                "Skalierte Netzlast [MWh]",
+            )
+        except Exception as e:
+            st.error(f"❌ Fehler beim Erstellen der Energiebilanz: {e}")
+            st.session_state.step_valid = False
+            return
+
+        # Zeiträume für Plots
+        winter_start = pd.to_datetime(f"{st.session_state.sim_jahr}-02-13")
+        winter_end = winter_start + pd.Timedelta(days=7)
+        summer_start = pd.to_datetime(f"{st.session_state.sim_jahr}-07-03")
+        summer_end = summer_start + pd.Timedelta(days=7)
+
+        # Hilfsfunktion für SOC-Plots
+        def show_storage_results(result_df, storage_name, winter_start, winter_end, summer_start, summer_end):
+            st.markdown(f"### 📊 {storage_name} - Ergebnisse")
+            
+            # Filter für Winter und Sommer
+            df_winter = result_df[
+                (pd.to_datetime(result_df["Zeitpunkt"]) >= winter_start) &
+                (pd.to_datetime(result_df["Zeitpunkt"]) < winter_end)
+            ]
+            df_summer = result_df[
+                (pd.to_datetime(result_df["Zeitpunkt"]) >= summer_start) &
+                (pd.to_datetime(result_df["Zeitpunkt"]) < summer_end)
+            ]
+            
+            # SOC Plots
+            col_w, col_s = st.columns(2, gap="small", border=True)
+            with col_w:
+                st.markdown("#### ❄️ Winter SOC")
+                if len(df_winter) > 0:
+                    fig_w = pltp.create_line_plot(
+                        df_winter,
+                        y_axis="SOC [MWh]",
+                        title="",
+                        description="",
+                        darkmode=False,
+                    )
+                    st.plotly_chart(fig_w, use_container_width=True)
+                else:
+                    st.warning("Keine Winterdaten")
+            
+            with col_s:
+                st.markdown("#### ☀️ Sommer SOC")
+                if len(df_summer) > 0:
+                    fig_s = pltp.create_line_plot(
+                        df_summer,
+                        y_axis="SOC [MWh]",
+                        title="",
+                        description="",
+                        darkmode=False,
+                    )
+                    st.plotly_chart(fig_s, use_container_width=True)
+                else:
+                    st.warning("Keine Sommerdaten")
+            
+            # Statistiken
+            total_charged = result_df["Charged [MWh]"].sum()
+            total_discharged = result_df["Discharged [MWh]"].sum()
+            remaining_surplus = result_df["Remaining Surplus [MWh]"].sum()
+            remaining_deficit = result_df["Remaining Deficit [MWh]"].sum()
+            
+            col1, col2, col3, col4 = st.columns(4, gap="small")
+            with col1:
+                st.metric("Geladen", f"{total_charged/1_000:.0f} GWh")
+            with col2:
+                st.metric("Entladen", f"{total_discharged/1_000:.0f} GWh")
+            with col3:
+                st.metric("Rest-Überschuss", f"{remaining_surplus/1_000:.0f} GWh")
+            with col4:
+                st.metric("Rest-Defizit", f"{remaining_deficit/1_000:.0f} GWh")
+
+        # Speicher-Konfiguration mit Tabs
+        st.subheader("⚙️ Energiespeicher konfigurieren")
+        
+        storage_tabs = st.tabs(["🔋 Batterie (Kurzzeit)", "💧 Pumpspeicher (Mittelzeit)", "🔬 Wasserstoff (Langzeit)"])
+        
+        # Tab 1: Batteriespeicher
+        with storage_tabs[0]:
+            st.markdown("#### Batteriespeicher (Kurzzeitspeicher)")
+            st.caption("Typische Speicherdauer: Stunden bis 1 Tag | Wirkungsgrad: ~90%")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                battery_capacity_mwh = st.number_input(
+                    "Kapazität [MWh]",
+                    min_value=1000.0,
+                    max_value=100_000.0,
+                    value=10_000.0,
+                    step=1000.0,
+                    key="battery_capacity"
+                )
+                battery_max_charge_mw = st.number_input(
+                    "Max. Ladeleistung [MW]",
+                    min_value=100.0,
+                    max_value=10_000.0,
+                    value=2_000.0,
+                    step=100.0,
+                    key="battery_charge_power"
+                )
+                battery_charge_eff = st.slider(
+                    "Ladewirkungsgrad [%]",
+                    min_value=80,
+                    max_value=100,
+                    value=95,
+                    key="battery_charge_eff"
+                ) / 100.0
+            
+            with col2:
+                battery_initial_soc_pct = st.slider(
+                    "Initial SOC [%]",
+                    min_value=0,
+                    max_value=100,
+                    value=50,
+                    key="battery_initial_soc"
+                )
+                battery_max_discharge_mw = st.number_input(
+                    "Max. Entladeleistung [MW]",
+                    min_value=100.0,
+                    max_value=10_000.0,
+                    value=2_000.0,
+                    step=100.0,
+                    key="battery_discharge_power"
+                )
+                battery_discharge_eff = st.slider(
+                    "Entladewirkungsgrad [%]",
+                    min_value=80,
+                    max_value=100,
+                    value=95,
+                    key="battery_discharge_eff"
+                ) / 100.0
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                battery_min_soc_pct = st.slider(
+                    "Min SOC [%] (Tiefentladungsschutz)",
+                    min_value=0,
+                    max_value=50,
+                    value=10,
+                    key="battery_min_soc"
+                )
+            with col4:
+                battery_max_soc_pct = st.slider(
+                    "Max SOC [%] (Schutz vor Überladung)",
+                    min_value=50,
+                    max_value=100,
+                    value=100,
+                    key="battery_max_soc"
+                )
+            
+            battery_min_soc_mwh = (battery_min_soc_pct / 100.0) * battery_capacity_mwh
+            battery_max_soc_mwh = (battery_max_soc_pct / 100.0) * battery_capacity_mwh
+            battery_initial_soc_mwh = (battery_initial_soc_pct / 100.0) * battery_capacity_mwh
+            
+            battery_roundtrip = battery_charge_eff * battery_discharge_eff * 100
+            st.info(f"ℹ️ Roundtrip-Wirkungsgrad: {battery_roundtrip:.1f}%")
+            
+            if st.button("🔋 Batteriespeicher simulieren", type="primary", use_container_width=True):
+                with st.spinner("Batteriespeicher-Simulation läuft..."):
+                    try:
+                        if "storage_results" not in st.session_state:
+                            st.session_state.storage_results = {}
+                        
+                        result_df = sim.apply_battery_storage(
+                            energie_bilanz,
+                            capacity_mwh=battery_capacity_mwh,
+                            max_charge_power_mw=battery_max_charge_mw,
+                            max_discharge_power_mw=battery_max_discharge_mw,
+                            charge_efficiency=battery_charge_eff,
+                            discharge_efficiency=battery_discharge_eff,
+                            initial_soc=battery_initial_soc_mwh,
+                            min_soc=battery_min_soc_mwh,
+                            max_soc=battery_max_soc_mwh
+                        )
+                        
+                        st.session_state.storage_results["battery"] = result_df
+                        st.success("✅ Batteriespeicher-Simulation abgeschlossen")
+                        st.session_state.step_valid = True
+                        
+                    except Exception as e:
+                        st.error(f"❌ Fehler bei der Batteriesimulation: {e}")
+                        st.session_state.step_valid = False
+        
+        # Tab 2: Pumpspeicher
+        with storage_tabs[1]:
+            st.markdown("#### Pumpspeicher (Mittelzeitspeicher)")
+            st.caption("Typische Speicherdauer: Tage bis Wochen | Wirkungsgrad: ~75-85%")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                pumped_capacity_mwh = st.number_input(
+                    "Kapazität [MWh]",
+                    min_value=10_000.0,
+                    max_value=500_000.0,
+                    value=50_000.0,
+                    step=5_000.0,
+                    key="pumped_capacity"
+                )
+                pumped_max_charge_mw = st.number_input(
+                    "Max. Pumpleistung [MW]",
+                    min_value=100.0,
+                    max_value=5_000.0,
+                    value=1_500.0,
+                    step=100.0,
+                    key="pumped_charge_power"
+                )
+                pumped_charge_eff = st.slider(
+                    "Pumpwirkungsgrad [%]",
+                    min_value=75,
+                    max_value=95,
+                    value=85,
+                    key="pumped_charge_eff"
+                ) / 100.0
+            
+            with col2:
+                pumped_initial_soc_pct = st.slider(
+                    "Initial SOC [%]",
+                    min_value=0,
+                    max_value=100,
+                    value=50,
+                    key="pumped_initial_soc"
+                )
+                pumped_max_discharge_mw = st.number_input(
+                    "Max. Turbinenleistung [MW]",
+                    min_value=100.0,
+                    max_value=5_000.0,
+                    value=1_500.0,
+                    step=100.0,
+                    key="pumped_discharge_power"
+                )
+                pumped_discharge_eff = st.slider(
+                    "Turbinenwirkungsgrad [%]",
+                    min_value=80,
+                    max_value=98,
+                    value=90,
+                    key="pumped_discharge_eff"
+                ) / 100.0
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                pumped_min_soc_pct = st.slider(
+                    "Min SOC [%] (Totvolumen)",
+                    min_value=0,
+                    max_value=20,
+                    value=5,
+                    key="pumped_min_soc"
+                )
+            with col4:
+                pumped_max_soc_pct = st.slider(
+                    "Max SOC [%]",
+                    min_value=80,
+                    max_value=100,
+                    value=100,
+                    key="pumped_max_soc"
+                )
+            
+            pumped_min_soc_mwh = (pumped_min_soc_pct / 100.0) * pumped_capacity_mwh
+            pumped_max_soc_mwh = (pumped_max_soc_pct / 100.0) * pumped_capacity_mwh
+            pumped_initial_soc_mwh = (pumped_initial_soc_pct / 100.0) * pumped_capacity_mwh
+            
+            pumped_roundtrip = pumped_charge_eff * pumped_discharge_eff * 100
+            st.info(f"ℹ️ Roundtrip-Wirkungsgrad: {pumped_roundtrip:.1f}%")
+            
+            if st.button("💧 Pumpspeicher simulieren", type="primary", use_container_width=True):
+                with st.spinner("Pumpspeicher-Simulation läuft..."):
+                    try:
+                        if "storage_results" not in st.session_state:
+                            st.session_state.storage_results = {}
+                        
+                        # Nutze Ergebnis von Batterie falls vorhanden, sonst Ausgangsbilanz
+                        input_df = st.session_state.storage_results.get("battery", energie_bilanz)
+                        
+                        result_df = sim.apply_pumped_hydro_storage(
+                            input_df,
+                            capacity_mwh=pumped_capacity_mwh,
+                            max_charge_power_mw=pumped_max_charge_mw,
+                            max_discharge_power_mw=pumped_max_discharge_mw,
+                            charge_efficiency=pumped_charge_eff,
+                            discharge_efficiency=pumped_discharge_eff,
+                            initial_soc=pumped_initial_soc_mwh,
+                            min_soc=pumped_min_soc_mwh,
+                            max_soc=pumped_max_soc_mwh
+                        )
+                        
+                        st.session_state.storage_results["pumped"] = result_df
+                        st.success("✅ Pumpspeicher-Simulation abgeschlossen")
+                        st.session_state.step_valid = True
+                        
+                    except Exception as e:
+                        st.error(f"❌ Fehler bei der Pumpspeicher-Simulation: {e}")
+                        st.session_state.step_valid = False
+        
+        # Tab 3: Wasserstoffspeicher
+        with storage_tabs[2]:
+            st.markdown("#### Wasserstoffspeicher (Langzeitspeicher)")
+            st.caption("Typische Speicherdauer: Wochen bis Monate (saisonal) | Wirkungsgrad: ~35-40%")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                h2_capacity_mwh = st.number_input(
+                    "Kapazität [MWh]",
+                    min_value=100_000.0,
+                    max_value=2_000_000.0,
+                    value=500_000.0,
+                    step=50_000.0,
+                    key="h2_capacity"
+                )
+                h2_max_charge_mw = st.number_input(
+                    "Max. Elektrolyseleistung [MW]",
+                    min_value=100.0,
+                    max_value=5_000.0,
+                    value=1_000.0,
+                    step=100.0,
+                    key="h2_charge_power"
+                )
+                h2_charge_eff = st.slider(
+                    "Elektrolyse-Wirkungsgrad [%]",
+                    min_value=50,
+                    max_value=80,
+                    value=65,
+                    key="h2_charge_eff"
+                ) / 100.0
+            
+            with col2:
+                h2_initial_soc_pct = st.slider(
+                    "Initial SOC [%]",
+                    min_value=0,
+                    max_value=100,
+                    value=0,
+                    key="h2_initial_soc"
+                )
+                h2_max_discharge_mw = st.number_input(
+                    "Max. Rückverstromungsleistung [MW]",
+                    min_value=100.0,
+                    max_value=5_000.0,
+                    value=800.0,
+                    step=100.0,
+                    key="h2_discharge_power"
+                )
+                h2_discharge_eff = st.slider(
+                    "Rückverstromungs-Wirkungsgrad [%]",
+                    min_value=40,
+                    max_value=70,
+                    value=55,
+                    key="h2_discharge_eff"
+                ) / 100.0
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                h2_min_soc_pct = st.slider(
+                    "Min SOC [%]",
+                    min_value=0,
+                    max_value=10,
+                    value=0,
+                    key="h2_min_soc"
+                )
+            with col4:
+                h2_max_soc_pct = st.slider(
+                    "Max SOC [%]",
+                    min_value=90,
+                    max_value=100,
+                    value=100,
+                    key="h2_max_soc"
+                )
+            
+            h2_min_soc_mwh = (h2_min_soc_pct / 100.0) * h2_capacity_mwh
+            h2_max_soc_mwh = (h2_max_soc_pct / 100.0) * h2_capacity_mwh
+            h2_initial_soc_mwh = (h2_initial_soc_pct / 100.0) * h2_capacity_mwh
+            
+            h2_roundtrip = h2_charge_eff * h2_discharge_eff * 100
+            st.info(f"ℹ️ Roundtrip-Wirkungsgrad: {h2_roundtrip:.1f}%")
+            st.warning("⚠️ Hinweis: Niedriger Wirkungsgrad ist typisch für H₂-Speicher (Elektrolyse + Rückverstromung)")
+            
+            if st.button("🔬 Wasserstoffspeicher simulieren", type="primary", use_container_width=True):
+                with st.spinner("Wasserstoffspeicher-Simulation läuft..."):
+                    try:
+                        if "storage_results" not in st.session_state:
+                            st.session_state.storage_results = {}
+                        
+                        # Nutze Ergebnis von Pumpspeicher oder Batterie falls vorhanden
+                        input_df = st.session_state.storage_results.get(
+                            "pumped", 
+                            st.session_state.storage_results.get("battery", energie_bilanz)
+                        )
+                        
+                        result_df = sim.apply_hydrogen_storage(
+                            input_df,
+                            capacity_mwh=h2_capacity_mwh,
+                            max_charge_power_mw=h2_max_charge_mw,
+                            max_discharge_power_mw=h2_max_discharge_mw,
+                            charge_efficiency=h2_charge_eff,
+                            discharge_efficiency=h2_discharge_eff,
+                            initial_soc=h2_initial_soc_mwh,
+                            min_soc=h2_min_soc_mwh,
+                            max_soc=h2_max_soc_mwh
+                        )
+                        
+                        st.session_state.storage_results["hydrogen"] = result_df
+                        st.success("✅ Wasserstoffspeicher-Simulation abgeschlossen")
+                        st.session_state.step_valid = True
+                        
+                    except Exception as e:
+                        st.error(f"❌ Fehler bei der Wasserstoffspeicher-Simulation: {e}")
+                        st.session_state.step_valid = False
+        
+        # Zeige Ergebnisse aller Speicher
+        st.markdown("---")
+        if "storage_results" in st.session_state and len(st.session_state.storage_results) > 0:
+            st.subheader("📊 Speicherergebnisse")
+            
+            if "battery" in st.session_state.storage_results:
+                show_storage_results(
+                    st.session_state.storage_results["battery"],
+                    "🔋 Batteriespeicher",
+                    winter_start,
+                    winter_end,
+                    summer_start,
+                    summer_end
+                )
+                st.markdown("---")
+            
+            if "pumped" in st.session_state.storage_results:
+                show_storage_results(
+                    st.session_state.storage_results["pumped"],
+                    "💧 Pumpspeicher",
+                    winter_start,
+                    winter_end,
+                    summer_start,
+                    summer_end
+                )
+                st.markdown("---")
+            
+            if "hydrogen" in st.session_state.storage_results:
+                show_storage_results(
+                    st.session_state.storage_results["hydrogen"],
+                    "🔬 Wasserstoffspeicher",
+                    winter_start,
+                    winter_end,
+                    summer_start,
+                    summer_end
+                )
+            
+            st.session_state.step_valid = True
+        else:
+            st.info("ℹ️ Keine Speichersimulation durchgeführt. Wähle einen Speichertyp aus und starte die Simulation.")
+            st.session_state.step_valid = False
     
     def gesamt_validieren():
-        st.write("Gesamtergebnisse werden validiert...")
-        st.success("Gesamtvalidierung abgeschlossen.")
+        st.header("6. 📋 Gesamtergebnisse & Zusammenfassung")
+        
+        # Prüfe ob alle notwendigen Daten vorhanden sind
+        if (
+            st.session_state.df_simulation_con is None
+            or st.session_state.df_simulation_prod is None
+        ):
+            st.warning("⚠️ Simulationsdaten fehlen. Bitte führe die vorherigen Schritte aus.")
+            st.session_state.step_valid = False
+            return
+        
+        # Erstelle Energiebilanz
+        try:
+            energie_bilanz = gen.add_total_generation(st.session_state.df_simulation_prod.copy())
+            energie_bilanz = col.add_column_from_other_df(
+                energie_bilanz,
+                st.session_state.df_simulation_con,
+                "Skalierte Netzlast [MWh]",
+                "Skalierte Netzlast [MWh]",
+            )
+            balance = energie_bilanz["Gesamterzeugung [MWh]"] - energie_bilanz["Skalierte Netzlast [MWh]"]
+        except Exception as e:
+            st.error(f"❌ Fehler beim Erstellen der Energiebilanz: {e}")
+            st.session_state.step_valid = False
+            return
+        
+        # --- ABSCHNITT 1: Simulationsübersicht ---
+        st.subheader("🎯 Simulationsübersicht")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Simulationsjahr", st.session_state.sim_jahr)
+        with col2:
+            st.metric("Referenzjahr", st.session_state.sim_referenz_jahr)
+        with col3:
+            st.metric("Studie (Verbrauch)", st.session_state.sim_studie_verbrauch or "-")
+        with col4:
+            st.metric("Studie (Erzeugung)", st.session_state.sim_studie_erzeugung or "-")
+        
+        st.markdown("---")
+        
+        # --- ABSCHNITT 2: Energiebilanz ohne Speicher ---
+        st.subheader("⚡ Energiebilanz (ohne Speicher)")
+        
+        total_prod = energie_bilanz["Gesamterzeugung [MWh]"].sum()
+        total_cons = energie_bilanz["Skalierte Netzlast [MWh]"].sum()
+        
+        # Defizit/Überschuss-Stunden
+        deficit_mask = balance < 0
+        surplus_mask = balance > 0
+        deficit_hours = deficit_mask.sum()
+        surplus_hours = surplus_mask.sum()
+        
+        total_deficit = (-balance[deficit_mask]).sum()
+        total_surplus = balance[surplus_mask].sum()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Gesamterzeugung", f"{total_prod/1_000_000:.2f} TWh")
+        with col2:
+            st.metric("Gesamtverbrauch", f"{total_cons/1_000_000:.2f} TWh")
+        with col3:
+            st.metric(
+                "Defizit-Energie",
+                f"{total_deficit/1_000:.0f} GWh",
+                delta=f"{deficit_hours} Stunden",
+                delta_color="inverse"
+            )
+        with col4:
+            st.metric(
+                "Überschuss-Energie",
+                f"{total_surplus/1_000:.0f} GWh",
+                delta=f"{surplus_hours} Stunden",
+                delta_color="normal"
+            )
+        
+        st.markdown("---")
+        
+        # --- ABSCHNITT 3: Speicher-Auswirkungen ---
+        if "storage_results" in st.session_state and len(st.session_state.storage_results) > 0:
+            st.subheader("🔋 Speicher-Auswirkungen")
+            
+            # Zeige Statistiken für jeden aktiven Speicher
+            storage_tabs = []
+            if "battery" in st.session_state.storage_results:
+                storage_tabs.append("🔋 Batterie")
+            if "pumped" in st.session_state.storage_results:
+                storage_tabs.append("💧 Pumpspeicher")
+            if "hydrogen" in st.session_state.storage_results:
+                storage_tabs.append("🔬 Wasserstoff")
+            
+            storage_display_tabs = st.tabs(storage_tabs)
+            
+            tab_idx = 0
+            if "battery" in st.session_state.storage_results:
+                with storage_display_tabs[tab_idx]:
+                    battery_df = st.session_state.storage_results["battery"]
+                    battery_charged = battery_df["Charged [MWh]"].sum()
+                    battery_discharged = battery_df["Discharged [MWh]"].sum()
+                    battery_losses = battery_charged - battery_discharged
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Geladen", f"{battery_charged/1_000:.0f} GWh")
+                    with col2:
+                        st.metric("Entladen", f"{battery_discharged/1_000:.0f} GWh")
+                    with col3:
+                        st.metric(
+                            "Verluste",
+                            f"{battery_losses/1_000:.0f} GWh",
+                            delta=f"{(battery_losses/battery_charged*100):.1f}%",
+                            delta_color="inverse"
+                        )
+                tab_idx += 1
+            
+            if "pumped" in st.session_state.storage_results:
+                with storage_display_tabs[tab_idx]:
+                    pumped_df = st.session_state.storage_results["pumped"]
+                    pumped_charged = pumped_df["Charged [MWh]"].sum()
+                    pumped_discharged = pumped_df["Discharged [MWh]"].sum()
+                    pumped_losses = pumped_charged - pumped_discharged
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Gepumpt", f"{pumped_charged/1_000:.0f} GWh")
+                    with col2:
+                        st.metric("Turbiniert", f"{pumped_discharged/1_000:.0f} GWh")
+                    with col3:
+                        st.metric(
+                            "Verluste",
+                            f"{pumped_losses/1_000:.0f} GWh",
+                            delta=f"{(pumped_losses/pumped_charged*100):.1f}%",
+                            delta_color="inverse"
+                        )
+                tab_idx += 1
+            
+            if "hydrogen" in st.session_state.storage_results:
+                with storage_display_tabs[tab_idx]:
+                    h2_df = st.session_state.storage_results["hydrogen"]
+                    h2_charged = h2_df["Charged [MWh]"].sum()
+                    h2_discharged = h2_df["Discharged [MWh]"].sum()
+                    h2_losses = h2_charged - h2_discharged
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Elektrolysiert", f"{h2_charged/1_000:.0f} GWh")
+                    with col2:
+                        st.metric("Rückverstromt", f"{h2_discharged/1_000:.0f} GWh")
+                    with col3:
+                        st.metric(
+                            "Verluste",
+                            f"{h2_losses/1_000:.0f} GWh",
+                            delta=f"{(h2_losses/h2_charged*100):.1f}%",
+                            delta_color="inverse"
+                        )
+            
+            # Verbesserungen durch Speicher (nutze letzten Speicher in der Kette)
+            st.markdown("#### 📈 Gesamtverbesserung durch Speichersystem")
+            
+            # Nutze das letzte Ergebnis in der Kette
+            final_result = None
+            if "hydrogen" in st.session_state.storage_results:
+                final_result = st.session_state.storage_results["hydrogen"]
+            elif "pumped" in st.session_state.storage_results:
+                final_result = st.session_state.storage_results["pumped"]
+            elif "battery" in st.session_state.storage_results:
+                final_result = st.session_state.storage_results["battery"]
+            
+            if final_result is not None:
+                remaining_surplus_with_storage = final_result["Remaining Surplus [MWh]"].sum()
+                remaining_deficit_with_storage = final_result["Remaining Deficit [MWh]"].sum()
+                
+                deficit_reduction = total_deficit - remaining_deficit_with_storage
+                surplus_reduction = total_surplus - remaining_surplus_with_storage
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(
+                        "Defizit-Reduktion",
+                        f"{deficit_reduction/1_000:.0f} GWh",
+                        delta=f"{(deficit_reduction/total_deficit*100):.1f}%",
+                        delta_color="normal"
+                    )
+                with col2:
+                    st.metric(
+                        "Verbleibendes Defizit",
+                        f"{remaining_deficit_with_storage/1_000:.0f} GWh",
+                        delta_color="inverse"
+                    )
+                with col3:
+                    st.metric(
+                        "Überschuss-Reduktion",
+                        f"{surplus_reduction/1_000:.0f} GWh",
+                        delta=f"{(surplus_reduction/total_surplus*100):.1f}%",
+                        delta_color="normal"
+                    )
+                with col4:
+                    st.metric(
+                        "Verbleibender Überschuss",
+                        f"{remaining_surplus_with_storage/1_000:.0f} GWh",
+                        delta_color="inverse"
+                    )
+            
+            st.markdown("---")
+        
+        # --- ABSCHNITT 4: Was muss noch getan werden? ---
+        st.subheader("🎯 Handlungsbedarf")
+        
+        # Bestimme finalen Surplus/Deficit basierend auf aktiven Speichern
+        if "storage_results" in st.session_state and len(st.session_state.storage_results) > 0:
+            # Nutze das letzte Ergebnis in der Speicherkette
+            if "hydrogen" in st.session_state.storage_results:
+                final_df = st.session_state.storage_results["hydrogen"]
+            elif "pumped" in st.session_state.storage_results:
+                final_df = st.session_state.storage_results["pumped"]
+            else:
+                final_df = st.session_state.storage_results["battery"]
+            
+            final_surplus = final_df["Remaining Surplus [MWh]"].sum()
+            final_deficit = final_df["Remaining Deficit [MWh]"].sum()
+        else:
+            final_surplus = total_surplus
+            final_deficit = total_deficit
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### ⚠️ Abregelung notwendig")
+            st.metric(
+                "Überschuss muss abgeregelt werden",
+                f"{final_surplus/1_000:.0f} GWh",
+                help="Diese Energie kann nicht genutzt werden und muss abgeregelt werden."
+            )
+            if final_surplus > 0:
+                abregelung_pct = (final_surplus / total_prod) * 100
+                st.warning(f"💡 {abregelung_pct:.2f}% der Gesamterzeugung muss abgeregelt werden.")
+        
+        with col2:
+            st.markdown("#### 🔌 Zusätzliche Erzeugung nötig")
+            st.metric(
+                "Defizit muss ausgeglichen werden",
+                f"{final_deficit/1_000:.0f} GWh",
+                help="Diese Energie fehlt und muss durch zusätzliche Erzeugung gedeckt werden."
+            )
+            if final_deficit > 0:
+                deficit_pct = (final_deficit / total_cons) * 100
+                st.warning(f"💡 {deficit_pct:.2f}% des Gesamtverbrauchs kann nicht gedeckt werden.")
+        
+        st.markdown("---")
+        
+        # --- ABSCHNITT 5: Empfehlungen ---
+        st.subheader("💡 Empfehlungen")
+        
+        recommendations = []
+        
+        if final_deficit > 0:
+            recommendations.append(
+                f"🔴 **Zusätzliche Speicherkapazität**: {final_deficit/1_000:.0f} GWh Defizit erfordert mehr Speicher oder flexible Erzeugung."
+            )
+        
+        if final_surplus > 1_000:  # > 1 GWh
+            recommendations.append(
+                f"🟡 **Power-to-X erwägen**: {final_surplus/1_000:.0f} GWh Überschuss könnte für Wasserstoff-Produktion genutzt werden."
+            )
+        
+        if "storage_results" in st.session_state and "battery" in st.session_state.storage_results:
+            battery_df = st.session_state.storage_results["battery"]
+            avg_soc = battery_df["SOC [MWh]"].mean()
+            capacity = st.session_state.get("battery_capacity", 10000)
+            if avg_soc / capacity < 0.3:
+                recommendations.append(
+                    f"🟡 **Batteriespeicher unterausgelastet**: Durchschnittlicher SOC nur {(avg_soc/capacity*100):.1f}%. Kleinere Kapazität könnte ausreichen."
+                )
+        
+        if "storage_results" in st.session_state and "pumped" in st.session_state.storage_results:
+            pumped_df = st.session_state.storage_results["pumped"]
+            avg_soc_pumped = pumped_df["SOC [MWh]"].mean()
+            capacity_pumped = st.session_state.get("pumped_capacity", 50000)
+            if avg_soc_pumped / capacity_pumped < 0.3:
+                recommendations.append(
+                    f"🟡 **Pumpspeicher unterausgelastet**: Durchschnittlicher SOC nur {(avg_soc_pumped/capacity_pumped*100):.1f}%."
+                )
+        
+        if "storage_results" in st.session_state and "hydrogen" in st.session_state.storage_results:
+            h2_df = st.session_state.storage_results["hydrogen"]
+            h2_charged = h2_df["Charged [MWh]"].sum()
+            h2_discharged = h2_df["Discharged [MWh]"].sum()
+            if h2_charged > 0 and h2_discharged / h2_charged < 0.5:
+                recommendations.append(
+                    f"🟡 **Wasserstoffspeicher-Nutzung gering**: Nur {(h2_discharged/h2_charged*100):.1f}% des gespeicherten H₂ wird rückverstromt. Eventuell für Export/Industrie nutzen."
+                )
+        
+        if total_surplus > total_deficit * 2:
+            recommendations.append(
+                "🟢 **Hoher Überschuss**: System produziert deutlich mehr als benötigt. Export oder zusätzliche Verbraucher erwägen."
+            )
+        
+        if not recommendations:
+            st.success("✅ Das System ist gut ausbalanciert. Keine kritischen Handlungsempfehlungen.")
+        else:
+            for rec in recommendations:
+                st.markdown(rec)
+        
+        st.session_state.step_valid = True
 
     def ergebnisse_speichern():
         st.write("Ergebnisse werden gespeichert...")
@@ -1010,10 +1778,12 @@ def show_step_simulation() -> None:
     elif aktiver_schritt_index == 2:
         erzeugung_simulieren()
     elif aktiver_schritt_index == 3:
-        defizite_ausgleichen()
+        defizite_anzeigen()
     elif aktiver_schritt_index == 4:
-        gesamt_validieren()
+        speicher_simulieren()
     elif aktiver_schritt_index == 5:
+        gesamt_validieren()
+    elif aktiver_schritt_index == 6:
         ergebnisse_speichern()
     else:
         st.error("Unbekannter Simulationsschritt. Versuche die App neu zu starten.")
@@ -1075,7 +1845,8 @@ SIMULATION_SCHRITTE = [
     "Daten auswählen",
     "Verbrauch Simulieren",
     "Erzeugung Simulieren",
-    "Defizite mit Speicher ausgleichen",
+    "Defizite anzeigen",
+    "Speicher Simulieren",
     "Gesamt Ergebnisse validieren",
     "Ergebnisse speichern"
 ]

@@ -541,3 +541,336 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
     return df_simu
 
 
+
+def apply_battery_storage(
+    df_balance: pd.DataFrame,
+    capacity_mwh: float = 10_000.0,
+    max_charge_power_mw: float = 2_000.0,
+    max_discharge_power_mw: float = 2_000.0,
+    charge_efficiency: float = 0.95,
+    discharge_efficiency: float = 0.95,
+    initial_soc: float = 0.0,
+    min_soc: float = 0.0,
+    max_soc: float = None
+) -> pd.DataFrame:
+    """
+    Simuliert einen Batteriespeicher (Kurzzeitspeicher) mit Bucket-Modell.
+    
+    Iteriert durch alle Zeitschritte (Viertelstunden) und gleicht Überschüsse/Defizite
+    mit dem Speicher aus. Berücksichtigt Kapazitätsgrenzen, Lade-/Entladeleistung,
+    Wirkungsgrade und Min/Max SOC-Limits.
+    
+    Logik:
+    - Überschuss (Balance > 0): Versuche zu laden (begrenzt durch max_charge_power und verbleibende Kapazität bis max_soc)
+    - Defizit (Balance < 0): Versuche zu entladen (begrenzt durch max_discharge_power und verfügbare Energie über min_soc)
+    - Wirkungsgrade werden beim Laden/Entladen angewendet
+    
+    Args:
+        df_balance: DataFrame mit Spalten 'Zeitpunkt', 'Gesamterzeugung [MWh]', 'Skalierte Netzlast [MWh]'
+        capacity_mwh: Speicherkapazität in MWh
+        max_charge_power_mw: Maximale Ladeleistung in MW
+        max_discharge_power_mw: Maximale Entladeleistung in MW
+        charge_efficiency: Ladewirkungsgrad (0.0-1.0)
+        discharge_efficiency: Entladewirkungsgrad (0.0-1.0)
+        initial_soc: Initialer Ladestand in MWh
+        min_soc: Minimaler SOC in MWh (Schutz vor Tiefentladung)
+        max_soc: Maximaler SOC in MWh (None = capacity_mwh)
+    
+    Returns:
+        DataFrame mit zusätzlichen Spalten für Batteriespeicher-Ergebnisse
+    """
+    
+    if max_soc is None:
+        max_soc = capacity_mwh
+    
+    # Kopiere DataFrame und berechne initiale Balance
+    df = df_balance.copy()
+    df['Balance [MWh]'] = df['Gesamterzeugung [MWh]'] - df['Skalierte Netzlast [MWh]']
+    
+    # Zeitschritt in Stunden (Viertelstunde = 0.25h)
+    delta_t = 0.25
+    
+    # Initialisiere Arrays für Ergebnisse
+    n = len(df)
+    soc = np.zeros(n)
+    charged = np.zeros(n)
+    discharged = np.zeros(n)
+    remaining_surplus = np.zeros(n)
+    remaining_deficit = np.zeros(n)
+    
+    # Initialer Ladestand
+    current_soc = initial_soc
+    
+    print(f"\n{'='*80}")
+    print(f"BATTERIESPEICHER SIMULATION (KURZZEITSPEICHER)")
+    print(f"{'='*80}")
+    print(f"Kapazität: {capacity_mwh:,.0f} MWh")
+    print(f"Min SOC: {min_soc:,.0f} MWh ({min_soc/capacity_mwh*100:.1f}%)")
+    print(f"Max SOC: {max_soc:,.0f} MWh ({max_soc/capacity_mwh*100:.1f}%)")
+    print(f"Initial SOC: {initial_soc:,.0f} MWh ({initial_soc/capacity_mwh*100:.1f}%)")
+    print(f"Max Ladeleistung: {max_charge_power_mw:,.0f} MW")
+    print(f"Max Entladeleistung: {max_discharge_power_mw:,.0f} MW")
+    print(f"Wirkungsgrade: Laden {charge_efficiency*100:.1f}%, Entladen {discharge_efficiency*100:.1f}%")
+    
+    # Iteriere durch alle Zeitschritte
+    for i in range(n):
+        balance = df['Balance [MWh]'].iloc[i]
+        
+        if balance > 0:
+            # Fall A: Überschuss -> Versuche zu laden
+            max_charge_energy = max_charge_power_mw * delta_t
+            available_capacity = max_soc - current_soc
+            energy_to_charge = min(balance, max_charge_energy, available_capacity / charge_efficiency)
+            energy_stored = energy_to_charge * charge_efficiency
+            current_soc += energy_stored
+            charged[i] = energy_to_charge
+            remaining_surplus[i] = balance - energy_to_charge
+            
+        elif balance < 0:
+            # Fall B: Defizit -> Versuche zu entladen
+            deficit = -balance
+            max_discharge_energy = max_discharge_power_mw * delta_t
+            available_energy = current_soc - min_soc
+            energy_needed_from_storage = min(deficit, max_discharge_energy) / discharge_efficiency
+            energy_from_storage = min(energy_needed_from_storage, available_energy)
+            energy_delivered = energy_from_storage * discharge_efficiency
+            current_soc -= energy_from_storage
+            discharged[i] = energy_delivered
+            remaining_deficit[i] = deficit - energy_delivered
+            
+        soc[i] = current_soc
+    
+    # Füge Ergebnisse zum DataFrame hinzu
+    df['Charged [MWh]'] = charged
+    df['Discharged [MWh]'] = discharged
+    df['SOC [MWh]'] = soc
+    df['Remaining Surplus [MWh]'] = remaining_surplus
+    df['Remaining Deficit [MWh]'] = remaining_deficit
+    df['Net Balance [MWh]'] = df['Remaining Surplus [MWh]'] - df['Remaining Deficit [MWh]']
+    
+    print(f"\nErgebnisse:")
+    print(f"Geladene Energie: {charged.sum():,.0f} MWh")
+    print(f"Entladene Energie: {discharged.sum():,.0f} MWh")
+    print(f"Finaler SOC: {soc[-1]:,.0f} MWh ({soc[-1]/capacity_mwh*100:.1f}%)")
+    print(f"Max SOC erreicht: {soc.max():,.0f} MWh ({soc.max()/capacity_mwh*100:.1f}%)")
+    print(f"Min SOC erreicht: {soc.min():,.0f} MWh ({soc.min()/capacity_mwh*100:.1f}%)")
+    print(f"Verbleibende Überschüsse: {remaining_surplus.sum():,.0f} MWh")
+    print(f"Verbleibende Defizite: {remaining_deficit.sum():,.0f} MWh")
+    print(f"{'='*80}\n")
+    
+    col.show_first_rows(df)
+    return df
+
+
+def apply_pumped_hydro_storage(
+    df_balance: pd.DataFrame,
+    capacity_mwh: float = 50_000.0,
+    max_charge_power_mw: float = 1_500.0,
+    max_discharge_power_mw: float = 1_500.0,
+    charge_efficiency: float = 0.85,
+    discharge_efficiency: float = 0.90,
+    initial_soc: float = None,
+    min_soc: float = 0.0,
+    max_soc: float = None
+) -> pd.DataFrame:
+    """
+    Simuliert einen Pumpspeicher (Mittelzeitspeicher) mit Bucket-Modell.
+    
+    Pumpspeicher haben typischerweise:
+    - Höhere Kapazitäten als Batterien (Tage bis Wochen)
+    - Geringere Wirkungsgrade (Round-trip: ~75-85%)
+    - Begrenzte Leistung durch Turbinen/Pumpen
+    
+    Args:
+        df_balance: DataFrame mit Energiebilanz
+        capacity_mwh: Speicherkapazität in MWh
+        max_charge_power_mw: Maximale Pumpleistung in MW
+        max_discharge_power_mw: Maximale Turbinenleistung in MW
+        charge_efficiency: Pumpwirkungsgrad (0.0-1.0), typisch 0.85-0.90
+        discharge_efficiency: Turbinenwirkungsgrad (0.0-1.0), typisch 0.90-0.95
+        initial_soc: Initialer SOC in MWh (None = 50% der Kapazität)
+        min_soc: Minimaler SOC in MWh (Totvolumen)
+        max_soc: Maximaler SOC in MWh (None = capacity_mwh)
+    
+    Returns:
+        DataFrame mit Pumpspeicher-Ergebnissen
+    """
+    
+    if max_soc is None:
+        max_soc = capacity_mwh
+    if initial_soc is None:
+        initial_soc = capacity_mwh * 0.5
+    
+    df = df_balance.copy()
+    df['Balance [MWh]'] = df['Gesamterzeugung [MWh]'] - df['Skalierte Netzlast [MWh]']
+    
+    delta_t = 0.25
+    n = len(df)
+    soc = np.zeros(n)
+    charged = np.zeros(n)
+    discharged = np.zeros(n)
+    remaining_surplus = np.zeros(n)
+    remaining_deficit = np.zeros(n)
+    current_soc = initial_soc
+    
+    print(f"\n{'='*80}")
+    print(f"PUMPSPEICHER SIMULATION (MITTELZEITSPEICHER)")
+    print(f"{'='*80}")
+    print(f"Kapazität: {capacity_mwh:,.0f} MWh")
+    print(f"Min SOC (Totvolumen): {min_soc:,.0f} MWh ({min_soc/capacity_mwh*100:.1f}%)")
+    print(f"Max SOC: {max_soc:,.0f} MWh ({max_soc/capacity_mwh*100:.1f}%)")
+    print(f"Initial SOC: {initial_soc:,.0f} MWh ({initial_soc/capacity_mwh*100:.1f}%)")
+    print(f"Max Pumpleistung: {max_charge_power_mw:,.0f} MW")
+    print(f"Max Turbinenleistung: {max_discharge_power_mw:,.0f} MW")
+    print(f"Wirkungsgrade: Pumpen {charge_efficiency*100:.1f}%, Turbine {discharge_efficiency*100:.1f}%")
+    print(f"Round-trip: {(charge_efficiency*discharge_efficiency)*100:.1f}%")
+    
+    for i in range(n):
+        balance = df['Balance [MWh]'].iloc[i]
+        
+        if balance > 0:
+            max_charge_energy = max_charge_power_mw * delta_t
+            available_capacity = max_soc - current_soc
+            energy_to_charge = min(balance, max_charge_energy, available_capacity / charge_efficiency)
+            energy_stored = energy_to_charge * charge_efficiency
+            current_soc += energy_stored
+            charged[i] = energy_to_charge
+            remaining_surplus[i] = balance - energy_to_charge
+            
+        elif balance < 0:
+            deficit = -balance
+            max_discharge_energy = max_discharge_power_mw * delta_t
+            available_energy = current_soc - min_soc
+            energy_needed = min(deficit, max_discharge_energy) / discharge_efficiency
+            energy_from_storage = min(energy_needed, available_energy)
+            energy_delivered = energy_from_storage * discharge_efficiency
+            current_soc -= energy_from_storage
+            discharged[i] = energy_delivered
+            remaining_deficit[i] = deficit - energy_delivered
+            
+        soc[i] = current_soc
+    
+    df['Charged [MWh]'] = charged
+    df['Discharged [MWh]'] = discharged
+    df['SOC [MWh]'] = soc
+    df['Remaining Surplus [MWh]'] = remaining_surplus
+    df['Remaining Deficit [MWh]'] = remaining_deficit
+    df['Net Balance [MWh]'] = remaining_surplus - remaining_deficit
+    
+    print(f"\nErgebnisse:")
+    print(f"Gepumpte Energie: {charged.sum():,.0f} MWh")
+    print(f"Turbinierte Energie: {discharged.sum():,.0f} MWh")
+    print(f"Finaler SOC: {soc[-1]:,.0f} MWh ({soc[-1]/capacity_mwh*100:.1f}%)")
+    print(f"Verbleibende Überschüsse: {remaining_surplus.sum():,.0f} MWh")
+    print(f"Verbleibende Defizite: {remaining_deficit.sum():,.0f} MWh")
+    print(f"{'='*80}\n")
+    
+    col.show_first_rows(df)
+    return df
+
+
+def apply_hydrogen_storage(
+    df_balance: pd.DataFrame,
+    capacity_mwh: float = 500_000.0,
+    max_charge_power_mw: float = 1_000.0,
+    max_discharge_power_mw: float = 800.0,
+    charge_efficiency: float = 0.65,
+    discharge_efficiency: float = 0.55,
+    initial_soc: float = 0.0,
+    min_soc: float = 0.0,
+    max_soc: float = None
+) -> pd.DataFrame:
+    """
+    Simuliert einen Wasserstoffspeicher (Langzeitspeicher) mit Bucket-Modell.
+    
+    H2-Speicher haben typischerweise:
+    - Sehr hohe Kapazitäten (Wochen bis Monate, saisonale Speicherung)
+    - Niedrige Wirkungsgrade durch Elektrolyse und Rückverstromung (Round-trip: ~35-40%)
+    - Begrenzte Leistung durch Elektrolyseur/Brennstoffzelle
+    
+    Args:
+        df_balance: DataFrame mit Energiebilanz
+        capacity_mwh: Speicherkapazität in MWh
+        max_charge_power_mw: Maximale Elektrolyseleistung in MW
+        max_discharge_power_mw: Maximale Brennstoffzellen-/CCGT-Leistung in MW
+        charge_efficiency: Elektrolyse-Wirkungsgrad (0.0-1.0), typisch 0.60-0.70
+        discharge_efficiency: Rückverstromungs-Wirkungsgrad (0.0-1.0), typisch 0.50-0.60
+        initial_soc: Initialer SOC in MWh
+        min_soc: Minimaler SOC in MWh
+        max_soc: Maximaler SOC in MWh (None = capacity_mwh)
+    
+    Returns:
+        DataFrame mit H2-Speicher-Ergebnissen
+    """
+    
+    if max_soc is None:
+        max_soc = capacity_mwh
+    
+    df = df_balance.copy()
+    df['Balance [MWh]'] = df['Gesamterzeugung [MWh]'] - df['Skalierte Netzlast [MWh]']
+    
+    delta_t = 0.25
+    n = len(df)
+    soc = np.zeros(n)
+    charged = np.zeros(n)
+    discharged = np.zeros(n)
+    remaining_surplus = np.zeros(n)
+    remaining_deficit = np.zeros(n)
+    current_soc = initial_soc
+    
+    print(f"\n{'='*80}")
+    print(f"WASSERSTOFFSPEICHER SIMULATION (LANGZEITSPEICHER)")
+    print(f"{'='*80}")
+    print(f"Kapazität: {capacity_mwh:,.0f} MWh")
+    print(f"Min SOC: {min_soc:,.0f} MWh ({min_soc/capacity_mwh*100:.1f}%)")
+    print(f"Max SOC: {max_soc:,.0f} MWh ({max_soc/capacity_mwh*100:.1f}%)")
+    print(f"Initial SOC: {initial_soc:,.0f} MWh ({initial_soc/capacity_mwh*100:.1f}%)")
+    print(f"Max Elektrolyseleistung: {max_charge_power_mw:,.0f} MW")
+    print(f"Max Rückverstromungsleistung: {max_discharge_power_mw:,.0f} MW")
+    print(f"Wirkungsgrade: Elektrolyse {charge_efficiency*100:.1f}%, Rückverstromung {discharge_efficiency*100:.1f}%")
+    print(f"Round-trip: {(charge_efficiency*discharge_efficiency)*100:.1f}%")
+    
+    for i in range(n):
+        balance = df['Balance [MWh]'].iloc[i]
+        
+        if balance > 0:
+            max_charge_energy = max_charge_power_mw * delta_t
+            available_capacity = max_soc - current_soc
+            energy_to_charge = min(balance, max_charge_energy, available_capacity / charge_efficiency)
+            energy_stored = energy_to_charge * charge_efficiency
+            current_soc += energy_stored
+            charged[i] = energy_to_charge
+            remaining_surplus[i] = balance - energy_to_charge
+            
+        elif balance < 0:
+            deficit = -balance
+            max_discharge_energy = max_discharge_power_mw * delta_t
+            available_energy = current_soc - min_soc
+            energy_needed = min(deficit, max_discharge_energy) / discharge_efficiency
+            energy_from_storage = min(energy_needed, available_energy)
+            energy_delivered = energy_from_storage * discharge_efficiency
+            current_soc -= energy_from_storage
+            discharged[i] = energy_delivered
+            remaining_deficit[i] = deficit - energy_delivered
+            
+        soc[i] = current_soc
+    
+    df['Charged [MWh]'] = charged
+    df['Discharged [MWh]'] = discharged
+    df['SOC [MWh]'] = soc
+    df['Remaining Surplus [MWh]'] = remaining_surplus
+    df['Remaining Deficit [MWh]'] = remaining_deficit
+    df['Net Balance [MWh]'] = remaining_surplus - remaining_deficit
+    
+    print(f"\nErgebnisse:")
+    print(f"Elektrolysierte Energie: {charged.sum():,.0f} MWh")
+    print(f"Rückverstromte Energie: {discharged.sum():,.0f} MWh")
+    print(f"Finaler SOC: {soc[-1]:,.0f} MWh ({soc[-1]/capacity_mwh*100:.1f}%)")
+    print(f"Verbleibende Überschüsse: {remaining_surplus.sum():,.0f} MWh")
+    print(f"Verbleibende Defizite: {remaining_deficit.sum():,.0f} MWh")
+    print(f"{'='*80}\n")
+    
+    col.show_first_rows(df)
+    return df
+
+
