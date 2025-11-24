@@ -3,7 +3,7 @@ from pathlib import Path
 from errors import AppError, WarningMessage
 from data_manager import DataManager
 from config_manager import ConfigManager
-from plotting import plot_auto
+from plotting.plotting import plot_auto
 from constants import SOURCES_GROUPS
 from user_interface import get_user_input
 

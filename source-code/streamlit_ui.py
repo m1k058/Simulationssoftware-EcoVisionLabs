@@ -9,8 +9,8 @@ import os
 import sys
 import time
 from io import StringIO
-import plotting_formated_st as pltf
-import plotting_plotly_st as pltp
+import plotting.plotting_formated_st as pltf
+import plotting.plotting_plotly_st as pltp
 from constants import ENERGY_SOURCES
 
 
@@ -66,6 +66,7 @@ def show_main_menu() -> None:
             disabled=not is_loaded,
         )
     st.markdown("---")
+
     if not is_loaded:
         info_placeholder = st.empty()
         info_placeholder.info("ℹ️ DataManager/ConfigManager ist nicht initialisiert.")
@@ -78,7 +79,7 @@ def show_main_menu() -> None:
             st.rerun()
         else:
             st.error("❌ Laden fehlgeschlagen. Siehe Log/Console für Details.")
-    else:
+    elif is_loaded and st.session_state.debug_mode:
         # Wenn geladen: Datasets anzeigen
         with st.expander("ℹ️ Geladene Datasets", expanded=False):
             try:
@@ -90,6 +91,8 @@ def show_main_menu() -> None:
                     st.write("Keine Datasets geladen")
             except Exception as e:
                 st.warning(f"Konnte Datasets nicht abrufen: {e}")
+
+    st.checkbox("Debug Modus", value=False, key="debug_mode")
     
     
 

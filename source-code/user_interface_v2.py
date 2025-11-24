@@ -32,7 +32,7 @@ from constants import ENERGY_SOURCES as CONST_ENERGY_SOURCES
 from config_manager import ConfigManager
 from data_manager import DataManager
 from io_handler import save_data, save_data_excel
-from plotting_formated import (
+from plotting.plotting_formated import (
     plot_auto,
     plot_stacked_bar,
     plot_line_chart,

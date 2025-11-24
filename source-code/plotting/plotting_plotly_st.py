@@ -1,7 +1,6 @@
 """
-Streamlit-optimierte Plotly-Funktionen
-Basiert auf plotting_plotly.py, angepasst für die Verwendung mit Streamlit.
-Alle Funktionen geben Plotly Figure-Objekte zurück (keine Anzeige/Speicherung).
+Streamlit-optimierte Plotly-Funktionen moved into package.
+Original: source-code/plotting_plotly_st.py
 """
 
 from __future__ import annotations
@@ -30,23 +29,10 @@ def create_stacked_bar_plot(
     description: str = "",
     darkmode: bool = False,
 ):
-    """Erstellt einen gestapelten Flächen-Plot (Stacked Area) mit Plotly.
-
-    Args:
-        df: Gefiltertes DataFrame mit Zeitreihe (Spalte 'Zeitpunkt') und Energiespalten.
-        energy_keys: Liste von ENERGY_SOURCES-Keys (z.B. ["BIO", "WON"]).
-        title: Plot-Titel.
-        description: Untertitel/Beschreibung.
-        darkmode: Aktiviert dunkles Plotly-Theme.
-
-    Returns:
-        plotly.graph_objs.Figure
-    """
     try:
         if "Zeitpunkt" not in df.columns:
             raise DataProcessingError("DataFrame muss Spalte 'Zeitpunkt' enthalten.")
 
-        # Spalten/Labels/Farben anhand ENERGY_SOURCES bestimmen
         available = [
             (ENERGY_SOURCES[k]["colname"], ENERGY_SOURCES[k]["name"], ENERGY_SOURCES[k]["color"]) 
             for k in energy_keys if ENERGY_SOURCES.get(k, {}).get("colname") in df.columns
@@ -93,15 +79,6 @@ def create_line_chart(
     description: str = "",
     darkmode: bool = False,
 ):
-    """Erstellt ein Liniendiagramm mit Plotly Express.
-
-    Args:
-        df: DataFrame mit 'Zeitpunkt'.
-        columns: Liste der zu plottenden Spalten (ohne 'Zeitpunkt').
-        title: Plot-Titel.
-        description: Untertitel/Beschreibung.
-        darkmode: Aktiviert dunkles Plotly-Theme.
-    """
     try:
         if "Zeitpunkt" not in df.columns:
             raise DataProcessingError("DataFrame muss Spalte 'Zeitpunkt' enthalten.")
@@ -113,7 +90,6 @@ def create_line_chart(
             if missing:
                 raise DataProcessingError(f"Spalten nicht gefunden: {missing}")
 
-        # Plotly Express-Liniendiagramm über mehrere Spalten
         fig = px.line(df, x="Zeitpunkt", y=columns, title=title, template=_plotly_template(darkmode))
 
         subtitle = f"<br><sup>{description}</sup>" if description else ""
@@ -139,16 +115,6 @@ def create_balance_plot(
     description: str = "",
     darkmode: bool = False,
 ):
-    """Erstellt einen Bilanzplot (Überschuss/Defizit) mit Plotly.
-
-    Args:
-        df: DataFrame mit 'Zeitpunkt' und den Spalten column1/column2.
-        column1: Minuend.
-        column2: Subtrahend (Balance = column1 - column2).
-        title: Plot-Titel.
-        description: Untertitel/Beschreibung.
-        darkmode: Aktiviert dunkles Plotly-Theme.
-    """
     try:
         if "Zeitpunkt" not in df.columns:
             raise DataProcessingError("DataFrame muss Spalte 'Zeitpunkt' enthalten.")
@@ -164,7 +130,6 @@ def create_balance_plot(
 
         fig = go.Figure()
 
-        # Defizit (rot)
         fig.add_trace(
             go.Scatter(
                 x=dfx["Zeitpunkt"],
@@ -177,7 +142,6 @@ def create_balance_plot(
             )
         )
 
-        # Überschuss (grün)
         fig.add_trace(
             go.Scatter(
                 x=dfx["Zeitpunkt"],
@@ -190,7 +154,6 @@ def create_balance_plot(
             )
         )
 
-        # Hauptlinie
         fig.add_trace(
             go.Scatter(
                 x=dfx["Zeitpunkt"],
@@ -227,17 +190,7 @@ def create_histogram_plot(
     description: str = "",
     darkmode: bool = False,
 ):
-    """Erstellt ein Histogramm für den Anteil erneuerbarer Energien am Verbrauch (Plotly).
-
-    Args:
-        df_erzeugung: DataFrame mit Erzeugungsdaten (EE-Spalten oder summierbar).
-        df_verbrauch: DataFrame mit Verbrauchsdaten (Spalte 'Netzlast [MWh]').
-        title: Plot-Titel.
-        description: Untertitel/Beschreibung.
-        darkmode: Aktiviert dunkles Plotly-Theme.
-    """
     try:
-        # Gesamterzeugung Erneuerbare sicherstellen
         if "Gesamterzeugung Erneuerbare [MWh]" not in df_erzeugung.columns:
             df_erzeugung = gen.add_total_renewable_generation(df_erzeugung.copy())
 
@@ -255,7 +208,6 @@ def create_histogram_plot(
             dfx.loc[mask, "Erzeugung_EE"] / dfx.loc[mask, "Verbrauch"]
         ) * 100
 
-        # In 0..100+ Bins packen
         dfx["EE_Anteil_Verbrauch_Clipped"] = dfx["EE_Anteil_Verbrauch"].clip(0, 100.1)
 
         fig = px.histogram(
