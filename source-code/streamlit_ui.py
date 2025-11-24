@@ -2,6 +2,8 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import pandas as pd
 import data_processing.simulation as sim
+import data_processing.gen as gen
+import data_processing.col as col
 from data_manager import DataManager
 from config_manager import ConfigManager
 from pathlib import Path
@@ -12,6 +14,7 @@ from io import StringIO
 import plotting.plotting_formated_st as pltf
 import plotting.plotting_plotly_st as pltp
 from constants import ENERGY_SOURCES
+from data_processing import col, gen
 
 st.set_page_config(
     layout="centered", # Standard ist "centered"
@@ -338,6 +341,7 @@ def set_step(step_index: int) -> None:
 def show_step_simulation() -> None:
     st.title("Step by Step Simulation")
     st.caption("Werde schrittweise durch die Simulation geführt.")
+    st.markdown("---")
     # st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung.")
 
     # Initialisiere step_index im session_state falls noch nicht vorhanden
@@ -396,7 +400,7 @@ def show_step_simulation() -> None:
     ]
 
     def daten_auswaehlen():
-        st.header("Daten auswählen:")
+        st.header("1. Daten auswählen:")
 
         is_loaded = st.session_state.dm is not None and st.session_state.cfg is not None
 
@@ -493,7 +497,7 @@ def show_step_simulation() -> None:
 
     def verbrauch_simulieren():
             
-        st.header("Verbrauch Simulieren:")
+        st.header("2. Verbrauch Simulieren:")
 
         # Finde Index der vorher ausgewählten Studie
         studie_index = 0
@@ -507,7 +511,7 @@ def show_step_simulation() -> None:
             key="selectbox_studie_verbrauch"
         )
         st.session_state.sim_verbrauch_lastprofile = st.checkbox(
-            "Verwende Verbrauchs-Lastprofile für Skalierung", 
+            "Verwende Verbrauchs-Lastprofile für Skalierung :orange[[EXPERIMENTELL]]", 
             value=st.session_state.sim_verbrauch_lastprofile,
             key="checkbox_lastprofile"
         )
@@ -537,7 +541,7 @@ def show_step_simulation() -> None:
         # Zeige Plot wenn Simulation abgeschlossen
         if st.session_state.df_simulation_con is not None and len(st.session_state.df_simulation_con) > 0:
             st.markdown("---")
-            st.subheader("📊 Simulationsergebnis")
+            st.subheader(":chart_with_upwards_trend: Simulationsergebnis")
             
             # Filtere auf zwei Standardwochen: Winterwoche (13. Feb) und Sommerwoche (3. Juli)
             try:
@@ -569,7 +573,6 @@ def show_step_simulation() -> None:
                     df_plot = df_full
                 else:
                     df_plot = df_zwei_wochen
-                    st.info(f"📅 Angezeigt: Winterwoche (13.-19. Feb) und Sommerwoche (3.-9. Juli) {st.session_state.sim_jahr}")
                 
             except Exception as e:
                 st.warning(f"⚠️ Fehler beim Filtern der Wochen: {e}. Zeige alle Daten.")
@@ -578,11 +581,14 @@ def show_step_simulation() -> None:
             # Plotly Visualisierung
             try:
                 # Toggle zwischen Wochenansicht und Jahresansicht
-                view_mode = st.radio(
-                    "Ansicht wählen:",
-                    ["📅 Zwei Wochen (Winter & Sommer)", "📊 Gesamtes Jahr"],
-                    horizontal=True,
-                    key="verbrauch_view_mode"
+                view_mode = st.segmented_control(
+                    label="Ansicht wählen:",
+                    options=[
+                        "📅 Zwei Wochen (Winter & Sommer)", 
+                        "📊 Gesamtes Jahr"
+                    ],
+                    key="verbrauch_view_mode",
+                    default="📅 Zwei Wochen (Winter & Sommer)"
                 )
                 
                 if view_mode == "📅 Zwei Wochen (Winter & Sommer)":
@@ -591,7 +597,7 @@ def show_step_simulation() -> None:
                     df_summer_plot = df_plot[pd.to_datetime(df_plot["Zeitpunkt"]).dt.month == 7]
                     
                     # Zwei Spalten für Winter und Sommer
-                    col_winter, col_summer = st.columns(2)
+                    col_winter, col_summer = st.columns(2, width="stretch", border=True, gap="small")
                     
                     with col_winter:
                         st.markdown("#### ❄️ Winterwoche (13.-19. Feb)")
@@ -624,25 +630,27 @@ def show_step_simulation() -> None:
                     # Statistiken für zwei Wochen
                     df_stats = df_plot
                     
-                else:  # Gesamtes Jahr
-                    st.markdown("#### 📆 Verbrauch über das gesamte Jahr")
+                else:
                     # Verwende vollständige Daten
                     df_full_year = st.session_state.df_simulation_con
                     
-                    fig_year = pltp.create_line_plot(
-                        df_full_year,
-                        y_axis="Skalierte Netzlast [MWh]",
-                        title=f"Verbrauchssimulation {st.session_state.sim_jahr} (Studie: {st.session_state.sim_studie_verbrauch})",
-                        description=f"Skalierter Verbrauch basierend auf Referenzjahr {st.session_state.sim_referenz_jahr}",
-                        darkmode=False,
-                    )
-                    st.plotly_chart(fig_year, use_container_width=True)
+                    col1 = st.columns(1, width="stretch", border=True)
+                    with col1[0]:
+                        st.markdown("### :calendar: Verbrauch über das gesamte Jahr")
+                        fig_year = pltp.create_line_plot(
+                            df_full_year,
+                            y_axis="Skalierte Netzlast [MWh]",
+                            title="",
+                            description="",
+                            darkmode=False,
+                        )
+                        st.plotly_chart(fig_year, use_container_width=True, width="stretch")
                     
                     # Statistiken für das gesamte Jahr
                     df_stats = df_full_year
                 
                 # Zusätzliche Statistiken
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3 = st.columns(3, border=True, gap="small")
                 with col1:
                     total_consumption = df_stats["Skalierte Netzlast [MWh]"].sum() / 1_000_000
                     st.metric("Gesamtverbrauch", f"{total_consumption:.2f} TWh")
@@ -659,17 +667,13 @@ def show_step_simulation() -> None:
                 st.error(f"❌ Fehler bei der Visualisierung: {e}")
                 st.session_state.step_valid = False
         else:
-            st.info("ℹ️ Klicke auf 'Simulation starten' um die Verbrauchssimulation durchzuführen.")
             st.session_state.step_valid = False
-    
-
-
 
     def erzeugung_simulieren():
-        st.header("Erzeugung Simulieren:")
+        st.header("3. Erzeugung Simulieren:")
         
         # Finde Index der vorher ausgewählten Studie
-        studie_index = 2
+        studie_index = 0
         if st.session_state.sim_studie_erzeugung in studie_optionen:
             studie_index = studie_optionen.index(st.session_state.sim_studie_erzeugung)
         
@@ -704,7 +708,7 @@ def show_step_simulation() -> None:
         # Zeige Plot wenn Simulation abgeschlossen
         if st.session_state.df_simulation_prod is not None and len(st.session_state.df_simulation_prod) > 0:
             st.markdown("---")
-            st.subheader("📊 Erzeugungssimulation Ergebnis")
+            st.subheader(":chart_with_upwards_trend: Erzeugungssimulation Ergebnis")
             
             # Filtere auf zwei Standardwochen: Winterwoche (13. Feb) und Sommerwoche (3. Juli)
             try:
@@ -736,7 +740,6 @@ def show_step_simulation() -> None:
                     df_plot = df_full
                 else:
                     df_plot = df_zwei_wochen
-                    st.info(f"📅 Angezeigt: Winterwoche (13.-19. Feb) und Sommerwoche (3.-9. Juli) {st.session_state.sim_jahr}")
                 
             except Exception as e:
                 st.warning(f"⚠️ Fehler beim Filtern der Wochen: {e}. Zeige alle Daten.")
@@ -756,7 +759,7 @@ def show_step_simulation() -> None:
                     df_summer_plot = df_plot[pd.to_datetime(df_plot["Zeitpunkt"]).dt.month == 7]
                     
                     # Zwei Spalten für Winter und Sommer
-                    col_winter, col_summer = st.columns(2)
+                    col_winter, col_summer = st.columns(2, border=True, gap="small")
                     
                     with col_winter:
                         st.markdown("#### ❄️ Winterwoche (13.-19. Feb)")
@@ -803,7 +806,7 @@ def show_step_simulation() -> None:
                                 renewable_production += production
                     
                     # 2 Spalten: Links Metriken untereinander, Rechts Kreisdiagramm
-                    col_metrics, col_pie = st.columns([1, 1])
+                    col_metrics, col_pie = st.columns([1, 1], border=True, gap="small")
                     
                     with col_metrics:
                         st.metric("Gesamterzeugung", f"{total_production / 1_000_000:.2f} TWh")
@@ -844,12 +847,152 @@ def show_step_simulation() -> None:
                 st.error(f"❌ Fehler bei der Visualisierung: {e}")
                 st.session_state.step_valid = False
         else:
-            st.info("ℹ️ Klicke auf 'Erzeugung simulieren' um die Erzeugungssimulation durchzuführen.")
             st.session_state.step_valid = False
 
     def defizite_ausgleichen():
-        st.write("Defizite werden mit Speicher ausgeglichen...")
-        st.success("Defizit-Ausgleich abgeschlossen.")
+        st.header("4. Defizite Ausgleichen:")
+        st.markdown("### :balance_scale: Energiebilanz Analyse")
+
+        # Vorbedingungen prüfen
+        if (
+            st.session_state.df_simulation_con is None
+            or st.session_state.df_simulation_prod is None
+            or len(st.session_state.df_simulation_con) == 0
+            or len(st.session_state.df_simulation_prod) == 0
+        ):
+            st.warning("⚠️ Verbrauchs- oder Erzeugungsdaten fehlen. Bitte zuerst Schritte 2 und 3 ausführen.")
+            st.session_state.step_valid = False
+            return
+
+        try:
+            # Gesamterzeugung hinzufügen
+            energie_bilanz = gen.add_total_generation(st.session_state.df_simulation_prod.copy())
+            # Verbrauch hinzufügen
+            energie_bilanz = col.add_column_from_other_df(
+                energie_bilanz,
+                st.session_state.df_simulation_con,
+                "Skalierte Netzlast [MWh]",
+                "Skalierte Netzlast [MWh]",
+            )
+        except Exception as e:
+            st.error(f"❌ Fehler beim Erstellen der Energiebilanz: {e}")
+            st.session_state.step_valid = False
+            return
+
+        # Toggle für Ansicht
+        view_mode = st.segmented_control(
+            label="Ansicht wählen:",
+            options=["📅 Zwei Wochen (Winter & Sommer)", "📊 Gesamtes Jahr"],
+            key="bilanz_view_mode",
+            default="📅 Zwei Wochen (Winter & Sommer)"
+        )
+
+        stats_df = energie_bilanz  # Default für Jahresansicht
+
+        if view_mode == "📅 Zwei Wochen (Winter & Sommer)":
+            # Zeiträume definieren (gleiche Definition wie vorherige Schritte)
+            winter_start = pd.to_datetime(f"{st.session_state.sim_jahr}-02-13")
+            winter_end = winter_start + pd.Timedelta(days=7)
+            summer_start = pd.to_datetime(f"{st.session_state.sim_jahr}-07-03")
+            summer_end = summer_start + pd.Timedelta(days=7)
+
+            winter_df = energie_bilanz[
+                (pd.to_datetime(energie_bilanz["Zeitpunkt"]) >= winter_start)
+                & (pd.to_datetime(energie_bilanz["Zeitpunkt"]) < winter_end)
+            ]
+            summer_df = energie_bilanz[
+                (pd.to_datetime(energie_bilanz["Zeitpunkt"]) >= summer_start)
+                & (pd.to_datetime(energie_bilanz["Zeitpunkt"]) < summer_end)
+            ]
+
+            stats_df = pd.concat([winter_df, summer_df], ignore_index=True) if len(winter_df) + len(summer_df) > 0 else energie_bilanz
+
+            col_winter, col_summer = st.columns(2, gap="small", border=True)
+
+            with col_winter:
+                st.markdown("#### ❄️ Winter (13.–19. Feb)")
+                if len(winter_df) > 0:
+                    fig_winter = pltp.create_balance_plot(
+                        winter_df,
+                        "Skalierte Netzlast [MWh]",
+                        "Gesamterzeugung [MWh]",
+                        "",
+                        "",
+                        darkmode=False,
+                    )
+                    st.plotly_chart(fig_winter, use_container_width=True)
+                else:
+                    st.warning("Keine Winterdaten verfügbar.")
+
+            with col_summer:
+                st.markdown("#### ☀️ Sommer (3.–9. Juli)")
+                if len(summer_df) > 0:
+                    fig_summer = pltp.create_balance_plot(
+                        summer_df,
+                        "Skalierte Netzlast [MWh]",
+                        "Gesamterzeugung [MWh]",
+                        "",
+                        "",
+                        darkmode=False,
+                    )
+                    st.plotly_chart(fig_summer, use_container_width=True)
+                else:
+                    st.warning("Keine Sommerdaten verfügbar.")
+        else:
+            # Gesamtjahres-Plot
+            fig_year = pltp.create_balance_plot(
+                energie_bilanz,
+                "Skalierte Netzlast [MWh]",
+                "Gesamterzeugung [MWh]",
+                "",
+                "",
+                darkmode=False,
+            )
+            st.plotly_chart(fig_year, use_container_width=True)
+
+        # Statistiken berechnen auf Basis der aktuell betrachteten Daten (stats_df)
+        try:
+            balance_series = stats_df["Gesamterzeugung [MWh]"].values - stats_df["Skalierte Netzlast [MWh]"].values
+            total_prod = stats_df["Gesamterzeugung [MWh]"].sum()
+            total_cons = stats_df["Skalierte Netzlast [MWh]"].sum()
+            deficit_hours = (balance_series < 0).sum()
+            surplus_hours = (balance_series >= 0).sum()
+            total_deficit = (-balance_series[balance_series < 0]).sum()
+            total_surplus = balance_series[balance_series > 0].sum()
+
+            # Hilfsfunktion für rote/grüne Zahl mit Pfeil
+            def arrow_metric(title: str, value_num: float, unit: str, hours: int | None = None):
+                is_positive = value_num >= 0
+                arrow = "▲" if is_positive else "▼"
+                color = "#0f8f35" if is_positive else "#d63030"
+                sign_value = value_num if is_positive else -value_num  # zeige Betrag
+                hours_html = f"<div style='font-size:0.65rem;opacity:0.75;'>Stunden: {hours}</div>" if hours is not None else ""
+                html = f"""
+                <div style='padding:10px 12px;'>
+                  <div style='font-size:0.70rem;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;opacity:0.65;'>{title}</div>
+                  <div style='font-size:1.3rem;font-weight:700;color:{color};display:flex;align-items:center;gap:6px;'>
+                    <span style='font-size:1.1rem;'>{arrow}</span>{sign_value:,.0f} {unit}
+                  </div>
+                  {hours_html}
+                </div>
+                """
+                st.markdown(html, unsafe_allow_html=True)
+
+            col_a, col_b, col_c, col_d = st.columns(4, gap="small")
+            with col_a:
+                st.metric("Gesamterzeugung", f"{total_prod/1_000_000:.2f} TWh")
+            with col_b:
+                st.metric("Gesamtverbrauch", f"{total_cons/1_000_000:.2f} TWh")
+            with col_c:
+                arrow_metric("Defizit Energie", -total_deficit, "MWh", deficit_hours)  # negativ -> roter Pfeil nach unten
+            with col_d:
+                arrow_metric("Überschuss Energie", total_surplus, "MWh", surplus_hours)  # positiv -> grüner Pfeil nach oben
+
+            st.session_state.step_valid = True
+        except Exception as e:
+            st.warning(f"⚠️ Fehler bei Statistikberechnung: {e}")
+            st.session_state.step_valid = False
+
     
     def gesamt_validieren():
         st.write("Gesamtergebnisse werden validiert...")
@@ -897,6 +1040,35 @@ def show_step_simulation() -> None:
                 st.button("Weiter ➡️", disabled=True, use_container_width=True)
         else:
             st.button("✅ Fertig", on_click=set_mode, args=("main",), use_container_width=True, type="primary")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.button("Simulation zurücksetzen", on_click=reset_step_simulation, use_container_width=True, type="secondary",)
+
+def reset_step_simulation():
+    """Setzt die Step-Simulation zurück."""
+    if "step_index" in st.session_state:
+        del st.session_state.step_index
+    if "step_valid" in st.session_state:
+        del st.session_state.step_valid
+    if "sim_datei_verbrauch" in st.session_state:
+        del st.session_state.sim_datei_verbrauch
+    if "sim_datei_erzeugung" in st.session_state:
+        del st.session_state.sim_datei_erzeugung
+    if "sim_studie_verbrauch" in st.session_state:
+        del st.session_state.sim_studie_verbrauch
+    if "sim_studie_erzeugung" in st.session_state:
+        del st.session_state.sim_studie_erzeugung
+    if "sim_jahr" in st.session_state:
+        del st.session_state.sim_jahr
+    if "sim_referenz_jahr" in st.session_state:
+        del st.session_state.sim_referenz_jahr
+    if "sim_verbrauch_lastprofile" in st.session_state:
+        del st.session_state.sim_verbrauch_lastprofile
+    if "df_simulation_con" in st.session_state:
+        del st.session_state.df_simulation_con
+    if "df_simulation_prod" in st.session_state:
+        del st.session_state.df_simulation_prod
+    
 
 
 SIMULATION_SCHRITTE = [
