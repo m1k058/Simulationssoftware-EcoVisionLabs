@@ -217,7 +217,7 @@ def create_balance_plot(
                 y=dfx["Balance"],
                 mode="lines",
                 line=dict(color="black", width=1.5),
-                name=f"{column1} - {column2}",
+                name=f"{column2} - {column1}",
                 hoverinfo="x+y",
             )
         )
