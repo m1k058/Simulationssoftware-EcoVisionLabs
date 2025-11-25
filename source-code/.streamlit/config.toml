@@ -1,22 +1,14 @@
 [theme]
-# Setze die primäre Akzentfarbe (z.B. für Buttons)
-primaryColor = "#0058aaff" 
-
-# Hintergrundfarbe der gesamten App
-backgroundColor = "#131313ff" 
-
-# Hintergrundfarbe der Seitenleiste/Widgets
-secondaryBackgroundColor = "#000000ff" 
-
-# Standardtextfarbe
-textColor = "#ffffffff" 
-
-# Schriftart
-font = "sans serif" # Optionen: "sans serif", "serif", "monospace"
+# Die folgenden expliziten Farbvorgaben MÜSSEN entfernt/auskommentiert werden,
+# um den Streamlit Theme-Wechsler (Light/Dark) zu reaktivieren.
+# primaryColor = "#0058aaff" 
+# backgroundColor = "#131313ff" 
+# secondaryBackgroundColor = "#000000ff" 
+# textColor = "#ffffffff" 
 
 # Zusätzliche Einstellungen...
-base = "dark" # Oder "dark" für den Streamlit Dark Mode
+base = "dark" # Startet standardmäßig im Dark Mode, erlaubt aber Wechsel zu Light Mode
+font = "sans serif"
 
 [server]
 headless = true
-

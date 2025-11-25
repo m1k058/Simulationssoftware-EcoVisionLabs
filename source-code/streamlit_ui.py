@@ -15,9 +15,10 @@ import plotting.plotting_formated_st as pltf
 import plotting.plotting_plotly_st as pltp
 from constants import ENERGY_SOURCES
 from data_processing import col, gen
+import math
 
 st.set_page_config(
-    layout="centered", # Standard ist "centered"
+    layout="wide", # Standard ist "centered"
     initial_sidebar_state="expanded",
     page_title="EcoVision Labs Simu",
     page_icon=":chart_with_upwards_trend:", # Emoji oder URL
@@ -106,8 +107,6 @@ def show_main_menu() -> None:
                 st.warning(f"Konnte Datasets nicht abrufen: {e}")
     
     
-
-
 def show_dataset_analysis() -> None:
     st.title("Dataset-Analyse")
     st.caption("Analysiere und visualisiere vorhandene Datensätze.")
@@ -904,7 +903,7 @@ def show_step_simulation() -> None:
                 & (pd.to_datetime(energie_bilanz["Zeitpunkt"]) < summer_end)
             ]
 
-            stats_df = pd.concat([winter_df, summer_df], ignore_index=True) if len(winter_df) + len(summer_df) > 0 else energie_bilanz
+            stats_df = energie_bilanz
 
             col_winter, col_summer = st.columns(2, gap="small", border=True)
 
@@ -960,22 +959,22 @@ def show_step_simulation() -> None:
             total_surplus = balance_series[balance_series > 0].sum()
 
             # Hilfsfunktion für rote/grüne Zahl mit Pfeil
-            def arrow_metric(title: str, value_num: float, unit: str, hours: int | None = None):
+            def arrow_metric(title: str, value_num: float, unit: str):
                 is_positive = value_num >= 0
                 arrow = "▲" if is_positive else "▼"
                 color = "#0f8f35" if is_positive else "#d63030"
                 sign_value = value_num if is_positive else -value_num  # zeige Betrag
-                hours_html = f"<div style='font-size:0.65rem;opacity:0.75;'>Stunden: {hours}</div>" if hours is not None else ""
+                
                 html = f"""
-                <div style='padding:10px 12px;'>
-                  <div style='font-size:0.70rem;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;opacity:0.65;'>{title}</div>
-                  <div style='font-size:1.3rem;font-weight:700;color:{color};display:flex;align-items:center;gap:6px;'>
-                    <span style='font-size:1.1rem;'>{arrow}</span>{sign_value:,.0f} {unit}
-                  </div>
-                  {hours_html}
-                </div>
+                <div style='padding:0px 2px;'>
+                  <div style='font-size:0.75rem;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;opacity:0.65;'>{title}</div>
+                  <div style='font-size:2rem;font-weight:700;color:{color};display:flex;align-items:center;gap:6px;'>
+                    <span style='font-size:1.7rem;'>{arrow}</span>{sign_value:,.0f} {unit}                 
                 """
                 st.markdown(html, unsafe_allow_html=True)
+
+            st.space("medium")
+            st.write(f"### Zusammenfassung der Energiebilanz in {st.session_state.sim_jahr}:")
 
             col_a, col_b, col_c, col_d = st.columns(4, gap="small", border=True)
             with col_a:
@@ -983,16 +982,30 @@ def show_step_simulation() -> None:
             with col_b:
                 st.metric("Gesamtverbrauch", f"{total_cons/1_000_000:.2f} TWh")
             with col_c:
-                arrow_metric("Defizit Energie", -total_deficit, "MWh", deficit_hours)  # negativ -> roter Pfeil nach unten
+                arrow_metric("Defizit Energie", -total_deficit, "MWh")  # negativ -> roter Pfeil nach unten
             with col_d:
-                arrow_metric("Überschuss Energie", total_surplus, "MWh", surplus_hours)  # positiv -> grüner Pfeil nach oben
+                arrow_metric("Überschuss Energie", total_surplus, "MWh")  # positiv -> grüner Pfeil nach oben
+
+            col_e, col_f = st.columns(2)
+            with col_e:
+                if total_deficit > total_surplus:
+                    st.warning("#### Warnung\nEnergie Defizit zu hoch um von Speicher ausgeglichen zu werden!")
+                else:
+                    st.empty()
+                
+            with col_f:
+                col_g, col_h = st.columns(2, gap="small", border=True)
+                with col_g:
+                    st.metric("Stunden mit Defizit", f"{deficit_hours} h")
+                with col_h:
+                    st.metric("Stunden mit Überschuss", f"{surplus_hours} h")
 
             st.session_state.step_valid = True
         except Exception as e:
             st.warning(f"⚠️ Fehler bei Statistikberechnung: {e}")
             st.session_state.step_valid = False
 
-    def speicher_simulieren():
+    def speicher_simulieren_alt():
         st.header("5. Speicher Simulieren:")
 
         # Prüfe ob Energiebilanz vorhanden
@@ -1461,6 +1474,338 @@ def show_step_simulation() -> None:
             st.info("ℹ️ Keine Speichersimulation durchgeführt. Wähle einen Speichertyp aus und starte die Simulation.")
             st.session_state.step_valid = False
     
+    def speicher_simulieren():
+        st.header("5. Speicher Simulieren:")
+
+        # Prüfe ob Energiebilanz vorhanden
+        if (
+            st.session_state.df_simulation_con is None
+            or st.session_state.df_simulation_prod is None
+            or len(st.session_state.df_simulation_con) == 0
+            or len(st.session_state.df_simulation_prod) == 0
+        ):
+            st.warning("⚠️ Verbrauchs- oder Erzeugungsdaten fehlen. Bitte zuerst Schritte 2 und 3 ausführen.")
+            st.session_state.step_valid = False
+            return
+
+        # Erstelle Energiebilanz für die Simulation
+        try:
+            # Basis-Bilanz erstellen
+            energie_bilanz = gen.add_total_generation(st.session_state.df_simulation_prod.copy())
+            energie_bilanz = col.add_column_from_other_df(
+                energie_bilanz,
+                st.session_state.df_simulation_con,
+                "Skalierte Netzlast [MWh]",
+                "Skalierte Netzlast [MWh]",
+            )
+            # Berechne initiale Balance für Visualisierung
+            energie_bilanz['Initial_Balance'] = energie_bilanz['Gesamterzeugung [MWh]'] - energie_bilanz['Skalierte Netzlast [MWh]']
+            
+        except Exception as e:
+            st.error(f"❌ Fehler beim Erstellen der Energiebilanz: {e}")
+            st.session_state.step_valid = False
+            return
+
+        # --- 1. Status Quo Visualisierung (Vor Speicher) ---
+        st.subheader("📊 Ausgangslage: Netzbilanz ohne Speicher")
+        
+        # Berechne Summen für das Chart
+        # Defizit muss negativ sein für den Plot (nach links)
+        initial_surplus = energie_bilanz[energie_bilanz['Initial_Balance'] > 0]['Initial_Balance'].sum() / 1e6
+        initial_deficit = energie_bilanz[energie_bilanz['Initial_Balance'] < 0]['Initial_Balance'].sum() / 1e6 # Ist schon negativ
+        
+        # Altair Chart für Diverging Bar Chart (Rot links, Grün rechts)
+        import altair as alt
+        
+        if "storage_results" in st.session_state:
+            if "battery" in st.session_state.storage_results:
+                batterie = col.generate_df_with_col_sums(st.session_state.storage_results["battery"])
+            else:
+                batterie = pd.DataFrame({'Batteriespeicher_Charged_MWh': [0]})
+                
+            if "pumped" in st.session_state.storage_results:
+                pumpspeicher = col.generate_df_with_col_sums(st.session_state.storage_results["pumped"])
+            else:
+                pumpspeicher = pd.DataFrame({'Pumpspeicher_Charged_MWh': [0]})
+                
+            if "hydrogen" in st.session_state.storage_results:
+                wasserstoff = col.generate_df_with_col_sums(st.session_state.storage_results["hydrogen"])
+            else:
+                wasserstoff = pd.DataFrame({'Wasserstoffspeicher_ChargedC_MWh': [0]})
+            
+        # Deine Daten (
+        data = pd.DataFrame({
+            'Werte': [initial_deficit, initial_surplus, (batterie["Batteriespeicher_Charged_MWh"].iloc[0]/1e6),
+                      (pumpspeicher["Pumpspeicher_Charged_MWh"].iloc[0]/1e6), (wasserstoff["Wasserstoffspeicher_Charged_MWh"].iloc[0]/1e6)
+                      ],
+            'Label': ['Bilanz', 'Bilanz', 'Batteriespeicher', 'Pumpspeicher', 'Wasserstoffspeicher'],
+            'MeineFarbe': ['#d32f2f', '#388e3c', '#1976d2', '#fbc02d', '#7b1fa2'] 
+        })
+
+        max_wert = max(abs(initial_deficit), abs(initial_surplus))
+        limit = math.ceil(max_wert / 10) * 10
+        grenze = limit * 1.1  # Etwas Puffer
+
+        # 1. Basis-Chart definieren (Datenquelle für beide Layer)
+        base = alt.Chart(data).encode(
+            y=alt.Y('Label', title=None)
+        )
+
+        # 2. Die Balken (wie vorher)
+        bars = base.mark_bar().encode(
+            x=alt.X('Werte', 
+                    title='Energie [TWh]',  # <--- HIER Achsen-Titel ändern
+                    scale=alt.Scale(domain=[-grenze, grenze]),
+                    axis=alt.Axis(values=list(range(-limit, limit + 10, 10)))
+            ),
+            color=alt.Color('MeineFarbe', scale=None, legend=None)
+        )
+
+        st.altair_chart(bars, use_container_width=True)
+
+        
+        st.markdown("---")
+
+        # --- 2. Speicher Konfiguration & Simulation ---
+        st.subheader("⚙️ Energiespeicher konfigurieren & simulieren")
+        
+        # Zeiträume für Detail-Plots definieren
+        winter_start = pd.to_datetime(f"{st.session_state.sim_jahr}-02-13")
+        winter_end = winter_start + pd.Timedelta(days=7)
+        summer_start = pd.to_datetime(f"{st.session_state.sim_jahr}-07-03")
+        summer_end = summer_start + pd.Timedelta(days=7)
+
+        # Hilfsfunktion für Ergebnis-Anzeige
+        def show_storage_results(result_df, storage_name, initial_surplus_val, initial_deficit_val):
+            st.markdown(f"### Ergebnisse: {storage_name}")
+            
+            # Berechne Restwerte (TWh)
+            # Surplus ist positiv, Deficit ist negativ im DataFrame 'Rest_Balance_MWh'
+            # Wir summieren nur die jeweiligen Teile
+            
+            # Korrektur: Initial values müssen TWh sein, wenn wir hier mit TWh rechnen, oder MWh.
+            # Oben haben wir MWh -> TWh umgerechnet für Plot.
+            # Hier rechnen wir am besten alles in TWh um für Konsistenz.
+            
+            initial_surplus_twh = initial_surplus_val # Ist schon TWh
+            initial_deficit_twh = initial_deficit_val # Ist schon TWh (negativ)
+            
+            # Rest ausrechnen
+            rest_surplus_mwh = result_df["Rest_Balance_MWh"][result_df["Rest_Balance_MWh"] > 0].sum()
+            rest_deficit_mwh = result_df["Rest_Balance_MWh"][result_df["Rest_Balance_MWh"] < 0].sum()
+            
+            rest_surplus_twh = rest_surplus_mwh / 1e6
+            rest_deficit_twh = rest_deficit_mwh / 1e6 # Ist negativ
+            
+            # Berechne genutzte/gedeckte Anteile (Differenz)
+            # Surplus: War 100, ist 80 -> 20 genutzt (gespeichert)
+            used_surplus_twh = initial_surplus_twh - rest_surplus_twh
+            
+            # Deficit: War -100, ist -80 -> 20 gedeckt (aus Speicher)
+            # Achtung Vorzeichen: -100 - (-80) = -20. Wir wollen aber positive Menge "gedeckt"
+            # covered_deficit_twh = abs(initial_deficit_twh) - abs(rest_deficit_twh)
+            covered_deficit_twh = abs(initial_deficit_twh) - abs(rest_deficit_twh)
+
+            # --- ERWEITERTER PLOT: VORHER vs. NACHHER ---
+            # Wir bauen einen DataFrame mit 2 Zeilen pro Kategorie: "Ohne Speicher" und "Mit Speicher"
+            
+            comp_data = pd.DataFrame({
+                "Energie [TWh]": [
+                    initial_surplus_twh, initial_deficit_twh,  # Ohne Speicher
+                    rest_surplus_twh, rest_deficit_twh       # Mit Speicher
+                ],
+                "Kategorie": ["Überschuss", "Defizit", "Überschuss", "Defizit"],
+                "Szenario": ["Ohne Speicher", "Ohne Speicher", "Mit Speicher", "Mit Speicher"],
+                "Farbe": ["#28a745", "#dc3545", "#28a745", "#dc3545"], # Grün, Rot
+                "Alpha": [0.5, 0.5, 1.0, 1.0] # Vorher leicht transparent, Nachher voll
+            })
+
+            # Altair Chart
+            bars_comp = alt.Chart(comp_data).mark_bar(size=30).encode(
+                x=alt.X('Energie [TWh]', title='Energie [TWh]'),
+                y=alt.Y('Szenario', title=None, sort=["Ohne Speicher", "Mit Speicher"]), # Sortierung erzwingen
+                color=alt.Color('Farbe', scale=None, legend=None),
+                opacity=alt.Opacity('Alpha', scale=None, legend=None),
+                tooltip=['Szenario', 'Kategorie', 'Energie [TWh]']
+            )
+            
+            # Text Labels
+            text_comp = bars_comp.mark_text(
+                align='center',
+                baseline='middle',
+                color='white',
+                dx=0
+            ).encode(
+                text=alt.Text('Energie [TWh]', format='.2f')
+            )
+
+            st.altair_chart((bars_comp + text_comp).properties(height=150), use_container_width=True)
+
+            
+            # 1. Zeile: Die wichtigsten KPIs farbig
+            c1, c2, c3, c4 = st.columns(4)
+            
+            # Prozentuale Änderung
+            surplus_change = ((rest_surplus_twh - initial_surplus_twh) / initial_surplus_twh * 100) if initial_surplus_twh != 0 else 0
+            deficit_change = ((abs(rest_deficit_twh) - abs(initial_deficit_twh)) / abs(initial_deficit_twh) * 100) if initial_deficit_twh != 0 else 0
+
+            c1.metric("Gespeicherter Überschuss", f"{used_surplus_twh:.2f} TWh", f"Netto-Ersparnis", delta_color="normal")
+            c2.metric("Gedecktes Defizit", f"{covered_deficit_twh:.2f} TWh", f"Versorgungssicherheit", delta_color="normal")
+            c3.metric("Verbleibender Überschuss", f"{rest_surplus_twh:.2f} TWh", f"{surplus_change:.1f}%", delta_color="off")
+            c4.metric("Verbleibendes Defizit", f"{abs(rest_deficit_twh):.2f} TWh", f"{deficit_change:.1f}%", delta_color="inverse")
+            
+            # 2. Zeile: Detail-Plots (Winter/Sommer SOC)
+            soc_col_name = f"{storage_name}_SOC_MWh"
+            if soc_col_name not in result_df.columns:
+                 soc_cols = [c for c in result_df.columns if "SOC" in c]
+                 if soc_cols: soc_col_name = soc_cols[0]
+            
+            df_winter = result_df[(pd.to_datetime(result_df["Zeitpunkt"]) >= winter_start) & (pd.to_datetime(result_df["Zeitpunkt"]) < winter_end)]
+            df_summer = result_df[(pd.to_datetime(result_df["Zeitpunkt"]) >= summer_start) & (pd.to_datetime(result_df["Zeitpunkt"]) < summer_end)]
+            
+            col_w, col_s = st.columns(2, gap="small", border=True)
+            with col_w:
+                st.markdown("#### ❄️ Winter SOC")
+                if len(df_winter) > 0:
+                    fig_w = pltp.create_line_plot(df_winter, y_axis=soc_col_name, title="", description="", darkmode=False)
+                    st.plotly_chart(fig_w, use_container_width=True)
+                else: st.warning("Keine Winterdaten")
+            with col_s:
+                st.markdown("#### ☀️ Sommer SOC")
+                if len(df_summer) > 0:
+                    fig_s = pltp.create_line_plot(df_summer, y_axis=soc_col_name, title="", description="", darkmode=False)
+                    st.plotly_chart(fig_s, use_container_width=True)
+                else: st.warning("Keine Sommerdaten")
+
+
+        # Tabs für die Speicher-Typen
+        storage_tabs = st.tabs(["🔋 Batterie (Kurzzeit)", "💧 Pumpspeicher (Mittelzeit)", "🔬 Wasserstoff (Langzeit)"])
+        
+        # --- TAB 1: BATTERIE ---
+        with storage_tabs[0]:
+            st.markdown("#### 🔋 Batteriespeicher")
+            st.caption("Ideal für Tagesausgleich (PV-Überschuss in die Nacht). Hoher Wirkungsgrad.")
+            
+            with st.expander("⚙️ Parameter anpassen", expanded=True):
+                c1, c2 = st.columns(2)
+                bat_cap = c1.number_input("Kapazität [MWh]", 1000.0, 500_000.0, 50_000.0, step=1000.0, key="bat_cap")
+                bat_power = c2.number_input("Leistung (Laden/Entladen) [MW]", 100.0, 50_000.0, 10_000.0, step=100.0, key="bat_pow")
+                c3, c4 = st.columns(2)
+                bat_eff_ch = c3.slider("Ladewirkungsgrad [%]", 80, 100, 95, key="bat_eff_ch") / 100
+                bat_eff_dis = c4.slider("Entladewirkungsgrad [%]", 80, 100, 95, key="bat_eff_dis") / 100
+            
+            if st.button("Simulation starten (Batterie)", type="primary", key="btn_bat"):
+                with st.spinner("Simuliere Batterie..."):
+                    res_bat = sim.simulate_storage_generic(
+                        df_balance=energie_bilanz,
+                        type_name="Batteriespeicher",
+                        capacity_mwh=bat_cap,
+                        max_charge_mw=bat_power,
+                        max_discharge_mw=bat_power,
+                        charge_efficiency=bat_eff_ch,
+                        discharge_efficiency=bat_eff_dis,
+                        initial_soc_mwh=bat_cap*0.5,
+                        min_soc_mwh=0.0
+                    )
+                    st.session_state.storage_results = st.session_state.get("storage_results", {})
+                    st.session_state.storage_results["battery"] = res_bat
+                    st.success("Batterie simuliert!")
+                    st.session_state.step_valid = True
+
+            if "storage_results" in st.session_state and "battery" in st.session_state.storage_results:
+                show_storage_results(st.session_state.storage_results["battery"], "Batteriespeicher", initial_surplus, initial_deficit)
+
+        # --- TAB 2: PUMPSPEICHER ---
+        with storage_tabs[1]:
+            st.markdown("#### 💧 Pumpspeicher")
+            st.caption("Bewährte Technologie für Wochenausgleich. Begrenzte Ausbaumöglichkeiten in DE.")
+            
+            with st.expander("⚙️ Parameter anpassen", expanded=True):
+                c1, c2 = st.columns(2)
+                ps_cap = c1.number_input("Kapazität [MWh]", 10_000.0, 1_000_000.0, 40_000.0, step=5000.0, key="ps_cap")
+                ps_power = c2.number_input("Leistung (Pumpen/Turbinieren) [MW]", 100.0, 20_000.0, 6_000.0, step=100.0, key="ps_pow")
+                c3, c4 = st.columns(2)
+                ps_eff_ch = c3.slider("Pumpwirkungsgrad [%]", 70, 95, 88, key="ps_eff_ch") / 100
+                ps_eff_dis = c4.slider("Turbinenwirkungsgrad [%]", 70, 95, 88, key="ps_eff_dis") / 100
+
+            if st.button("Simulation starten (Pumpspeicher)", type="primary", key="btn_ps"):
+                with st.spinner("Simuliere Pumpspeicher..."):
+                    input_df = energie_bilanz.copy()
+                    if "battery" in st.session_state.storage_results:
+                        prev_res = st.session_state.storage_results["battery"]
+                        # Wir nutzen die Rest-Balance (Achtung: MWh)
+                        # simulate_storage_generic erwartet 'Gesamterzeugung' und 'Skalierte Netzlast' zur Differenzbildung.
+                        # Hack: Wir setzen 'Gesamterzeugung' = Rest_Balance und 'Skalierte Netzlast' = 0.
+                        input_df['Gesamterzeugung [MWh]'] = prev_res['Rest_Balance_MWh']
+                        input_df['Skalierte Netzlast [MWh]'] = 0
+                    
+                    res_ps = sim.simulate_storage_generic(
+                        df_balance=input_df,
+                        type_name="Pumpspeicher",
+                        capacity_mwh=ps_cap,
+                        max_charge_mw=ps_power,
+                        max_discharge_mw=ps_power,
+                        charge_efficiency=ps_eff_ch,
+                        discharge_efficiency=ps_eff_dis,
+                        initial_soc_mwh=ps_cap*0.5,
+                        min_soc_mwh=0.0
+                    )
+                    st.session_state.storage_results = st.session_state.get("storage_results", {})
+                    st.session_state.storage_results["pumped"] = res_ps
+                    st.success("Pumpspeicher simuliert!")
+                    st.session_state.step_valid = True
+
+            if "storage_results" in st.session_state and "pumped" in st.session_state.storage_results:
+                show_storage_results(st.session_state.storage_results["pumped"], "Pumpspeicher", initial_surplus, initial_deficit)
+
+        # --- TAB 3: WASSERSTOFF ---
+        with storage_tabs[2]:
+            st.markdown("#### 🔬 Wasserstoffspeicher (Power-to-Gas)")
+            st.caption("Saisonaler Speicher. Geringer Wirkungsgrad, aber riesige Kapazität möglich.")
+            
+            with st.expander("⚙️ Parameter anpassen", expanded=True):
+                c1, c2 = st.columns(2)
+                h2_cap = c1.number_input("Kapazität (Kavernen) [MWh]", 100_000.0, 50_000_000.0, 1_000_000.0, step=100_000.0, key="h2_cap")
+                c3, c4 = st.columns(2)
+                h2_ely = c3.number_input("Elektrolyse-Leistung [MW]", 100.0, 100_000.0, 5_000.0, step=100.0, key="h2_ely")
+                h2_fc = c4.number_input("Rückverstromung (H2-Kraftwerk) [MW]", 100.0, 100_000.0, 5_000.0, step=100.0, key="h2_fc")
+                c5, c6 = st.columns(2)
+                h2_eff_ch = c5.slider("Elektrolyse-Wirkungsgrad [%]", 50, 80, 65, key="h2_eff_ch") / 100
+                h2_eff_dis = c6.slider("Rückverstromungs-Wirkungsgrad [%]", 30, 70, 50, key="h2_eff_dis") / 100
+
+            if st.button("Simulation starten (Wasserstoff)", type="primary", key="btn_h2"):
+                with st.spinner("Simuliere Wasserstoff..."):
+                    input_df = energie_bilanz.copy()
+                    # Priorität: Pumpspeicher > Batterie > Original
+                    if "pumped" in st.session_state.storage_results:
+                        prev_res = st.session_state.storage_results["pumped"]
+                        input_df['Gesamterzeugung [MWh]'] = prev_res['Rest_Balance_MWh']
+                        input_df['Skalierte Netzlast [MWh]'] = 0
+                    elif "battery" in st.session_state.storage_results:
+                        prev_res = st.session_state.storage_results["battery"]
+                        input_df['Gesamterzeugung [MWh]'] = prev_res['Rest_Balance_MWh']
+                        input_df['Skalierte Netzlast [MWh]'] = 0
+                    
+                    res_h2 = sim.simulate_storage_generic(
+                        df_balance=input_df,
+                        type_name="Wasserstoffspeicher",
+                        capacity_mwh=h2_cap,
+                        max_charge_mw=h2_ely,
+                        max_discharge_mw=h2_fc,
+                        charge_efficiency=h2_eff_ch,
+                        discharge_efficiency=h2_eff_dis,
+                        initial_soc_mwh=0.0,
+                        min_soc_mwh=0.0
+                    )
+                    st.session_state.storage_results = st.session_state.get("storage_results", {})
+                    st.session_state.storage_results["hydrogen"] = res_h2
+                    st.success("Wasserstoff simuliert!")
+                    st.session_state.step_valid = True
+
+            if "storage_results" in st.session_state and "hydrogen" in st.session_state.storage_results:
+                show_storage_results(st.session_state.storage_results["hydrogen"], "Wasserstoffspeicher", initial_surplus, initial_deficit)
+            
+
     def gesamt_validieren():
         st.header("6. 📋 Gesamtergebnisse & Zusammenfassung")
         
@@ -1814,6 +2159,7 @@ def show_step_simulation() -> None:
     with col2:
         st.button("Simulation zurücksetzen", on_click=reset_step_simulation, use_container_width=True, type="secondary",)
 
+
 def reset_step_simulation():
     """Setzt die Step-Simulation zurück."""
     if "step_index" in st.session_state:
@@ -1839,7 +2185,6 @@ def reset_step_simulation():
     if "df_simulation_prod" in st.session_state:
         del st.session_state.df_simulation_prod
     
-
 
 SIMULATION_SCHRITTE = [
     "Daten auswählen",
@@ -1874,6 +2219,7 @@ def render_checklist(aktiver_schritt_index):
         checklist_html += f"{line} <br>\n\n"
 
     return checklist_html
+
 
 def load_data_manager() -> bool:
     """Lädt den DataManager und ConfigManager und speichert sie im Session-State.
