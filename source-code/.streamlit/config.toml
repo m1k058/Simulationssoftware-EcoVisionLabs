@@ -1,9 +1,4 @@
-[theme]
 
-
-# Zusätzliche Einstellungen...
-base = "dark" # Startet standardmäßig im Dark Mode, erlaubt aber Wechsel zu Light Mode
-font = "sans serif"
 
 [server]
 headless = true
