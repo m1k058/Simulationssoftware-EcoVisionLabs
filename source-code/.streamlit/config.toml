@@ -1,10 +1,5 @@
 [theme]
-# Die folgenden expliziten Farbvorgaben MÜSSEN entfernt/auskommentiert werden,
-# um den Streamlit Theme-Wechsler (Light/Dark) zu reaktivieren.
-# primaryColor = "#0058aaff" 
-# backgroundColor = "#131313ff" 
-# secondaryBackgroundColor = "#000000ff" 
-# textColor = "#ffffffff" 
+
 
 # Zusätzliche Einstellungen...
 base = "dark" # Startet standardmäßig im Dark Mode, erlaubt aber Wechsel zu Light Mode
