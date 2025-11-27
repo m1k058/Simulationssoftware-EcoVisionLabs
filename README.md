@@ -8,7 +8,7 @@ Ein Projekt von **EcoVision Labs** :)
 - [Beispiel Plot Interaktiv](https://m1k058.github.io/Simulationssoftware-EcoVisionLabs/interactive_plot_example.html)  
 - [zum Konzept](docu/konzept.md)
 
-- [Online Software (in entwicklung)](https://ecovisionlabs.streamlit.app/)
+- [Online Software (in entwicklung)]((https://simu-ecovisionlabs.streamlit.app/)
    
 ## 1. Funktionen
 
