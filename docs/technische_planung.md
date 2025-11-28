@@ -1,50 +1,56 @@
 # Technische Planung – EcoVision Labs
 
-> **Projekt:** Erreichbarkeit der Klimaziele 2030/2045  
+> **Projekt:** Analyse der Klimaziele 2030/2045 (Energiewende-Simulator)  
 > **Kurs:** REE3 – IPJ1  
 > **Team:** EcoVision Labs  
-> **Version:** 1.0 (MS1)  
-> **Datum:** Oktober 2025  
-> **Autoren:** Julian Umlauf, Michal Kos
+> **Version:** 0.2.3 (Fokus Daten & Roadmap MS4)  
+> **Datum:** November 2025  
+> **Autoren:** Julian Umlauf, Michał Kos  
 
 ---
 
- Dieses Dokument beschreibt die **technische Struktur und die genutzten Werkzeuge** für die Umsetzung der Aufgaben im **IPJ1**.  
- Es dient als Leitfaden für das Entwicklerteam und zur Transparenz innerhalb des Projekts.
+## 1. Datenstrategie & Modellierungsansatz
+
+Wir wechseln von einer pauschalen Energieskalierung (Top-Down) zu einer kapazitätsbasierten Simulation (Bottom-Up).
+
+### A. Referenzjahr-Prinzip
+Um meteorologische Korrelationen (z. B. „Dunkelflaute“ = Kälte + Windstille) korrekt abzubilden, verzichten wir auf Randomisierung.
+* **Referenzjahr:** 2023 (als „Wetter-Schablone“).
+* **Konsequenz:** Alle Zeitreihen (Wind, Solar, Temperatur, Last) basieren auf dem Verlauf dieses Jahres.
+
+### B. Erzeugung: Kapazitäts-Ansatz (Capacity-Based Scaling)
+Die Erzeugung wird nicht über Energiemengen, sondern über die **installierte Leistung (GW)** skaliert.
+1.  **Input:** Installierte Leistung 2023 (Ist-Stand) & Zeitreihe 2023.
+2.  **Normierung:** Berechnung eines „Unit-Profils“ (Einspeisung pro 1 GW installierter Leistung).
+3.  **Simulation:** `Erzeugung_Neu(t) = Unit_Profil(t) * Installierte_Leistung_Szenario`.
+
+### C. Verbrauch: Sektorenkopplung
+Der Verbrauch setzt sich additiv zusammen (Superposition):
+1.  **Basislast:** Klassischer Stromverbrauch (skaliert anhand Effizienztrends).
+2.  **Wärme:** Basierend auf **Außentemperatur** (DWD-Daten) und COP-Kennlinien.
+3.  **Verkehr:** Basierend auf **Standardlastprofilen** für E-Mobilität (BDEW) und Fahrzeuganzahl.
 
 ---
 
-## 1. Eingesetzte Werkzeuge und Bibliotheken
+## 2. Benötigte Datenquellen (To-Do)
 
-| Kategorie | Tool / Bibliothek | Beschreibung |
-|------------|------------------|---------------|
-| Programmiersprache | **Python 3.13.x** | Hauptsprache für Analyse, Simulation und Benutzeroberfläche |
-| Datenanalyse | **Pandas** | Verarbeitung und Analyse von CSV-/Excel-Daten |
-| Visualisierung | **Matplotlib** | Erstellung von Diagrammen und Plots |
-| Versionskontrolle | **GitHub** | Verwaltung von Code und Dokumentation im Team |
-| Entwicklungsumgebung | **VS Code** | Lokale Entwicklungsumgebung für Python-Projekte |
-
----
-
-## 2. Projektstruktur (GitHub-Repository)
-
-| **Ordner** | **Beschreibung** |
-|------------|------------------|
-| `/assets` | Zusätzliche Inhalte (z. B. Bilder für die Dokumentation) |
-| `/documentation` | Projekt- und Entwicklungsdokumentation |
-| `/output` | Ausgaben der Simulationssoftware (z. B. Diagramme, Ergebnisse) |
-| `/raw-data` | Rohdaten zur weiteren Verarbeitung (z. B. SMARD-Daten) |
-| `/source-code` | Quellcode der Anwendung (Python-Module und Skripte) |
+| Datensatz | Beschreibung | Quelle | Status |
+| :--- | :--- | :--- | :--- |
+| **Strommarktdaten** | Erzeugung/Verbrauch 2023 (15-min Auflösung) | SMARD | ✅ Vorhanden |
+| **Installierte Leistung** | GW-Zahlen für Wind/PV (Status Quo 2023) | BNetzA / BMWK | 🔄 Offen |
+| **Wetterdaten** | Zeitreihe Außentemperatur DE 2023 | DWD (Open Data) | 🔄 Offen |
+| **Lastprofile** | Normierte Profile für E-Mobilität & Wärmepumpen | BDEW / Netzbetreiber | 🔄 Offen |
 
 ---
 
-## 3. Datenbeschaffung (SMARD)
+## 3. Roadmap bis MS4 (Beta)
 
-Zugriff über: 
-| Methode | Ursprung |
-|-----|-----|
-| SMARD API | Bundesnetzagentur Strommarktdaten |
-| CSV-Download | SMARD Downloadcenter |
-| Smardcast-Tool | Kolja Egers Github |
-
-(Kombination der Methoden möglich)
+1.  **Daten-Infrastruktur:**
+    * Integration der Wetterdaten (Temperatur) in das Pandas-DataFrame.
+    * Erstellung der „Unit-Profile“ für Wind und PV.
+2.  **Erweiterung der Simulation:**
+    * Implementierung der Speicher-Logik (Füllstandsberechnung mit Constraints).
+    * Kostenmodul (Berechnung CAPEX/OPEX basierend auf den GW-Slidern).
+3.  **UI-Ausbau:**
+    * Ersetzen der abstrakten Faktoren-Slider durch **GW-Slider** (z. B. "Wind Onshore: 115 GW").
+    * Hinzufügen von Preset-Buttons (z. B. "Lade Szenario BMWK 2030").
