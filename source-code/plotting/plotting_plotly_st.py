@@ -181,7 +181,7 @@ def create_balance_plot(
             raise DataProcessingError(f"Spalte '{column2}' nicht gefunden.")
 
         dfx = df[["Zeitpunkt", column1, column2]].copy()
-        dfx["Balance"] = dfx[column1] - dfx[column2]
+        dfx["Balance"] = dfx[column2] - dfx[column1]
         dfx["Surplus"] = dfx["Balance"].clip(lower=0)
         dfx["Deficit"] = dfx["Balance"].clip(upper=0)
 
@@ -217,7 +217,7 @@ def create_balance_plot(
                 y=dfx["Balance"],
                 mode="lines",
                 line=dict(color="black", width=1.5),
-                name=f"{column1} - {column2}",
+                name=f"{column2} - {column1}",
                 hoverinfo="x+y",
             )
         )
