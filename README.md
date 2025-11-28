@@ -2,13 +2,14 @@
 
 Ein Projekt von **EcoVision Labs** :) 
 
-### Shortcuts:
-- [zu den Features](docu/code_features_aktuell.md)  
-- [zur technischen Planung](docu/technische_planung.md)  
-- [Beispiel Plot Interaktiv](https://m1k058.github.io/Simulationssoftware-EcoVisionLabs/interactive_plot_example.html)  
-- [zum Konzept](docu/konzept.md)
+> [!NOTE]
+> **Alpha Version:** Diese Software ist noch stark in Entwicklung.
 
-- [Online Software (in entwicklung)](https://simu-ecovisionlabs.streamlit.app/)
+### Shortcuts 
+[![Run Software](https://img.shields.io/badge/Klicke_hier-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)  
+[![Technische Planung](https://img.shields.io/badge/Technische_Planung-docu-blue.svg)](docu/technische_planung.md)   
+[![zum Konzept (alt)](https://img.shields.io/badge/zum_Konzept_(alt)-docu-blue.svg)](docu/konzept.md)  
+[![zu_den_Features_(alt)](https://img.shields.io/badge/zu_den_Features_(alt)-docu-blue.svg)](docu/code_features_aktuell.md)  
    
 ## 1. Funktionen
 
@@ -27,60 +28,39 @@ mit Fokus auf erneuerbare Energien und das Erreichen der Klimaziele 2030/2045.
 
 ## 2. Schnellstart
 
-### Voraussetzungen
-- Python 3.9 oder höher
-- Abhängigkeiten: `pandas`, `matplotlib`, `numpy`
+### Software starten (gehostete WebApp):
+[![Run Software](https://img.shields.io/badge/Klicke_hier:-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)
 
-### Software starten (einfach)
+### Software starten (lokal):
+
+**Voraussetzungen :** 
+- Python 3.9 oder höher
+
 
 Die Software kann **direkt** gestartet werden, ohne Installation:
 
-**Linux/macOS (bash/fish):**
-```bash
-python source-code/main.py
-```
+**Linux/macOS :**  
+1.  **Öffne das Terminal** und navigiere in das Hauptverzeichnis des Projekts:
+    ```bash
+    cd /Pfad_zu/Simulationssoftware-EcoVisionLabs
+    ```
 
-**Windows (PowerShell/cmd):**
-```powershell
-python source-code\main.py
-```
+2.  **Mache das Skript ausführbar** (nur einmalig nötig):
+    ```bash
+    chmod +x start_app.sh
+    ```
 
-### Abhängigkeiten installieren
+3.  **Starte die Anwendung:**
+    ```bash
+    ./start_app.sh
+    ```
 
-Falls Bibliotheken fehlen:
-
-**Mit pip (alle Plattformen):**
-```bash
-pip install pandas matplotlib numpy
-```
-
-**Mit Virtual Environment (empfohlen für Entwicklung):**
-
-Linux/macOS:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install pandas matplotlib numpy
-```
-
-Windows (PowerShell):
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install pandas matplotlib numpy
-```
+**Windows :**
+1.  **Öffne den Projektordner** (diesen Ordner, der das Skript `start_app.bat` enthält).
+2.  Mache einen **Doppelklick** auf die Datei **`start_app.bat`**.
 
 ---
 
-## 3. Installation für Entwickler (optional)
-
-Für die **Entwicklung** (z.B. zum Ausführen von Unit-Tests oder für bessere IDE-Integration) 
-kann das Projekt im "editable mode" installiert werden:
-
-```bash
-# Projekt im editable mode installieren
-pip install -e .
-```
 
 ### Tests ausführen (nach editable install)
 
