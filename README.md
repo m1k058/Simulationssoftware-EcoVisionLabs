@@ -6,10 +6,10 @@ Ein Projekt von **EcoVision Labs** :)
 > **Alpha Version:** Diese Software ist noch stark in Entwicklung.
 
 ### Shortcuts 
-[![Run Software](https://img.shields.io/badge/WebApp-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)  
-[![Technische Planung](https://img.shields.io/badge/Technische_Planung-docu-blue.svg)](docu/technische_planung.md)   
-[![zum Konzept (alt)](https://img.shields.io/badge/zum_Konzept_(alt)-docu-blue.svg)](docu/konzept.md)  
-[![zu_den_Features_(alt)](https://img.shields.io/badge/zu_den_Features_(alt)-docu-blue.svg)](docu/code_features_aktuell.md)  
+[![Run Software](https://img.shields.io/badge/Web_App-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)  
+[![Technische Planung](https://img.shields.io/badge/Technische_Planung-docs-blue.svg)](docs/technische_planung.md)   
+[![zum Konzept (alt)](https://img.shields.io/badge/zum_Konzept_(alt)-docs-blue.svg)](docs/konzept.md)  
+[![zu_den_Features_(alt)](https://img.shields.io/badge/zu_den_Features_(alt)-docs-blue.svg)](docs/code_features_aktuell.md)  
    
 ## 1. Funktionen
 
