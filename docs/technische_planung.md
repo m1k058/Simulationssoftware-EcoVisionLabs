@@ -35,16 +35,5 @@ Festgelegte Jahres Zielwerte sind:
 ### Simulationsablauf Visuell:
 Hier eine vereinfachte Visualiesierung der Verbrauchssimulation.
 
-```mermaid
-flowchart TD
-    Start((Start)) --> Init[Initialisierung]
-    
-    Init --> Check{t < t_max?}
-    Check -->|Ja| Calc[Berechne Physik]
-    Calc --> Log[Speichere Daten]
-    Log --> Inc[t = t + dt]
-    Inc --> Check
-    
-    Check -->|Nein| Done((Ende))
-```
+![Teamfoto](assets/erzeugung.svg)
 
