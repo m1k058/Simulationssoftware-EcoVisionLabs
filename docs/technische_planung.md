@@ -35,5 +35,29 @@ Festgelegte Jahres Zielwerte sind:
 ### Simulationsablauf Visuell:
 Hier eine vereinfachte Visualiesierung der Verbrauchssimulation.
 
-![Teamfoto](assets/erzeugung.svg)
+![Teamfoto](../assets/verbrauch.svg)
+
+## 2. Erzeugungssimulation:
+### Aktueller Fortschritt:
+| Teilaufgabe | Zuständig | Fertig? |
+| :----- | :-----: | :-----: |
+|  | Michal | ❌ |
+|  | Michal | ❌ |
+|  | Michal | ❌ |
+| ¿Todo terminado? | Michal | ❌ |
+  
+Der Verbrauch wird jetzt mithilfe eines selbst erstellten Erzeugunsprofils aus den SMARD Erzeugungsdaten, dem verbrauchs-DataFrame, einer prozentualen angabe der Erzeuger Anteile und dem hinzugefügten Puffer (zum Verbrauch addiert und wir gehen aus das das die Instlierte Leistung sein soll) simuliert.  
+   
+Beispiel Eingaben:
+
+| Jahr | Photovoltaik [TWh] | Wind Onshore [TWh] | Wind Offshore [TWh] | Braunkohle [TWh] | ... |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 2030 | 24% | 26% | 23% | 5% | ... |
+| 2045 | 28% | 29% | 26% | 0% | ... |
+
+### Simulationsablauf Visuell:
+Hier eine vereinfachte Visualiesierung der Erzeugungssimulation.
+
+![Teamfoto](../assets/erzeugung.svg)
+
 
