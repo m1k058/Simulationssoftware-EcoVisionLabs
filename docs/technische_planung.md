@@ -1,50 +1,63 @@
 # Technische Planung – EcoVision Labs
 
-> **Projekt:** Erreichbarkeit der Klimaziele 2030/2045  
+> **Projekt:** Analyse der Klimaziele 2030/2045 (Energiewende-Simulator)  
 > **Kurs:** REE3 – IPJ1  
 > **Team:** EcoVision Labs  
-> **Version:** 1.0 (MS1)  
-> **Datum:** Oktober 2025  
-> **Autoren:** Julian Umlauf, Michal Kos
+> **Version:** 3.0 (Planung MS4 - Beta)  
+> **Datum:** November 2025  
+> **Autoren:** Julian Umlauf, Michał Kos  
 
 ---
 
- Dieses Dokument beschreibt die **technische Struktur und die genutzten Werkzeuge** für die Umsetzung der Aufgaben im **IPJ1**.  
- Es dient als Leitfaden für das Entwicklerteam und zur Transparenz innerhalb des Projekts.
+# Simulationsstrategie (Core Concepts)
 
----
+Für den Meilenstein 4 wechseln wir von einer pauschalen Skalierung (Top-Down) zu einer detaillierten Simulation (Bottom-Up).
+Im Folgenden wird beschrieben wie welche Module verändert und optimaliesiert werden.  
 
-## 1. Eingesetzte Werkzeuge und Bibliotheken
+## 1. Verbrauchssimulation:
+### Aktueller Fortschritt:
+| Teilaufgabe | Zuständig | Fertig? |
+| :----- | :-----: | :-----: |
+| BDEW-Lastprofil mithilfe bestehender IO handling Funktionen in DataManager laden | Julian | ❌ |
+| Neue Last Simulation mithilfe des Lastprofils bauen | Julian | ❌ |
+| Zum Testen an DV-Team übergeben | Julian | ❌ |
+| ¿Todo terminado? | Julian | ❌ |
+  
+Der Verbrauch wird jetzt mithilfe des [BDEW-Lastprofils](https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx 'Excel Datei Download') und Vorgegebener Ziel Jahresverbrauchs für die drei Sektoren: Haushalte (H25), Gewerbe (G25), Landwirtschaft (L25) simuliert.  
+   
+Festgelegte Jahres Zielwerte sind:
 
-| Kategorie | Tool / Bibliothek | Beschreibung |
-|------------|------------------|---------------|
-| Programmiersprache | **Python 3.13.x** | Hauptsprache für Analyse, Simulation und Benutzeroberfläche |
-| Datenanalyse | **Pandas** | Verarbeitung und Analyse von CSV-/Excel-Daten |
-| Visualisierung | **Matplotlib** | Erstellung von Diagrammen und Plots |
-| Versionskontrolle | **GitHub** | Verwaltung von Code und Dokumentation im Team |
-| Entwicklungsumgebung | **VS Code** | Lokale Entwicklungsumgebung für Python-Projekte |
+| Jahr | Haushalte [TWh] | Gewerbe [TWh] | Landwirtschaft [TWh] |
+|:---:|:---:|:---:|:---:|
+| 2030 | 999 | 888 | 777 |
+| 2045 | 666 | 555 | 444 |
 
----
+### Simulationsablauf Visuell:
+Hier eine vereinfachte Visualiesierung der Verbrauchssimulation.
 
-## 2. Projektstruktur (GitHub-Repository)
+![Teamfoto](../assets/verbrauch.svg)
 
-| **Ordner** | **Beschreibung** |
-|------------|------------------|
-| `/assets` | Zusätzliche Inhalte (z. B. Bilder für die Dokumentation) |
-| `/documentation` | Projekt- und Entwicklungsdokumentation |
-| `/output` | Ausgaben der Simulationssoftware (z. B. Diagramme, Ergebnisse) |
-| `/raw-data` | Rohdaten zur weiteren Verarbeitung (z. B. SMARD-Daten) |
-| `/source-code` | Quellcode der Anwendung (Python-Module und Skripte) |
+## 2. Erzeugungssimulation:
+### Aktueller Fortschritt:
+| Teilaufgabe | Zuständig | Fertig? |
+| :----- | :-----: | :-----: |
+|  | Michal | ❌ |
+|  | Michal | ❌ |
+|  | Michal | ❌ |
+| ¿Todo terminado? | Michal | ❌ |
+  
+Der Verbrauch wird jetzt mithilfe eines selbst erstellten Erzeugunsprofils aus den SMARD Erzeugungsdaten, dem verbrauchs-DataFrame, einer prozentualen angabe der Erzeuger Anteile und dem hinzugefügten Puffer (zum Verbrauch addiert und wir gehen aus das das die Instlierte Leistung sein soll) simuliert.  
+   
+Beispiel Eingaben:
 
----
+| Jahr | Photovoltaik [TWh] | Wind Onshore [TWh] | Wind Offshore [TWh] | Braunkohle [TWh] | ... |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 2030 | 24% | 26% | 23% | 5% | ... |
+| 2045 | 28% | 29% | 26% | 0% | ... |
 
-## 3. Datenbeschaffung (SMARD)
+### Simulationsablauf Visuell:
+Hier eine vereinfachte Visualiesierung der Erzeugungssimulation.
 
-Zugriff über: 
-| Methode | Ursprung |
-|-----|-----|
-| SMARD API | Bundesnetzagentur Strommarktdaten |
-| CSV-Download | SMARD Downloadcenter |
-| Smardcast-Tool | Kolja Egers Github |
+![Teamfoto](../assets/erzeugung.svg)
 
-(Kombination der Methoden möglich)
+
