@@ -590,7 +590,7 @@ def simulate_storage_generic(
     if max_soc_mwh is None:
         max_soc_mwh = capacity_mwh
     
-    # Kopiere DataFrame und berechne initiale Balance
+    #  DataFrame kopieren und initiale Balance berechnen
     df = df_balance.copy()
     balance_series = df['Gesamterzeugung [MWh]'] - df['Skalierte Netzlast [MWh]']
     
@@ -623,7 +623,7 @@ def simulate_storage_generic(
         bal = balance_series.iloc[i]
         
         if bal > 0:
-            # Fall A: Überschuss -> Versuche zu laden
+            # Fall A: Überschuss - Versucht zu laden
             free_space = max_soc_mwh - current_soc
             max_grid_intake_by_capacity = free_space / charge_efficiency
             energy_in_from_grid = min(bal, max_charge_energy_per_step, max_grid_intake_by_capacity)
@@ -634,7 +634,7 @@ def simulate_storage_generic(
             
         elif bal < 0:
             deficit = abs(bal)
-            # Fall B: Defizit -> Versuche zu entladen
+            # Fall B: Defizit - Versucht zu entladen
             available_energy_above_min = current_soc - min_soc_mwh
             max_grid_output_by_power = max_discharge_energy_per_step
             max_grid_output_by_content = available_energy_above_min * discharge_efficiency
