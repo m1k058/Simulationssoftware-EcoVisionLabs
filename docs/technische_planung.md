@@ -58,6 +58,6 @@ Beispiel Eingaben:
 ### Simulationsablauf Visuell:
 Hier eine vereinfachte Visualiesierung der Erzeugungssimulation.
 
-![Teamfoto](../assets/erzeugung.svg)
+![Teamfoto](../assets/Erzeugung_simu.png)
 
 
