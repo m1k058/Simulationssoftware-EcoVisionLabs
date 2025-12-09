@@ -4,6 +4,8 @@ from config_manager import ConfigManager
 
 # Eigene Imports
 import data_processing.generation_profile as genPro
+import data_processing.simulation as simu
+import data_processing.col as col
 
 def standard_simulation_page() -> None:
     st.title("Simulation")
@@ -19,24 +21,32 @@ def standard_simulation_page() -> None:
     ##       Verbrauch Simulation          ##
     ## =================================== ##
 
+
+
+
     ## =================================== ##
     ##       Erzeugung Simulation          ##
     ## =================================== ##
-
     st.subheader("Erzeugungssimulation")
 
-    # dataframe auswählen
-    selected_dataset_name = st.selectbox("Wähle ein Dataframe", options=st.session_state.dm.list_dataset_names())
-    df_erzeugung = st.session_state.dm.get(selected_dataset_name)
+    # dataframes auswählen
+    df_erzeugung = st.session_state.dm.get("SMARD_2020-2025_Erzeugung")
+    df_instErzeugung = st.session_state.dm.get("SMARD_Installierte Leistung 2020-2025")
     
     # nach zeit filtern
     df_idx = df_erzeugung.set_index("Zeitpunkt")
-    df_oneYear = df_idx.loc['2023']
+    df_oneYear = df_idx.loc['2024']
 
-    genPro.generate_generation_profile()
+    st.dataframe(df_oneYear)
+    st.dataframe(df_instErzeugung)
 
+    df_genProfile = None
 
+    if st.button("Berechnen"):
+        df_genProfile = genPro.generate_generation_profile(df_oneYear, df_instErzeugung, True)
 
-    # genPro.generate_generation_profile()
+    st.dataframe(df_genProfile)
     
+
+
 

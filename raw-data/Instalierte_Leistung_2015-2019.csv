@@ -1,0 +1,6 @@
+﻿Datum von;Datum bis;Biomasse [MW] Originalauflösungen;Wasserkraft [MW] Originalauflösungen;Wind Offshore [MW] Originalauflösungen;Wind Onshore [MW] Originalauflösungen;Photovoltaik [MW] Originalauflösungen;Sonstige Erneuerbare [MW] Originalauflösungen;Kernenergie [MW] Originalauflösungen;Braunkohle [MW] Originalauflösungen;Steinkohle [MW] Originalauflösungen;Erdgas [MW] Originalauflösungen;Pumpspeicher [MW] Originalauflösungen;Sonstige Konventionelle [MW] Originalauflösungen
+01.01.2015;01.01.2016;6.808,00;5.507,00;993,00;37.701,00;37.271,00;483,00;12.068,00;21.160,00;26.190,00;31.734,00;8.699,00;7.437,00
+01.01.2016;01.01.2017;6.815,00;5.514,00;3.283,00;41.168,00;38.686,00;545,00;10.793,00;21.062,00;26.264,00;32.398,00;8.699,00;7.576,00
+01.01.2017;01.01.2018;7.080,00;5.446,00;4.131,00;47.042,00;40.834,00;550,00;10.793,00;21.262,00;27.437,00;32.627,00;8.894,00;7.720,00
+01.01.2018;01.01.2019;7.073,00;5.300,00;5.051,00;51.633,00;42.804,00;534,00;9.516,00;21.275,00;25.035,00;30.232,00;8.918,00;7.375,00
+01.01.2019;01.01.2020;7.720,00;5.281,00;6.393,00;52.394,00;44.036,00;487,00;9.516,00;21.205,00;25.293,00;31.664,00;9.422,00;7.277,00

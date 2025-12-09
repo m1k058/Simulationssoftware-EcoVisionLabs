@@ -573,3 +573,15 @@ def simulate_storage_generic(
     print(f"{'='*80}\n")
     
     return result
+
+
+def simulate_production_scaling(jahrTarget: pd.DataFrame, genProfile: pd.DataFrame) -> pd.DataFrame:
+    """
+    Skaliert ein Produktionsprofil basierend auf einem Ziel-Installierte-Leistung-DataFrame und einem Referenzjahresprofil (Werte von 0-1 nach auslastung der Erzeuger).
+    
+    Args:
+        jahrTarget: DataFrame mit Ziel installierter Leistung pro Erzeuger in dem Simulationsjahr.
+        genProfile: DataFrame mit Referenz Erzeugungsprofil für das Vergleichsjahr.
+    """
+
+    

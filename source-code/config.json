@@ -40,6 +40,20 @@
             "path": "..\\raw-data\\Prognosedaten_Studien.csv",
             "datatype": "CUST_PROG",
             "description": "Daten für Erzeugungs- und Verbrauchsprognosen verschiedener Studien"
+        },
+        {
+            "id": 5,
+            "name": "SMARD_Installierte Leistung 2015-2019",
+            "path": "..\\raw-data\\Instalierte_Leistung_2015-2019.csv",
+            "datatype": "SMARD-Inst",
+            "description": "Daten für installierte Leistung verschiedener Quellen 2015-2019"
+        },
+        {
+            "id": 6,
+            "name": "SMARD_Installierte Leistung 2020-2025",
+            "path": "..\\raw-data\\Instalierte_Leistung_2020-2025.csv",
+            "datatype": "SMARD-Inst",
+            "description": "Daten für installierte Leistung verschiedener Quellen 2020-2025"
         }
     ],
     "PLOTS": [

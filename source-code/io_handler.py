@@ -89,6 +89,9 @@ def load_data(path: Path, datatype: str = "SMARD"):
 
     # --- Load data into DataFrame
     try:
+        # Identifiziere Datumsspalten anhand der erwarteten Header
+        date_columns = [i for i, col in enumerate(clean_header) if "Datum" in col]
+        
         df = pd.read_csv(
             path,
             sep=cfg["sep"],
@@ -98,6 +101,7 @@ def load_data(path: Path, datatype: str = "SMARD"):
             decimal=cfg["decimal"],
             thousands=cfg["thousands"],
             na_values=cfg["na_values"],
+            dtype={i: str for i in date_columns},  # Datumsspalten als String einlesen
         )
         df.columns = clean_header
     except Exception as e:
@@ -106,14 +110,26 @@ def load_data(path: Path, datatype: str = "SMARD"):
     # --- Convert date columns
     try:
         for col in [c for c in df.columns if "Datum" in c]:
-            df[col] = pd.to_datetime(df[col], format=cfg["date_format"], errors="coerce")
+            date_format = cfg["date_format"]
+            if date_format == "dayfirst":
+                # Deutsches Datumsformat (dd.mm.yyyy) - robuster als striktes Format
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+            else:
+                # Verwende spezifisches Format wenn angegeben
+                df[col] = pd.to_datetime(df[col], format=date_format, errors="coerce")
     except Exception as e:
         warnings.warn(f"Failed to convert date columns in {path}: {e}", WarningMessage)
 
     # --- Create midpoint timestamp column if applicable
     if "Datum von" in df.columns and "Datum bis" in df.columns:
         try:
-            df["Zeitpunkt"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
+            # Für jährliche Daten (z.B. installierte Leistung): extrahiere nur das Jahr
+            if datatype == "SMARD-Inst":
+                df["Zeitpunkt"] = df["Datum von"]
+                df["Jahr"] = df["Datum von"].dt.year
+            else:
+                # Für zeitlich höher aufgelöste Daten: Mittelwert berechnen
+                df["Zeitpunkt"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
         except Exception as e:
             warnings.warn(f"Could not calculate 'Zeitpunkt' for {path}: {e}", WarningMessage)
 

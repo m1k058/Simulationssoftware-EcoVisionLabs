@@ -32,6 +32,22 @@ EXPECTED_HEADERS = {
         "Pumpspeicher [MWh]",
         "Residuallast [MWh]",
     ],
+    "SMARD-Inst": [
+        "Datum von",
+        "Datum bis",
+        "Biomasse [MW]",
+        "Wasserkraft [MW]",
+        "Wind Offshore [MW]",
+        "Wind Onshore [MW]",
+        "Photovoltaik [MW]",
+        "Sonstige Erneuerbare [MW]",
+        "Kernenergie [MW]",
+        "Braunkohle [MW]",
+        "Steinkohle [MW]",
+        "Erdgas [MW]",
+        "Pumpspeicher [MW]",
+        "Sonstige Konventionelle [MW]",
+    ],
     "CUST_PROG": [
         "Studie",
         "Jahr",
@@ -77,6 +93,14 @@ FILE_FORMAT_OPTIONS = {
         "encoding": "utf-8",
         "na_values": ["-", "NaN", "n/a", ""]
     },
+    "SMARD-Inst": {
+        "sep": ";",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "dayfirst",
+        "encoding": "utf-8",
+        "na_values": ["-", "NaN", "n/a", ""]
+    },
     "CUST_PROG": {
         "sep": ";",
         "decimal": ",",
@@ -98,18 +122,18 @@ FILE_FORMAT_OPTIONS = {
 
 # Energy Sources Names, Shortcodes and Colors
 ENERGY_SOURCES = {
-    "KE": {"name": "Kernenergie", "color": "#800080", "colname": "Kernenergie [MWh]"},
-    "BK": {"name": "Braunkohle", "color": "#774400", "colname": "Braunkohle [MWh]"},
-    "SK": {"name": "Steinkohle", "color": "#1F1F1F", "colname": "Steinkohle [MWh]"},
-    "EG": {"name": "Erdgas", "color": "#5D5D5D", "colname": "Erdgas [MWh]"},
-    "SOE": {"name": "Sonstige Erneuerbare", "color": "#ADFF2F", "colname": "Sonstige Erneuerbare [MWh]"},
-    "SOK": {"name": "Sonstige Konventionelle", "color": "#272727", "colname": "Sonstige Konventionelle [MWh]"},
-    "BIO": {"name": "Biomasse", "color": "#00A51B", "colname": "Biomasse [MWh]"},
-    "PS": {"name": "Pumpspeicher", "color": "#090085", "colname": "Pumpspeicher [MWh]"},
-    "WAS": {"name": "Wasserkraft", "color": "#1E90FF", "colname": "Wasserkraft [MWh]"},
-    "WOF": {"name": "Wind Offshore", "color": "#00BFFF", "colname": "Wind Offshore [MWh]"},
-    "WON": {"name": "Wind Onshore", "color": "#007F78", "colname": "Wind Onshore [MWh]"},
-    "PV": {"name": "Photovoltaik", "color": "#FFD700", "colname": "Photovoltaik [MWh]"},
+    "KE": {"name": "Kernenergie", "color": "#800080", "colname": "Kernenergie [MWh]", "colname_MW": "Kernenergie [MW]"},
+    "BK": {"name": "Braunkohle", "color": "#774400", "colname": "Braunkohle [MWh]", "colname_MW": "Braunkohle [MW]"},
+    "SK": {"name": "Steinkohle", "color": "#1F1F1F", "colname": "Steinkohle [MWh]", "colname_MW": "Steinkohle [MW]"},
+    "EG": {"name": "Erdgas", "color": "#5D5D5D", "colname": "Erdgas [MWh]", "colname_MW": "Erdgas [MW]"},
+    "SOE": {"name": "Sonstige Erneuerbare", "color": "#ADFF2F", "colname": "Sonstige Erneuerbare [MWh]", "colname_MW": "Sonstige Erneuerbare [MW]"},
+    "SOK": {"name": "Sonstige Konventionelle", "color": "#272727", "colname": "Sonstige Konventionelle [MWh]", "colname_MW": "Sonstige Konventionelle [MW]"},
+    "BIO": {"name": "Biomasse", "color": "#00A51B", "colname": "Biomasse [MWh]", "colname_MW": "Biomasse [MW]"},
+    "PS": {"name": "Pumpspeicher", "color": "#090085", "colname": "Pumpspeicher [MWh]", "colname_MW": "Pumpspeicher [MW]"},
+    "WAS": {"name": "Wasserkraft", "color": "#1E90FF", "colname": "Wasserkraft [MWh]", "colname_MW": "Wasserkraft [MW]"},
+    "WOF": {"name": "Wind Offshore", "color": "#00BFFF", "colname": "Wind Offshore [MWh]", "colname_MW": "Wind Offshore [MW]"},
+    "WON": {"name": "Wind Onshore", "color": "#007F78", "colname": "Wind Onshore [MWh]", "colname_MW": "Wind Onshore [MW]"},
+    "PV": {"name": "Photovoltaik", "color": "#FFD700", "colname": "Photovoltaik [MWh]", "colname_MW": "Photovoltaik [MW]"},
 }
 
 SOURCES_GROUPS = {

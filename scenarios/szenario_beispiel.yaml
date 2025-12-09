@@ -1,82 +1,91 @@
+# ==============================================================================
+# CONFIG: ENERGIESYSTEM-SIMULATION
+# ==============================================================================
+
 # ------------------------------------------------------------------
 # 1. METADATEN
-# Beschreibung des Szenarios und Versionierung
+# Allgemeine Informationen zur Identifikation des Datensatzes
 # ------------------------------------------------------------------
 metadata:
-  name: "Szenario Beispiel"
-  valid_for_years: [2030, 2045]
-  description: "Beispielhaftes Szenario mit plausiblen Dummy-Werten zur Simulation."
-  version: "1.0"
+  name: "Szenario Deutschland Transformation"
+  valid_for_years: [2030, 2045] # Liste der Jahre, die simuliert werden sollen
+  description: "Simulation der Ausbaupfade für EE und Sektorkopplung."
+  version: "0.0.0"
   author: "SW-Team EcoVisionLabs"
 
 # ------------------------------------------------------------------
-# 2. VERBRAUCH
-# Wie hoch ist der Zielverbrauch und welches Profil wird skaliert?
+# 2. VERBRAUCH (LAST)
+# Definition des jährlichen Strombedarfs pro Sektor.
+# Dient als Skalierungsfaktor für die hinterlegten Lastprofile.
 # ------------------------------------------------------------------
 target_load_demand_twh:
-  H25:
-    2030: 520
-    2045: 580
-    load_profile: "2025-BDEW-H25"
-  L25:
-    2030: 480
-    2045: 420
-    load_profile: "2025-BDEW-L25"
-  G25:
-    2030: 500
-    2045: 500
-    load_profile: "2025-BDEW-G25"
+  # Haushalte (Standardlastprofil)
+  Haushalt_Basis:
+    2030: 130 # Einheit: TWh
+    2045: 120 # Einheit: TWh
+    load_profile: "BDEW-25-Haushalte" # Name des zu nutzenden Lastprofils
+
+  # Gewerbe
+  Gewerbe_Basis:
+    2030: 140
+    2045: 130
+    load_profile: "BDEW-25-Gewerbe"
+
+  # Industrie
+  Industrie_Basis:
+    2030: 280
+    2045: 350
+    load_profile: "BDEW-25-Industrie"
+
+  # Elektromobilität
   EMobility:
-    2030: 550
-    2045: 610
+    2030: 60
+    2045: 140
     load_profile: "EMobility-self"
-  heat_pumps:
-    2030: 530
-    2045: 590
+
+  # Wärmepumpen (Gebäudewärme)
+  Heat_Pumps:
+    2030: 50
+    2045: 110
     load_profile: "HeatPumps-self"
 
 # ------------------------------------------------------------------
-# 3. PARAMETER FÜR ERZEUGUNGSPROFILE
-# Angaben für erzeugungsprofile (quelle, zeitauflösung, gute/schlechte Jahre)
+# 3. ZIEL-KAPAZITÄTEN (ERZEUGUNG)
+# Installierte Nennleistung pro Technologie und Jahr.
+# Dient zur Skalierung der normierten Einspeiseprofile (0 bis 1).
 # ------------------------------------------------------------------
-generation_profile_parameters:
-  time_resolution: "15min"  # viertelstündig
-  source: "SMARD"
-  2030:
-    wind_offshore: "good"
-    wind_onshore: "average"
-    photovoltaic: "good"
-  2045:
-    wind_offshore: "average"
-    wind_onshore: "good"
-    photovoltaic: "bad"
-
-# kommt weg bitte
-
-# ------------------------------------------------------------------
-# 4. ZIEL-KAPAZITÄTEN (ERZEUGUNG)
-# Die "Bottom-Up" Eingabe: Wie viel Leistung wird installiert?
-# Einheit: Megawatt (MW)
-# ------------------------------------------------------------------
-generation_capacities_mw:
+target_generation_capacities_mw:
+  # Photovoltaik (Gesamt)
   Photovoltaik:
-    2030: 140000
-    2045: 240000
-  Wind Onshore:
-    2030: 90000
-    2045: 150000
-  Wind Offshore:
-    2030: 40000
-    2045: 85000
+    2030: 215000 # Einheit: MW (Megawatt)
+    2045: 400000
+
+  # Windenergie an Land
+  Wind_Onshore:
+    2030: 115000 # Einheit: MW
+    2045: 160000
+
+  # Windenergie auf See
+  Wind_Offshore:
+    2030: 30000
+    2045: 70000
+
+  # Biomasse
+  Biomasse:
+    2030: 8500
+    2045: 6000
+
+  # Laufwasserkraft
   Wasserkraft:
     2030: 5000
     2045: 5000
-  Biomasse:
-    2030: 4500
-    2045: 4500
+
+  # Gaskraftwerke
   Erdgas:
-    2030: 15000
-    2045: 8000
+    2030: 25000
+    2045: 40000
+
+  # Konventionelle
   Steinkohle:
     2030: 0
     2045: 0
@@ -87,40 +96,59 @@ generation_capacities_mw:
     2030: 0
     2045: 0
 
-# ------------------------------------------------------------------ #
-# 5. SPEICHER-EINGABEN                                               #
-# Parameter für Batterien und Speichertechnologien                   #
-# ------------------------------------------------------------------ #
-storage_capacities:
-  battery_storage:
-    installed_capacity_mwh: 50000   # Speicherkapazität in MWh
-    max_charge_power_mw: 12000      # Ladeleistung (Einspeichern)
-    max_discharge_power_mw: 12000   # Entladeleistung (Ausspeichern)
-    charge_efficiency: 0.92
-    discharge_efficiency: 0.92
-    soc:
-      initial: 0.55  # Anteil 0-1 (0.55 = 55 %)
-      min: 0.10      # Minimaler Anteil 0-1
-      max: 0.90      # Maximaler Anteil 0-1
-    
-  pumped_hydro_storage:
-    installed_capacity_mwh: 180000
-    max_charge_power_mw: 35000
-    max_discharge_power_mw: 35000
-    charge_efficiency: 0.88
-    discharge_efficiency: 0.88
-    soc:
-      initial: 0.60
-      min: 0.20      # Anteil 0-1
-      max: 0.95      # Anteil 0-1
+# Wetterprofile für erneuerbare Energien
+  weather_profiles:
+    2030:
+      Wind_Offshore: "good"
+      Wind_Onshore: "average"
+      Photovoltaik: "average"
+    2045:
+      Wind_Offshore: "bad"
+      Wind_Onshore: "good"
+      Photovoltaik: "good"
+
+# ------------------------------------------------------------------
+# 4. SPEICHER-PARAMETER
+# Definition der Flexibilitäten zur Lastverschiebung.
+# Unterscheidung zwischen Leistung (Aufnahme/Abgabe) und Kapazität (Inhalt).
+# ------------------------------------------------------------------
+target_storage_capacities:
   
+  # Batteriespeicher (Kurzzeitspeicher)
+  battery_storage:
+    2030:
+      installed_capacity_mwh: 60000   # Einheit: MWh (Maximale Energiemenge)
+      max_charge_power_mw: 20000      # Einheit: MW (Max. Ladeleistung)
+      max_discharge_power_mw: 20000   # Einheit: MW (Max. Entladeleistung)
+      initial_soc: 0.5                # Einheit: float 0.0-1.0 (Ladezustand zum Start t=0)
+    2045:
+      installed_capacity_mwh: 180000
+      max_charge_power_mw: 60000
+      max_discharge_power_mw: 60000
+      initial_soc: 0.5
+
+  # Pumpspeicherkraftwerke
+  pumped_hydro_storage:
+    2030:
+      installed_capacity_mwh: 40000
+      max_charge_power_mw: 7000
+      max_discharge_power_mw: 7000
+      initial_soc: 0.6
+    2045:
+      installed_capacity_mwh: 45000
+      max_charge_power_mw: 8000
+      max_discharge_power_mw: 8000
+      initial_soc: 0.6
+
+  # Wasserstoff-Speicher (Langzeitspeicher / P2G2P)
   h2_storage:
-    installed_capacity_mwh: 250000
-    max_charge_power_mw: 50000
-    max_discharge_power_mw: 50000
-    charge_efficiency: 0.60
-    discharge_efficiency: 0.60
-    soc:
-      initial: 0.45  # Anteil 0-1 (0.45 = 45 %)
-      min: 0.10      # Anteil 0-1
-      max: 0.90      # Anteil 0-1
+    2030:
+      installed_capacity_mwh: 500000
+      max_charge_power_mw: 10000
+      max_discharge_power_mw: 10000
+      initial_soc: 0.4
+    2045:
+      installed_capacity_mwh: 3000000
+      max_charge_power_mw: 60000
+      max_discharge_power_mw: 40000
+      initial_soc: 0.45
