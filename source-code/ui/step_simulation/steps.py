@@ -1108,12 +1108,6 @@ def ergebnisse_speichern() -> None:
             type="primary",
         )
         st.markdown("---")
-    if False:
-        st.subheader("Energiebilanz Ergebnisse: ")
-        st.dataframe(st.session_state.energie_bilanz.head())
-        csv_eb = convert_for_download_csv(st.session_state.energie_bilanz)
-        st.download_button("Download CSV", data=csv_eb, file_name="energiebilanz.csv", mime="text/csv", type="primary")
-        st.markdown("---")
     if "storage_results" in st.session_state:
         for storage_type, storage_df in st.session_state.storage_results.items():
             st.subheader(f"{storage_type.capitalize()} Speicher Simulation Ergebnisse: ")

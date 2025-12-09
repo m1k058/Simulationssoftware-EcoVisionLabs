@@ -2,7 +2,6 @@ import streamlit as st
 from pathlib import Path
 import pandas as pd
 from scenario_manager import ScenarioManager
-from . import set_mode
 
 
 LOAD_PROFILE_OPTIONS = [
@@ -19,10 +18,8 @@ def ensure_state(sm: ScenarioManager) -> None:
         st.session_state["scenario_editor"] = sm.default_template()
 
 
-
-
-
-def show_scenario_generation() -> None:
+def scenario_generation_page() -> None:
+    st.set_page_config(layout="wide")
     st.title("Szenario Editor")
     st.caption("Szenarien erstellen und als YAML herunterladen.")
 
@@ -392,3 +389,4 @@ def show_scenario_generation() -> None:
     st.markdown("---")
     with st.expander("📄 Vorschau YAML"):
         st.code(yaml_output, language="yaml")
+

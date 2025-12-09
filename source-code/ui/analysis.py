@@ -4,9 +4,8 @@ import matplotlib.pyplot as plt
 import plotting.plotting_formated_st as pltf
 import plotting.plotting_plotly_st as pltp
 from constants import ENERGY_SOURCES
-from . import set_mode
 
-def show_dataset_analysis() -> None:
+def analysis_page() -> None:
     st.title("Dataset-Analyse")
     st.caption("Analysiere und visualisiere vorhandene Datensätze.")
 
@@ -49,7 +48,6 @@ def show_dataset_analysis() -> None:
         max_date = pd.to_datetime(df["Zeitpunkt"].max())
     except Exception as e:
         st.error(f"In diesem Dataframe gibt es keine: {e} und kann deshalb derzeit nicht analysiert werden.\nKontaktiere das Entwicklerteam um das Feature vorzuschlagen.")
-        st.button("Zurück", on_click=set_mode, args=("main",))
         return
     
     sidebar.checkbox("Uhrzeit mit angeben", value=False, key="set_time")
@@ -155,7 +153,6 @@ def show_dataset_analysis() -> None:
 
         else:
             st.error("Unbekannte Plot Engine ausgewählt.")
-        st.button("Zurück", on_click=set_mode, args=("main",))
     
     elif datentyp == "SMARD-V":
         # st.info("Verbrauchs-Daten können derzeit nur mit Matplotlib geplottet werden.")
@@ -193,9 +190,7 @@ def show_dataset_analysis() -> None:
         
         else:
             st.error("Unbekannte Plot Engine ausgewählt.")
-
-        st.button("Zurück", on_click=set_mode, args=("main",))
     
     else:
         st.warning("Derzeit werden nur SMARD Erzeugungs- und Verbrauchs-Daten unterstützt.")
-        st.button("Zurück", on_click=set_mode, args=("main",))
+

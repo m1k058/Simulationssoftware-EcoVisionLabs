@@ -1,31 +1,42 @@
-import streamlit as st
-from . import set_mode
+import streamlit as st 
+from data_manager import DataManager
+from config_manager import ConfigManager
 
-def show_standard_simulation() -> None:
+# Eigene Imports
+import data_processing.generation_profile as genPro
+
+def standard_simulation_page() -> None:
     st.title("Simulation")
-    st.caption("Werde schrittweise durch die Simulation geführt.")
+    st.caption("Eine Vollständige Simulation basierend auf vordefinierten Studien und Parametern.")
     st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung und dient nur Demonstrationszwecken.")
     sidebar = st.sidebar
-    sidebar.title("Simulationseinstellungen")
+    
+    # Überprüfe ob DataManager und ConfigManager geladen sind
+    if st.session_state.dm is None or st.session_state.cfg is None:
+        st.warning("DataManager/ConfigManager ist nicht initialisiert.")
 
-    jahr_von = sidebar.number_input("Simulationsjahr von", min_value=2026, max_value=2050, value=2031)
-    jahr_bis = sidebar.number_input("Simulationsjahr bis", min_value=2026, max_value=2050, value=2045)
-    referenz_jahr = sidebar.number_input("Referenzjahr aus SMARD Daten", min_value=2020, max_value=2025, value=2023)
-    studie_optionen = [
-        "Agora",
-        "BDI - Klimapfade 2.0",
-        "dena - KN100",
-        "BMWK - LFS TN-Strom",
-        "Ariadne - REMIND-Mix",
-        "Ariadne - REMod-Mix",
-        "Ariadne - TIMES PanEU-Mix",
-    ]
-    studie_auswahl = sidebar.selectbox("Wähle eine Studie", studie_optionen)
+    ## =================================== ##
+    ##       Verbrauch Simulation          ##
+    ## =================================== ##
 
-    if st.button("Simulation starten", type="primary"):
-        st.write("Simulation wird durchgeführt...")
-        st.success(
-            f"Simulation abgeschlossen für den Zeitraum :blue[***{jahr_von}***] bis :blue[***{jahr_bis}***] "
-            f"mit Referenzjahr :blue[***{referenz_jahr}***] und Studie :green[***{studie_auswahl}***]."
-        )
-    st.button("Zurück", on_click=set_mode, args=("main",))
+    ## =================================== ##
+    ##       Erzeugung Simulation          ##
+    ## =================================== ##
+
+    st.subheader("Erzeugungssimulation")
+
+    # dataframe auswählen
+    selected_dataset_name = st.selectbox("Wähle ein Dataframe", options=st.session_state.dm.list_dataset_names())
+    df_erzeugung = st.session_state.dm.get(selected_dataset_name)
+    
+    # nach zeit filtern
+    df_idx = df_erzeugung.set_index("Zeitpunkt")
+    df_oneYear = df_idx.loc['2023']
+
+    genPro.generate_generation_profile()
+
+
+
+    # genPro.generate_generation_profile()
+    
+

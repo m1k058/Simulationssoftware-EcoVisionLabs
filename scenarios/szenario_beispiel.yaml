@@ -4,23 +4,36 @@
 # ------------------------------------------------------------------
 metadata:
   name: "Szenario Beispiel"
-  valid_years_from: 2025
-  valid_years_to: 2045
+  valid_for_years: [2030, 2045]
   description: "Beispielhaftes Szenario mit plausiblen Dummy-Werten zur Simulation."
   version: "1.0"
   author: "SW-Team EcoVisionLabs"
 
 # ------------------------------------------------------------------
-# 2. LASTPROFIL (VERBRAUCH)
+# 2. VERBRAUCH
 # Wie hoch ist der Zielverbrauch und welches Profil wird skaliert?
 # ------------------------------------------------------------------
-load_parameters:
-  target_demand_twh:
+target_load_demand_twh:
+  H25:
     2030: 520
-    2035: 540
-    2040: 560
     2045: 580
-  load_profile: "2025-BDEW"
+    load_profile: "2025-BDEW-H25"
+  L25:
+    2030: 480
+    2045: 420
+    load_profile: "2025-BDEW-L25"
+  G25:
+    2030: 500
+    2045: 500
+    load_profile: "2025-BDEW-G25"
+  EMobility:
+    2030: 550
+    2045: 610
+    load_profile: "EMobility-self"
+  heat_pumps:
+    2030: 530
+    2045: 590
+    load_profile: "HeatPumps-self"
 
 # ------------------------------------------------------------------
 # 3. PARAMETER FÜR ERZEUGUNGSPROFILE
@@ -29,19 +42,16 @@ load_parameters:
 generation_profile_parameters:
   time_resolution: "15min"  # viertelstündig
   source: "SMARD"
-  good_year:
-    wind_onshore: 2017
-    wind_offshore: 2017
-    photovoltaics: 2019
-  bad_year:
-    wind_onshore: 2021
-    wind_offshore: 2021
-    photovoltaics: 2016
-  average_year:
-    wind_onshore: 2015
-    wind_offshore: 2015
-    photovoltaics: 2018
+  2030:
+    wind_offshore: "good"
+    wind_onshore: "average"
+    photovoltaic: "good"
+  2045:
+    wind_offshore: "average"
+    wind_onshore: "good"
+    photovoltaic: "bad"
 
+# kommt weg bitte
 
 # ------------------------------------------------------------------
 # 4. ZIEL-KAPAZITÄTEN (ERZEUGUNG)
@@ -51,54 +61,36 @@ generation_profile_parameters:
 generation_capacities_mw:
   Photovoltaik:
     2030: 140000
-    2035: 180000
-    2040: 210000
     2045: 240000
   Wind Onshore:
     2030: 90000
-    2035: 115000
-    2040: 135000
     2045: 150000
   Wind Offshore:
     2030: 40000
-    2035: 55000
-    2040: 70000
     2045: 85000
   Wasserkraft:
     2030: 5000
-    2035: 5000
-    2040: 5000
     2045: 5000
   Biomasse:
     2030: 4500
-    2035: 4500
-    2040: 4500
     2045: 4500
   Erdgas:
     2030: 15000
-    2035: 12000
-    2040: 9000
     2045: 8000
   Steinkohle:
     2030: 0
-    2035: 0
-    2040: 0
     2045: 0
   Braunkohle:
     2030: 0
-    2035: 0
-    2040: 0
     2045: 0
   Kernenergie:
     2030: 0
-    2035: 0
-    2040: 0
     2045: 0
 
-# ------------------------------------------------------------------
-# 5. SPEICHER-EINGABEN
-# Parameter für Batterien und Speichertechnologien
-# ------------------------------------------------------------------
+# ------------------------------------------------------------------ #
+# 5. SPEICHER-EINGABEN                                               #
+# Parameter für Batterien und Speichertechnologien                   #
+# ------------------------------------------------------------------ #
 storage_capacities:
   battery_storage:
     installed_capacity_mwh: 50000   # Speicherkapazität in MWh
