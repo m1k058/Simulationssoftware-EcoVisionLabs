@@ -823,7 +823,7 @@ def speicher_simulieren() -> None:
 
         c1, c2 = st.columns(2)
         e1, e2 = c1.columns(2)
-        bat_cap = e1.number_input("Kapazität [MWh]", 1000.0, 500_000.0, 50_000.0, step=1000.0, key="bat_cap")
+        bat_cap = e1.number_input("Kapazität [MWh]", 0.0, 500_000.0, 50_000.0, step=100.0, key="bat_cap")
         bat_soc_init_pct = e2.slider("Anfangs-SOC [%]", 0, 100, 50, key="bat_soc_init") / 100
         if st.session_state.bat_args_mode == "Basic":
             bat_power = c2.number_input(
