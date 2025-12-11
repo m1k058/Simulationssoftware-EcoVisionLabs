@@ -1082,7 +1082,7 @@ def ergebnisse_speichern() -> None:
 
     @st.cache_data
     def convert_for_download_csv(df: pd.DataFrame) -> bytes:
-        return df.to_csv().encode("utf-8")
+        return df.to_csv(sep=';', decimal=',').encode("utf-8")
 
     if "df_simulation_prod" in st.session_state:
         st.subheader("Produktions Simulation Ergebnisse: ")
