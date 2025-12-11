@@ -127,7 +127,8 @@ def step_5_speicher_simulieren():
     st.session_state.step_index = 4  # Setze aktuellen Step
     
     # Validierung: Defizite müssen analysiert sein
-    if not st.session_state.get("energie_bilanz"):
+    energie_bilanz = st.session_state.get("energie_bilanz")
+    if energie_bilanz is None or (hasattr(energie_bilanz, 'empty') and energie_bilanz.empty):
         st.warning("⚠️ Bitte fülle zuerst die Schritte 1-4 aus!")
         st.stop()
     
