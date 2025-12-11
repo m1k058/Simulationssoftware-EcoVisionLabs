@@ -19,76 +19,103 @@ class ScenarioManager:
         return {
             "metadata": {
                 "name": "Szenario Beispiel",
-                "valid_years_from": 2025,
-                "valid_years_to": 2045,
+                "valid_for_years": [2030, 2045],
                 "description": "Beispielhaftes Szenario mit plausiblen Dummy-Werten zur Simulation.",
-                "version": "1.0",
+                "version": "0.0.0",
                 "author": "SW-Team EcoVisionLabs",
-                "created": datetime.now().isoformat(),
             },
-            "load_parameters": {
-                "target_demand_twh": {
-                    2030: 520,
-                    2035: 540,
-                    2040: 560,
-                    2045: 580,
+            "target_load_demand_twh": {
+                "Haushalt_Basis": {
+                    2030: 130,
+                    2045: 120,
+                    "load_profile": "BDEW-25-Haushalte",
                 },
-                "load_profile": "2025-BDEW",
-            },
-            "generation_profile_parameters": {
-                "time_resolution": "15min",
-                "source": "SMARD",
-                "good_year": {
-                    "wind_onshore": 2017,
-                    "wind_offshore": 2017,
-                    "photovoltaics": 2019,
+                "Gewerbe_Basis": {
+                    2030: 140,
+                    2045: 130,
+                    "load_profile": "BDEW-25-Gewerbe",
                 },
-                "bad_year": {
-                    "wind_onshore": 2021,
-                    "wind_offshore": 2021,
-                    "photovoltaics": 2016,
+                "Industrie_Basis": {
+                    2030: 280,
+                    2045: 350,
+                    "load_profile": "BDEW-25-Industrie",
                 },
-                "average_year": {
-                    "wind_onshore": 2015,
-                    "wind_offshore": 2015,
-                    "photovoltaics": 2018,
+                "EMobility": {
+                    2030: 60,
+                    2045: 140,
+                    "load_profile": "EMobility-self",
+                },
+                "Heat_Pumps": {
+                    2030: 50,
+                    2045: 110,
+                    "load_profile": "HeatPumps-self",
                 },
             },
-            "generation_capacities_mw": {
-                "Photovoltaik": {2030: 140_000, 2035: 180_000, 2040: 210_000, 2045: 240_000},
-                "Wind Onshore": {2030: 90_000, 2035: 115_000, 2040: 135_000, 2045: 150_000},
-                "Wind Offshore": {2030: 40_000, 2035: 55_000, 2040: 70_000, 2045: 85_000},
-                "Wasserkraft": {2030: 5_000, 2035: 5_000, 2040: 5_000, 2045: 5_000},
-                "Biomasse": {2030: 4_500, 2035: 4_500, 2040: 4_500, 2045: 4_500},
-                "Erdgas": {2030: 15_000, 2035: 12_000, 2040: 9_000, 2045: 8_000},
-                "Steinkohle": {2030: 0, 2035: 0, 2040: 0, 2045: 0},
-                "Braunkohle": {2030: 0, 2035: 0, 2040: 0, 2045: 0},
-                "Kernenergie": {2030: 0, 2035: 0, 2040: 0, 2045: 0},
+            "target_generation_capacities_mw": {
+                "Photovoltaik": {2030: 215000, 2045: 400000},
+                "Wind_Onshore": {2030: 115000, 2045: 160000},
+                "Wind_Offshore": {2030: 30000, 2045: 70000},
+                "Biomasse": {2030: 8500, 2045: 6000},
+                "Wasserkraft": {2030: 5000, 2045: 5000},
+                "Erdgas": {2030: 25000, 2045: 40000},
+                "Steinkohle": {2030: 0, 2045: 0},
+                "Braunkohle": {2030: 0, 2045: 0},
+                "Kernenergie": {2030: 0, 2045: 0},
             },
-            "storage_capacities": {
+            "weather_generation_profiles": {
+                2030: {
+                    "Wind_Offshore": "good",
+                    "Wind_Onshore": "average",
+                    "Photovoltaik": "average",
+                },
+                2045: {
+                    "Wind_Offshore": "bad",
+                    "Wind_Onshore": "good",
+                    "Photovoltaik": "good",
+                },
+            },
+            "target_storage_capacities": {
                 "battery_storage": {
-                    "installed_capacity_mwh": 50000,
-                    "max_charge_power_mw": 12000,
-                    "max_discharge_power_mw": 12000,
-                    "charge_efficiency": 0.92,
-                    "discharge_efficiency": 0.92,
-                    "soc": {"initial": 0.55, "min": 0.10, "max": 0.90},
+                    2030: {
+                        "installed_capacity_mwh": 60000,
+                        "max_charge_power_mw": 20000,
+                        "max_discharge_power_mw": 20000,
+                        "initial_soc": 0.5,
+                    },
+                    2045: {
+                        "installed_capacity_mwh": 180000,
+                        "max_charge_power_mw": 60000,
+                        "max_discharge_power_mw": 60000,
+                        "initial_soc": 0.5,
+                    },
                 },
                 "pumped_hydro_storage": {
-                    "installed_capacity_mwh": 180000,
-                    "max_charge_power_mw": 35000,
-                    "max_discharge_power_mw": 35000,
-                    "charge_efficiency": 0.88,
-                    "discharge_efficiency": 0.88,
-                    "soc": {"initial": 0.60, "min": 0.20, "max": 0.95},
+                    2030: {
+                        "installed_capacity_mwh": 40000,
+                        "max_charge_power_mw": 7000,
+                        "max_discharge_power_mw": 7000,
+                        "initial_soc": 0.6,
+                    },
+                    2045: {
+                        "installed_capacity_mwh": 45000,
+                        "max_charge_power_mw": 8000,
+                        "max_discharge_power_mw": 8000,
+                        "initial_soc": 0.6,
+                    },
                 },
                 "h2_storage": {
-                    "installed_capacity_mwh": 250000,
-                    "max_charge_power_mw": 50000,
-                    "max_discharge_power_mw": 50000,
-                    "charge_efficiency": 0.60,
-                    "discharge_efficiency": 0.60,
-                    "soc": {"initial": 0.45, "min": 0.10, "max": 0.90},
+                    2030: {
+                        "installed_capacity_mwh": 500000,
+                        "max_charge_power_mw": 10000,
+                        "max_discharge_power_mw": 10000,
+                        "initial_soc": 0.4,
+                    },
+                    2045: {
+                        "installed_capacity_mwh": 3000000,
+                        "max_charge_power_mw": 60000,
+                        "max_discharge_power_mw": 40000,
+                        "initial_soc": 0.45,
+                    },
                 },
             },
         }
@@ -97,8 +124,8 @@ class ScenarioManager:
         """
         Erstellt einen YAML-String aus Scenario-Daten.
 
-        Erwartet ein Dictionary mit: metadata, load_parameters, generation_profile_parameters,
-        generation_capacities_mw, storage_capacities.
+        Erwartet ein Dictionary mit: metadata, target_load_demand_twh, target_generation_capacities_mw,
+        weather_generation_profiles, target_storage_capacities.
         """
         if "metadata" not in scenario_data or "name" not in scenario_data.get("metadata", {}):
             raise ValueError("Pflichtfeld 'metadata.name' fehlt")
@@ -111,32 +138,26 @@ class ScenarioManager:
             scenario["metadata"].update({
                 "name": meta.get("name", ""),
                 "description": meta.get("description", scenario["metadata"].get("description", "")),
-                "version": meta.get("version", "1.0"),
+                "version": meta.get("version", "0.0.0"),
                 "author": meta.get("author", "SW-Team EcoVisionLabs"),
-                "valid_years_from": meta.get("valid_years_from", 2025),
-                "valid_years_to": meta.get("valid_years_to", 2045),
+                "valid_for_years": meta.get("valid_for_years", [2030, 2045]),
             })
-            scenario["metadata"]["created"] = datetime.now().isoformat()
 
-        # Verbrauchsdaten
-        if "load_parameters" in scenario_data:
-            lp = scenario_data["load_parameters"]
-            if "target_demand_twh" in lp:
-                scenario["load_parameters"]["target_demand_twh"] = lp["target_demand_twh"]
-            if "load_profile" in lp:
-                scenario["load_parameters"]["load_profile"] = lp["load_profile"]
-
-        # Erzeugungsprofile
-        if "generation_profile_parameters" in scenario_data:
-            scenario["generation_profile_parameters"].update(scenario_data["generation_profile_parameters"])
+        # Verbrauchsdaten (pro Sektor)
+        if "target_load_demand_twh" in scenario_data:
+            scenario["target_load_demand_twh"] = scenario_data["target_load_demand_twh"]
 
         # Kapazitäten
-        if "generation_capacities_mw" in scenario_data:
-            scenario["generation_capacities_mw"] = scenario_data["generation_capacities_mw"]
+        if "target_generation_capacities_mw" in scenario_data:
+            scenario["target_generation_capacities_mw"] = scenario_data["target_generation_capacities_mw"]
+
+        # Wetterprofile
+        if "weather_generation_profiles" in scenario_data:
+            scenario["weather_generation_profiles"] = scenario_data["weather_generation_profiles"]
 
         # Speicher
-        if "storage_capacities" in scenario_data:
-            scenario["storage_capacities"] = scenario_data["storage_capacities"]
+        if "target_storage_capacities" in scenario_data:
+            scenario["target_storage_capacities"] = scenario_data["target_storage_capacities"]
 
         return yaml.dump(
             scenario,

@@ -37,14 +37,14 @@ def standard_simulation_page() -> None:
     df_idx = df_erzeugung.set_index("Zeitpunkt")
     df_oneYear = df_idx.loc['2024']
 
+    # Generierungsprofil erstellen
+    df_genProfile = genPro.generate_generation_profile(df_oneYear, df_instErzeugung, True)
+
+    # Simulation durchführen
+
+    # Ergebnisse anzeigen
     st.dataframe(df_oneYear)
     st.dataframe(df_instErzeugung)
-
-    df_genProfile = None
-
-    if st.button("Berechnen"):
-        df_genProfile = genPro.generate_generation_profile(df_oneYear, df_instErzeugung, True)
-
     st.dataframe(df_genProfile)
     
 

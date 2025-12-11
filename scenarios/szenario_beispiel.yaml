@@ -97,15 +97,15 @@ target_generation_capacities_mw:
     2045: 0
 
 # Wetterprofile für erneuerbare Energien
-  weather_profiles:
-    2030:
-      Wind_Offshore: "good"
-      Wind_Onshore: "average"
-      Photovoltaik: "average"
-    2045:
-      Wind_Offshore: "bad"
-      Wind_Onshore: "good"
-      Photovoltaik: "good"
+weather_generation_profiles:
+  2030:
+    Wind_Offshore: "good"
+    Wind_Onshore: "average"
+    Photovoltaik: "average"
+  2045:
+    Wind_Offshore: "bad"
+    Wind_Onshore: "good"
+    Photovoltaik: "good"
 
 # ------------------------------------------------------------------
 # 4. SPEICHER-PARAMETER
