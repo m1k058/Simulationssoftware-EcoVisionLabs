@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional, Union
 from datetime import datetime
 import copy
 import yaml
-
+import pandas as pd
 
 class ScenarioManager:
     """Verwaltet Szenario-Konfigurationen für Simulationen."""
@@ -13,6 +13,10 @@ class ScenarioManager:
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).resolve().parent.parent
         self.output_dir = Path(output_dir) if output_dir else self.base_dir / "scenarios"
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Aktuell geladenes Szenario speichern
+        self.current_scenario: Dict[str, Any] = {}
+        self.current_path: Optional[Path] = None
 
     def default_template(self) -> Dict[str, Any]:
         """Gibt ein plausibles Dummy-Szenario im gewünschten Schema zurück."""
@@ -176,10 +180,28 @@ class ScenarioManager:
         filepath.write_text(yaml_content, encoding="utf-8")
         return filepath
 
-    def load_scenario(self, filepath: Path) -> Dict[str, Any]:
-        """Lädt Szenario aus YAML."""
-        with open(filepath, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+    def load_scenario(self, filepath_or_uploadedfile) -> Dict[str, Any]:
+        """
+        Lädt Szenario aus YAML-Datei oder Streamlit UploadedFile.
+        
+        Args:
+            filepath_or_uploadedfile: Path-Objekt oder Streamlit UploadedFile
+            
+        Returns:
+            Dictionary mit den Szenario-Daten
+        """
+        # Streamlit UploadedFile: direkt vom Stream lesen
+        if hasattr(filepath_or_uploadedfile, 'read'):
+            content = filepath_or_uploadedfile.read().decode("utf-8")
+            self.current_scenario = yaml.safe_load(content)
+            self.current_path = None
+        else:
+            # Normale Datei (Path)
+            with open(filepath_or_uploadedfile, "r", encoding="utf-8") as f:
+                self.current_scenario = yaml.safe_load(f)
+            self.current_path = Path(filepath_or_uploadedfile)
+        
+        return self.current_scenario
 
     def delete_scenario(self, name_or_path: Union[str, Path]) -> bool:
         """Löscht ein Szenario im /scenarios-Ordner. Gibt True zurück, wenn gelöscht."""
@@ -208,3 +230,142 @@ class ScenarioManager:
     def _safe_name(name: str) -> str:
         """Erzeugt einen Dateinamen-freundlichen String."""
         return "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+
+    @property
+    def scenario_name(self) -> Optional[str]:
+        """Gibt Namen des aktuellen Szenarios zurück."""
+        return self.current_scenario.get("metadata", {}).get("name")
+
+    @property
+    def scenario_description(self) -> Optional[str]:
+        """Gibt Beschreibung des aktuellen Szenarios zurück."""
+        return self.current_scenario.get("metadata", {}).get("description")
+
+    @property
+    def scenario_data(self) -> Dict[str, Any]:
+        """Gibt die kompletten Szenario-Daten zurück."""
+        return self.current_scenario
+
+    def get_load_demand(self, sector: Optional[str] = None, year: Optional[int] = None) -> Any:
+        """
+        Holt Verbrauchsdaten aus dem Szenario.
+        
+        Args:
+            sector: Spezifischer Sektor (z.B. 'Haushalt_Basis'). Wenn None, alle Sektoren.
+            year: Spezifisches Jahr. Wenn None, alle Jahre.
+            
+        Returns:
+            Verbrauchsdaten in TWh
+        """
+        load_data = self.current_scenario.get("target_load_demand_twh", {})
+        
+        if sector is None:
+            return load_data
+        if year is None:
+            return load_data.get(sector, {})
+        return load_data.get(sector, {}).get(year)
+
+    def get_generation_capacities(self, tech: Optional[str] = None, year: Optional[int] = None) -> Any:
+        """
+        Holt Erzeugungskapazitäten aus dem Szenario.
+        
+        Args:
+            tech: Spezifische Technologie (z.B. 'Photovoltaik'). Wenn None, alle Technologien.
+            year: Spezifisches Jahr. Wenn None, alle Jahre.
+            
+        Returns:
+            Kapazitäten in MW
+        """
+        gen_data = self.current_scenario.get("target_generation_capacities_mw", {})
+        
+        if tech is None:
+            return gen_data
+        if year is None:
+            return gen_data.get(tech, {})
+        return gen_data.get(tech, {}).get(year)
+
+    def get_storage_capacities(self, storage_type: Optional[str] = None, year: Optional[int] = None) -> Any:
+        """
+        Holt Speicherkapazitäten aus dem Szenario.
+        
+        Args:
+            storage_type: Speichertyp (z.B. 'battery_storage'). Wenn None, alle Typen.
+            year: Spezifisches Jahr. Wenn None, alle Jahre.
+            
+        Returns:
+            Speicherkonfiguration
+        """
+        storage_data = self.current_scenario.get("target_storage_capacities", {})
+        
+        if storage_type is None:
+            return storage_data
+        if year is None:
+            return storage_data.get(storage_type, {})
+        return storage_data.get(storage_type, {}).get(year)
+
+    def get_generation_profile_df(self, year: int, include_conv: bool = False) -> pd.DataFrame:
+        """
+        Konvertiert die target_generation_capacities_mw in ein DataFrame kompatibel mit 
+        der generate_generation_profile() Funktion.
+        
+        Args:
+            year: Das Jahr für das die Kapazitäten extrahiert werden sollen
+            include_conv: Ob konventionelle Energieträger eingebunden werden sollen
+            
+        Returns:
+            pd.DataFrame: Ein DataFrame mit einer Zeile, die die installierten Kapazitäten 
+                         für das angegebene Jahr enthält. Spaltenformat: "[Name] [MW]"
+                         
+        Example:
+            >>> df_capacities = sm.get_generation_profile_df(2030, include_conv=True)
+            >>> # df_capacities hat Spalten wie "Photovoltaik [MW]", "Wind Onshore [MW]" etc.
+        """
+        import pandas as pd
+        from constants import ENERGY_SOURCES, SOURCES_GROUPS
+        
+        # Mapping von Szenario-Namen zu technischen Namen
+        tech_mapping = {
+            "Photovoltaik": "PV",
+            "Wind_Offshore": "WOF",
+            "Wind_Onshore": "WON",
+            "Wasserkraft": "WAS",
+            "Biomasse": "BIO",
+            "Kernenergie": "KE",
+            "Braunkohle": "BK",
+            "Steinkohle": "SK",
+            "Erdgas": "EG",
+        }
+        
+        # Relevante Technologien auswählen
+        if include_conv:
+            relevant_sources = SOURCES_GROUPS["Renewable"] + SOURCES_GROUPS["Conventional"]
+        else:
+            relevant_sources = SOURCES_GROUPS["Renewable"]
+        
+        # Daten vorbereiten - hole ALL technologies für das Jahr
+        gen_capacities_raw = self.current_scenario.get("target_generation_capacities_mw", {})
+        if not gen_capacities_raw:
+            raise ValueError(f"Keine Erzeugungskapazitäten im Szenario gefunden.")
+        
+        # DataFrame-Daten sammeln
+        df_data = {}
+        for tech_short in relevant_sources:
+            if tech_short in ENERGY_SOURCES:
+                col_name = ENERGY_SOURCES[tech_short]["colname_MW"]
+                
+                # Finde den entsprechenden Wert aus dem Szenario für das Jahr
+                scenario_value = 0
+                for scenario_name, tech_short_code in tech_mapping.items():
+                    if tech_short_code == tech_short and scenario_name in gen_capacities_raw:
+                        # gen_capacities_raw[scenario_name] ist ein Dict wie {2030: 215000, 2045: 400000}
+                        year_data = gen_capacities_raw[scenario_name]
+                        if isinstance(year_data, dict) and year in year_data:
+                            scenario_value = year_data[year]
+                        break
+                
+                df_data[col_name] = [scenario_value]
+        
+        # Erstelle DataFrame mit einer Zeile (ähnlich wie SMARD-Instalierte Leistung)
+        df = pd.DataFrame(df_data)
+        
+        return df

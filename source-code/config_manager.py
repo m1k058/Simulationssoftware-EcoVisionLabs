@@ -470,3 +470,7 @@ class ConfigManager:
         print(f"Plot '{plot_cfg['name']}' updated:\n{updates}")
         return plot_cfg
     
+    def get_generation_year(self, tech, scenario="good"):
+        table = self.config.get("GENERATION_SIMULATION", {}).get("optimal_reference_years_by_technology", {})
+        tech_entry = table.get(tech) or {}
+        return tech_entry.get(scenario) or table.get("default")

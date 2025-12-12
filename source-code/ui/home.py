@@ -3,6 +3,7 @@ from pathlib import Path
 import traceback
 from data_manager import DataManager
 from config_manager import ConfigManager
+from scenario_manager import ScenarioManager
 
 
 def load_data_manager() -> bool:
@@ -17,9 +18,11 @@ def load_data_manager() -> bool:
         config_path = Path(__file__).parent.parent / "config.json"
         cfg = ConfigManager(config_path=config_path)
         dm = DataManager(config_manager=cfg)
+        sm = ScenarioManager()
         
         st.session_state.cfg = cfg
         st.session_state.dm = dm
+        st.session_state.sm = sm
         return True
         
     except Exception as e:
@@ -58,18 +61,18 @@ def home_page() -> None:
     st.subheader("Status:")
     
     if is_loaded:
-        st.success(":material/check: DataManager und ConfigManager sind geladen.")
+        st.success(":material/check: DataManager, ConfigManager, ScenarioManager sind geladen.")
     else:
-        st.info(":material/info: DataManager/ConfigManager ist nicht initialisiert.")
+        st.info(":material/info: DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
 
     st.checkbox(":material/bug_report: Debug Modus", value=False, key="debug_mode")
 
     if not is_loaded:
         if st.button(":material/drive_folder_upload: Daten laden", use_container_width=True, type="primary"):
-            with st.spinner("Datenmanager/ConfigManager laden..."):
+            with st.spinner("Datenmanager/ConfigManager/ScenarioManager laden..."):
                 success = load_data_manager()
             if success:
-                st.success("✅ DataManager erfolgreich geladen!")
+                st.success("✅ DataManager, ConfigManager, ScenarioManager erfolgreich geladen!")
                 st.rerun()
             else:
                 st.error("❌ Laden fehlgeschlagen. Siehe Log/Console für Details.")

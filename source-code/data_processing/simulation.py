@@ -2,9 +2,11 @@ import pandas as pd
 import numpy as np
 import data_processing.col as col
 import data_processing.gen as gen
+import data_processing.generation_profile as genPro
 import locale
 from typing import List, Optional
 from data_processing.load_profile import apply_load_profile_to_simulation
+from config_manager import ConfigManager
 
 
 def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
@@ -575,13 +577,187 @@ def simulate_storage_generic(
     return result
 
 
-def simulate_production_scaling(jahrTarget: pd.DataFrame, genProfile: pd.DataFrame) -> pd.DataFrame:
+def simulate_production(
+    cfg: ConfigManager,
+    smardGeneration: pd.DataFrame,
+    smardCapacity: pd.DataFrame,
+    capacity_dict: dict,
+    wind_on_weather: str, wind_off_weather: str, pv_weather: str,
+    simu_jahr: int
+) -> pd.DataFrame:
+    
     """
-    Skaliert ein Produktionsprofil basierend auf einem Ziel-Installierte-Leistung-DataFrame und einem Referenzjahresprofil (Werte von 0-1 nach auslastung der Erzeuger).
+    Simuliert die Energieproduktion für alle Technologien basierend auf SMARD-Daten
+    und Ziel-Installierte-Leistung für ein Simulationsjahr.
     
     Args:
-        jahrTarget: DataFrame mit Ziel installierter Leistung pro Erzeuger in dem Simulationsjahr.
-        genProfile: DataFrame mit Referenz Erzeugungsprofil für das Vergleichsjahr.
+        smardGeneration: DataFrame mit SMARD Erzeugungsdaten (Kapazitätsfaktoren 0-1)
+        smardCapacity: DataFrame mit installierten Kapazitäten im Referenzjahr
+        capacity_dict: Dictionary mit Format:
+                      {"Photovoltaik":{"2030":150000,"2045":385000}, 
+                       "Wind_Onshore":{"2030":81000,"2045":145000},
+                       ...} (Werte in MW)
+        wind_on_weather: Weather-Profil für Wind Onshore ("good", "average", "bad")
+        wind_off_weather: Weather-Profil für Wind Offshore ("good", "average", "bad")
+        pv_weather: Weather-Profil für Photovoltaik ("good", "average", "bad")
+        simu_jahr: Das Zieljahr für die Simulation
+    
+    Returns:
+        DataFrame mit skalierter Energieproduktion für alle Technologien im Simulationsjahr
     """
 
+    # Suche Referenzjahre für das filtern der SMARD-Daten
+    windOn_smard_ref_jahr = cfg.get_generation_year("Wind_Onshore", wind_on_weather)
+    windOff_smard_ref_jahr = cfg.get_generation_year("Wind_Offshore", wind_off_weather)
+    pv_smard_ref_jahr = cfg.get_generation_year("Photovoltaik", pv_weather)
+    ref_jahr = cfg.config["GENERATION_SIMULATION"]["optimal_reference_years_by_technology"]["default"]
+
+    # Bereite SMARD-Daten vor
+    smardGeneration = smardGeneration.set_index("Zeitpunkt")
+    smardGeneration.index = pd.to_datetime(smardGeneration.index)
+
+    df_windOn_ref = smardGeneration.loc[str(windOn_smard_ref_jahr)].copy()
+    df_windOff_ref = smardGeneration.loc[str(windOff_smard_ref_jahr)].copy()
+    df_pv_ref = smardGeneration.loc[str(pv_smard_ref_jahr)].copy()
+    df_ref = smardGeneration.loc[str(ref_jahr)].copy()
+
+    df_windOn_refCap = smardCapacity[smardCapacity["Jahr"] == windOn_smard_ref_jahr]
+    df_windOff_refCap = smardCapacity[smardCapacity["Jahr"] == windOff_smard_ref_jahr]
+    df_pv_refCap = smardCapacity[smardCapacity["Jahr"] == pv_smard_ref_jahr]
+    df_refCap = smardCapacity[smardCapacity["Jahr"] == ref_jahr]
+
+    # bereite ziel Kapazitäten für simu_jahr vor
     
+
+    # generiere GeneratioProfile für alle Technologien
+
+    # Wind Onshore
+    df_windOn_Profile = genPro.generate_generation_profile(
+                            df_windOn_ref,
+                            df_windOn_refCap,
+                            False
+                            )
+    
+    # Wind Offshore
+    df_windOff_Profile = genPro.generate_generation_profile(
+                            df_windOff_ref,
+                            df_windOff_refCap,
+                            False
+                            )
+    
+    # Photovoltaik
+    df_pv_Profile = genPro.generate_generation_profile(
+                            df_pv_ref,
+                            df_pv_refCap,
+                            False
+                            )
+    
+    # Sonstige Technologien (Braunkohle, Steinkohle, Erdgas, Kernenergie, Wasserkraft, Biomasse)
+    df_other_Profile = genPro.generate_generation_profile(
+                            df_ref,
+                            df_refCap,
+                            True
+                            )
+    
+    # Simuliere Produktion für alle Technologien
+
+    # Konvertiere target_year zu String für Dictionary-Zugriff
+    target_year_str = str(simu_jahr)
+    target_year_int = int(simu_jahr)
+    
+    # Initialisiere Ergebnis-DataFrame mit Zeitpunkt-Spalte
+    df_result = pd.DataFrame()
+    if 'Zeitpunkt' in df_windOn_Profile.columns:
+        df_result['Zeitpunkt'] = df_windOn_Profile['Zeitpunkt'].copy()
+    elif 'Zeitpunkt' in df_windOff_Profile.columns:
+        df_result['Zeitpunkt'] = df_windOff_Profile['Zeitpunkt'].copy()
+    elif 'Zeitpunkt' in df_pv_Profile.columns:
+        df_result['Zeitpunkt'] = df_pv_Profile['Zeitpunkt'].copy()
+    elif 'Zeitpunkt' in df_other_Profile.columns:
+        df_result['Zeitpunkt'] = df_other_Profile['Zeitpunkt'].copy()
+    else:
+        # Wenn keine Zeitpunkt-Spalte, nutze Index von einem der Profile
+        df_result['Zeitpunkt'] = df_windOn_Profile.index
+    
+    # Verarbeitungsfaktor: 0.25 für Viertelstunden
+    quarter_hour_factor = 0.25
+    
+    # 1. Wind Onshore
+    if 'Wind_Onshore' in capacity_dict:
+        target_capacity = capacity_dict['Wind_Onshore'].get(target_year_str, 
+                         capacity_dict['Wind_Onshore'].get(target_year_int, 0))
+        if target_capacity > 0:
+            # Suche nach passender Spalte (mit verschiedenen Namensformaten)
+            possible_cols = ['Wind Onshore [MWh]', 'Wind_Onshore [MWh]', 'Wind Onshore', 'Wind_Onshore', 'Onshore [MWh]']
+            wind_on_col = None
+            for col in possible_cols:
+                if col in df_windOn_Profile.columns:
+                    wind_on_col = col
+                    break
+            
+            if wind_on_col:
+                df_result['Wind Onshore [MWh]'] = (
+                    df_windOn_Profile[wind_on_col].values * target_capacity * quarter_hour_factor
+                )
+    
+    # 2. Wind Offshore
+    if 'Wind_Offshore' in capacity_dict:
+        target_capacity = capacity_dict['Wind_Offshore'].get(target_year_str,
+                         capacity_dict['Wind_Offshore'].get(target_year_int, 0))
+        if target_capacity > 0:
+            # Suche nach passender Spalte (mit verschiedenen Namensformaten)
+            possible_cols = ['Wind Offshore [MWh]', 'Wind_Offshore [MWh]', 'Wind Offshore', 'Wind_Offshore', 'Offshore [MWh]']
+            wind_off_col = None
+            for col in possible_cols:
+                if col in df_windOff_Profile.columns:
+                    wind_off_col = col
+                    break
+            
+            if wind_off_col:
+                df_result['Wind Offshore [MWh]'] = (
+                    df_windOff_Profile[wind_off_col].values * target_capacity * quarter_hour_factor
+                )
+    
+    # 3. Photovoltaik
+    if 'Photovoltaik' in capacity_dict:
+        target_capacity = capacity_dict['Photovoltaik'].get(target_year_str,
+                         capacity_dict['Photovoltaik'].get(target_year_int, 0))
+        if target_capacity > 0:
+            # Suche nach passender Spalte
+            possible_cols = ['Photovoltaik [MWh]', 'PV [MWh]', 'Photovoltaik', 'Solar [MWh]']
+            pv_col = None
+            for col in possible_cols:
+                if col in df_pv_Profile.columns:
+                    pv_col = col
+                    break
+            
+            if pv_col:
+                df_result['Photovoltaik [MWh]'] = (
+                    df_pv_Profile[pv_col].values * target_capacity * quarter_hour_factor
+                )
+    
+    # 4. Alle anderen Technologien aus df_other_Profile
+    other_technologies = [
+        'Biomasse', 'Wasserkraft', 'Erdgas', 'Steinkohle', 'Braunkohle', 
+        'Kernenergie', 'Sonstige Erneuerbare'
+    ]
+    
+    for tech in other_technologies:
+        tech_col_name = f'{tech} [MWh]'
+        if tech in capacity_dict and tech_col_name in df_other_Profile.columns:
+            target_capacity = capacity_dict[tech].get(target_year_str,
+                             capacity_dict[tech].get(target_year_int, 0))
+            if target_capacity > 0:
+                df_result[tech_col_name] = (
+                    df_other_Profile[tech_col_name].values * target_capacity * quarter_hour_factor
+                )
+    
+    # Setze das Jahr in der Zeitpunkt-Spalte auf das Simulationsjahr
+    if 'Zeitpunkt' in df_result.columns:
+        df_result['Zeitpunkt'] = pd.to_datetime(df_result['Zeitpunkt'])
+        # Ersetze das Jahr durch das Simulationsjahr
+        df_result['Zeitpunkt'] = df_result['Zeitpunkt'].apply(
+            lambda x: x.replace(year=simu_jahr)
+        )
+    
+    return df_result
