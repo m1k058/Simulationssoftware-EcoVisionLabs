@@ -12,7 +12,6 @@ import data_processing.col as col
 def standard_simulation_page() -> None:
     st.title("Simulation")
     st.caption("Eine Vollständige Simulation basierend auf vordefinierten Studien und Parametern.")
-    st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung und dient nur Demonstrationszwecken.")
     sidebar = st.sidebar
     
     # Überprüfe ob DataManager, ConfigManager, ScenarioManager geladen sind
@@ -215,6 +214,7 @@ def standard_simulation_page() -> None:
     ## =================================== ##
 
     st.markdown("## Verbrauchssimulation")
+    st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung.")
 
     ## ================================== ##
     ##                                    ##
@@ -268,21 +268,54 @@ def standard_simulation_page() -> None:
             )
             results[year] = df_res
         
+        # Anzeige der Ergebnisse Tabele/visuell
+
+        tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"])
+
         # Tabs erstellen und DataFrames anzeigen
-        tabs = st.tabs([str(year) for year in years])
-        for tab, year in zip(tabs, years):
-            with tab:
-                st.subheader(f"Erzeugungssimulation {year}")
-                st.dataframe(results[year], use_container_width=True)
-                # Konvertiere zu CSV mit ; als Separator und , als Dezimalzeichen
-                csv_data = results[year].to_csv(
-                    index=False, 
-                    sep=';', 
-                    decimal=','
-                ).encode('utf-8')
-                st.download_button(
-                    label="Download als CSV",
-                    data=csv_data,
-                    file_name=f'erzeugungssimulation_{year}.csv',
-                    mime='text/csv'
-                )
+        with tab1:
+            selected_year_str = st.segmented_control(
+                "Bitte Jahr auswählen",
+                [str(year) for year in years],
+                default=str(years[0]),
+                selection_mode="single"
+            )
+            # Konvertiere die Auswahl zurück zu int (falls Jahre als int vorliegen)
+            try:
+                selected_year = int(selected_year_str)
+            except (ValueError, TypeError):
+                selected_year = years[0]
+
+            st.subheader(f"Erzeugungssimulation {selected_year}")
+            st.dataframe(results[selected_year], use_container_width=True)
+            # Konvertiere zu CSV mit ; als Separator und , als Dezimalzeichen
+            csv_data = results[selected_year].to_csv(
+                index=False,
+                sep=';',
+                decimal=','
+            ).encode('utf-8')
+            st.download_button(
+                label="Download als CSV",
+                data=csv_data,
+                file_name=f'erzeugungssimulation_{selected_year}.csv',
+                mime='text/csv'
+            )
+
+        with tab2:
+            selected_year_str_viz = st.segmented_control(
+                "Bitte Jahr auswählen",
+                [str(year) for year in years],
+                default=str(years[0]),
+                selection_mode="single"
+            )
+            try:
+                selected_year_viz = int(selected_year_str_viz)
+            except (ValueError, TypeError):
+                selected_year_viz = years[0]
+
+            st.subheader(f"Visuelle Darstellung {selected_year_viz}")
+            # Einfache visuelle Darstellung (z. B. Linienplot, falls Zeitreihen vorhanden)
+            try:
+                st.line_chart(results[selected_year_viz].set_index(results[selected_year_viz].columns[0]))
+            except Exception:
+                st.write("Visualisierung wird später ergänzt.")

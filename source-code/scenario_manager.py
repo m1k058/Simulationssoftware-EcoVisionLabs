@@ -18,8 +18,8 @@ class ScenarioManager:
         self.current_scenario: Dict[str, Any] = {}
         self.current_path: Optional[Path] = None
 
-    def default_template(self) -> Dict[str, Any]:
-        """Gibt ein plausibles Dummy-Szenario im gewünschten Schema zurück."""
+    def _static_default_template(self) -> Dict[str, Any]:
+        """Fallback-Dummy-Szenario, falls die Beispiel-YAML fehlt."""
         return {
             "metadata": {
                 "name": "Szenario Beispiel",
@@ -29,31 +29,11 @@ class ScenarioManager:
                 "author": "SW-Team EcoVisionLabs",
             },
             "target_load_demand_twh": {
-                "Haushalt_Basis": {
-                    2030: 130,
-                    2045: 120,
-                    "load_profile": "BDEW-25-Haushalte",
-                },
-                "Gewerbe_Basis": {
-                    2030: 140,
-                    2045: 130,
-                    "load_profile": "BDEW-25-Gewerbe",
-                },
-                "Industrie_Basis": {
-                    2030: 280,
-                    2045: 350,
-                    "load_profile": "BDEW-25-Industrie",
-                },
-                "EMobility": {
-                    2030: 60,
-                    2045: 140,
-                    "load_profile": "EMobility-self",
-                },
-                "Heat_Pumps": {
-                    2030: 50,
-                    2045: 110,
-                    "load_profile": "HeatPumps-self",
-                },
+                "Haushalt_Basis": {2030: 130, 2045: 120, "load_profile": "BDEW-25-Haushalte"},
+                "Gewerbe_Basis": {2030: 140, 2045: 130, "load_profile": "BDEW-25-Gewerbe"},
+                "Industrie_Basis": {2030: 280, 2045: 350, "load_profile": "BDEW-25-Industrie"},
+                "EMobility": {2030: 60, 2045: 140, "load_profile": "EMobility-self"},
+                "Heat_Pumps": {2030: 50, 2045: 110, "load_profile": "HeatPumps-self"},
             },
             "target_generation_capacities_mw": {
                 "Photovoltaik": {2030: 215000, 2045: 400000},
@@ -67,16 +47,8 @@ class ScenarioManager:
                 "Kernenergie": {2030: 0, 2045: 0},
             },
             "weather_generation_profiles": {
-                2030: {
-                    "Wind_Offshore": "good",
-                    "Wind_Onshore": "average",
-                    "Photovoltaik": "average",
-                },
-                2045: {
-                    "Wind_Offshore": "bad",
-                    "Wind_Onshore": "good",
-                    "Photovoltaik": "good",
-                },
+                2030: {"Wind_Offshore": "good", "Wind_Onshore": "average", "Photovoltaik": "average"},
+                2045: {"Wind_Offshore": "bad", "Wind_Onshore": "good", "Photovoltaik": "good"},
             },
             "target_storage_capacities": {
                 "battery_storage": {
@@ -123,6 +95,20 @@ class ScenarioManager:
                 },
             },
         }
+
+    def default_template(self) -> Dict[str, Any]:
+        """Lädt das Beispiel-Szenario aus /scenarios/Szenario_Beispiel_SW.yaml, Fallback auf statisch."""
+        example_path = self.base_dir / "scenarios" / "Szenario_Beispiel_SW.yaml"
+        if example_path.exists():
+            try:
+                with open(example_path, "r", encoding="utf-8") as f:
+                    loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    return copy.deepcopy(loaded)
+            except Exception:
+                # Im Fehlerfall auf statische Defaults zurückfallen
+                pass
+        return self._static_default_template()
 
     def create_scenario_yaml(self, scenario_data: Dict[str, Any]) -> str:
         """
