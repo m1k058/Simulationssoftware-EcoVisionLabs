@@ -8,10 +8,10 @@
     "DATAFRAMES": [
         {
             "id": 0,
-            "name": "SMARD_2015-2020_Erzeugung",
-            "path": "..\\raw-data\\Realisierte_Erzeugung_2015-2020.csv",
+            "name": "SMARD_2015-2019_Erzeugung",
+            "path": "..\\raw-data\\Realisierte_Erzeugung_2015-2019.csv",
             "datatype": "SMARD",
-            "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2020"
+            "description": "Daten für Stromerzeugung verschiedener Quellen 2015-2019"
         },
         {
             "id": 1,
@@ -22,24 +22,59 @@
         },
         {
             "id": 2,
+            "name": "SMARD_2015-2019_Verbrauch",
+            "path": "..\\raw-data\\Realisierter_Stromverbrauch_2015-2019.csv",
+            "datatype": "SMARD-V",
+            "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2015-2019"
+        },
+        {
+            "id": 3,
             "name": "SMARD_2020-2025_Verbrauch",
             "path": "..\\raw-data\\Realisierter_Stromverbrauch_2020-2025.csv",
             "datatype": "SMARD-V",
             "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2020-heute"
         },
         {
-            "id": 3,
-            "name": "SMARD_2015-2020_Verbrauch",
-            "path": "..\\raw-data\\Realisierter_Stromverbrauch_2015-2020.csv",
-            "datatype": "SMARD-V",
-            "description": "Daten für realisierten Stromverbrauch verschiedener Quellen 2015-2020"
+            "id": 4,
+            "name": "SMARD_Installierte Leistung 2015-2019",
+            "path": "..\\raw-data\\Instalierte_Leistung_2015-2019.csv",
+            "datatype": "SMARD-Inst",
+            "description": "Daten für installierte Leistung verschiedener Quellen 2015-2019"
         },
         {
-            "id": 4,
+            "id": 5,
+            "name": "SMARD_Installierte Leistung 2020-2025",
+            "path": "..\\raw-data\\Instalierte_Leistung_2020-2025.csv",
+            "datatype": "SMARD-Inst",
+            "description": "Daten für installierte Leistung verschiedener Quellen 2020-2025"
+        },
+        {
+            "id": 6,
             "name": "Erzeugungs/Verbrauchs Prognose Daten",
             "path": "..\\raw-data\\Prognosedaten_Studien.csv",
             "datatype": "CUST_PROG",
             "description": "Daten für Erzeugungs- und Verbrauchsprognosen verschiedener Studien"
+        },
+        {
+            "id": 7,
+            "name": "Verbrauchsprofil Haushalte BDEW",
+            "path": "..\\raw-data\\BDEW-Standardlastprofile-H25.csv",
+            "datatype": "BDEW-Last",
+            "description": "Verbrauchsprofil Haushalte BDEW"
+        },
+        {
+            "id": 8,
+            "name": "Verbrauchsprofil Gewerbe BDEW",
+            "path": "..\\raw-data\\BDEW-Standardlastprofile-G25.csv",
+            "datatype": "BDEW-Last",
+            "description": "Verbrauchsprofil Gewerbe BDEW"
+        },
+        {
+            "id": 9,
+            "name": "Verbrauchsprofil Landwirtschaft BDEW",
+            "path": "..\\raw-data\\BDEW-Standardlastprofile-L25.csv",
+            "datatype": "BDEW-Last",
+            "description": "Verbrauchsprofil Landwirtschaft BDEW"
         }
     ],
     "PLOTS": [
@@ -107,5 +142,25 @@
             "plot_type": "histogram",
             "description": "Plot for testing Histogram of renewable energy share in consumption"
         }
-    ]
+    ],
+    "GENERATION_SIMULATION": {
+        "optimal_reference_years_by_technology": {
+            "Wind_Onshore": {
+                "good": 2023,
+                "average": 2023,
+                "bad": 2023
+            },            
+            "Wind_Offshore": {
+                "good": 2023,
+                "average": 2023,
+                "bad": 2023
+            },
+            "Photovoltaik": {
+                "good": 2023,
+                "average": 2023,
+                "bad": 2023
+            },
+            "default": 2022
+        }
+    }
 }

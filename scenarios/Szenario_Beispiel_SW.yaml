@@ -1,0 +1,100 @@
+metadata:
+  name: Szenario Beispiel
+  valid_for_years:
+  - 2030
+  - 2045
+  description: Beispielhaftes Szenario mit plausiblen Dummy-Werten zur Simulation.
+  version: '1.0'
+  author: SW-Team EcoVisionLabs
+target_load_demand_twh:
+  Haushalt_Basis:
+    load_profile: BDEW-25-Haushalte
+    2030: 0.0
+    2045: 0.0
+  Gewerbe_Basis:
+    load_profile: BDEW-25-Gewerbe
+    2030: 0.0
+    2045: 0.0
+  Industrie_Basis:
+    load_profile: BDEW-25-Industrie
+    2030: 0.0
+    2045: 0.0
+  EMobility:
+    load_profile: ''
+    2030: 0.0
+    2045: 0.0
+  Heat_Pumps:
+    load_profile: ''
+    2030: 0.0
+    2045: 0.0
+target_generation_capacities_mw:
+  Photovoltaik:
+    2030: 150000.0
+    2045: 385000.0
+  Wind_Onshore:
+    2030: 81000.0
+    2045: 145000.0
+  Wind_Offshore:
+    2030: 25000.0
+    2045: 70000.0
+  Biomasse:
+    2030: 7000.0
+    2045: 2000.0
+  Wasserkraft:
+    2030: 6000.0
+    2045: 6000.0
+  Erdgas:
+    2030: 43000.0
+    2045: 71000.0
+  Steinkohle:
+    2030: 3000.0
+    2045: 0.0
+  Braunkohle:
+    2030: 3000.0
+    2045: 0.0
+  Kernenergie:
+    2030: 0.0
+    2045: 0.0
+weather_generation_profiles:
+  2030:
+    Wind_Onshore: average
+    Wind_Offshore: good
+    Photovoltaik: average
+  2045:
+    Wind_Onshore: good
+    Wind_Offshore: bad
+    Photovoltaik: good
+target_storage_capacities:
+  battery_storage:
+    2030:
+      installed_capacity_mwh: 0.0
+      max_charge_power_mw: 0.0
+      max_discharge_power_mw: 0.0
+      initial_soc: 0.0
+    2045:
+      installed_capacity_mwh: 0.0
+      max_charge_power_mw: 0.0
+      max_discharge_power_mw: 0.0
+      initial_soc: 0.0
+  pumped_hydro_storage:
+    2030:
+      installed_capacity_mwh: 0.0
+      max_charge_power_mw: 0.0
+      max_discharge_power_mw: 0.0
+      initial_soc: 0.0
+    2045:
+      installed_capacity_mwh: 0.0
+      max_charge_power_mw: 0.0
+      max_discharge_power_mw: 0.0
+      initial_soc: 0.0
+  h2_storage:
+    2030:
+      installed_capacity_mwh: 0.0
+      max_charge_power_mw: 0.0
+      max_discharge_power_mw: 0.0
+      initial_soc: 0.0
+    2045:
+      installed_capacity_mwh: 0.0
+      max_charge_power_mw: 0.0
+      max_discharge_power_mw: 0.0
+      initial_soc: 0.0

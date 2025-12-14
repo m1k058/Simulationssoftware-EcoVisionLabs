@@ -2,7 +2,6 @@ import streamlit as st
 from pathlib import Path
 import pandas as pd
 from scenario_manager import ScenarioManager
-from . import set_mode
 
 
 LOAD_PROFILE_OPTIONS = [
@@ -19,376 +18,389 @@ def ensure_state(sm: ScenarioManager) -> None:
         st.session_state["scenario_editor"] = sm.default_template()
 
 
+def _show_year_modal() -> list:
+    """Modal zur Jahreseingabe - blockiert den Rest der Seite."""
+    if "years_confirmed" not in st.session_state:
+        st.session_state["years_confirmed"] = False
+    
+    if not st.session_state["years_confirmed"]:
+        with st.container():
+            st.markdown("---")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.markdown("## :material/date_range: Jahre auswählen")
+                st.markdown("Bitte geben Sie die Jahre ein, für die das Szenario gelten soll.")
+                
+                available_years = list(range(2020, 2051))
+                default_years = [2030, 2045]
+                
+                selected_years = st.multiselect(
+                    "Verfügbare Jahre (2020-2050)",
+                    options=available_years,
+                    default=default_years,
+                    help="Wählen Sie aus der Liste oder geben Sie Jahre ein.",
+                    key="modal_years_select"
+                )
+                
+                extra_years_text = st.text_input(
+                    "Weitere Jahre (kommagetrennt)",
+                    value="",
+                    placeholder="z.B. 2055, 2060, 2070",
+                    help="Für Jahre außerhalb der Liste (2020-2050)",
+                    key="modal_years_extra"
+                )
+                
+                parsed_extra_years = []
+                if extra_years_text.strip():
+                    for part in extra_years_text.replace(";", ",").split(","):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        try:
+                            parsed_extra_years.append(int(part))
+                        except ValueError:
+                            pass
+                
+                valid_years = sorted(set(selected_years + parsed_extra_years)) or [2030, 2045]
+                
+                st.markdown(f"**Aktivierte Jahre:** {', '.join(map(str, valid_years))}")
+                
+                if st.button("✅ Jahre bestätigen", use_container_width=True, key="confirm_years"):
+                    st.session_state["years_confirmed"] = True
+                    st.session_state["valid_years"] = valid_years
+                    st.rerun()
+            
+            st.markdown("---")
+        st.stop()  # Seitenladevorgang stoppen, bis Jahre bestätigt sind
+    
+    return st.session_state.get("valid_years", [2030, 2045])
 
 
-
-def show_scenario_generation() -> None:
-    st.title("Szenario Editor")
+def scenario_generation_page() -> None:
+    st.title("Szenario Editor :material/edit_note:")
     st.caption("Szenarien erstellen und als YAML herunterladen.")
 
     sm = ScenarioManager()
     ensure_state(sm)
 
+    # === MODAL: JAHRE ZUERST ABFRAGEN ===
+    valid_years = _show_year_modal()
+
+    # Schneller Reset auf die Beispielwerte aus der Vorlage
+    if st.button(":material/lab_profile: Beispielwerte laden", use_container_width=True):
+        st.session_state["scenario_editor"] = sm.default_template()
+        st.session_state.pop("storage_values", None)
+        st.rerun()
+
     data = st.session_state["scenario_editor"]
 
-    with st.form("scenario_form"):
-        # === METADATEN ===
-        st.subheader("Metadaten")
-        name = st.text_input("Name", value=data.get("metadata", {}).get("name", ""))
-        description = st.text_area("Beschreibung", value=data.get("metadata", {}).get("description", ""), height=80)
-        col_meta1, col_meta2 = st.columns(2)
-        with col_meta1:
-            valid_years_from = st.number_input(
-                "Gültig ab Jahr",
-                value=int(data.get("metadata", {}).get("valid_years_from", 2025)),
-                step=1,
-            )
-            version = st.text_input("Version", value=str(data.get("metadata", {}).get("version", "1.0")))
-        with col_meta2:
-            valid_years_to = st.number_input(
-                "Gültig bis Jahr",
-                value=int(data.get("metadata", {}).get("valid_years_to", 2045)),
-                step=1,
-            )
-            author = st.text_input("Autor", value=str(data.get("metadata", {}).get("author", "SW-Team EcoVisionLabs")))
+    # === METADATEN ===
+    st.subheader("Metadaten")
+    name = st.text_input("Name", value=data.get("metadata", {}).get("name", ""))
+    description = st.text_area("Beschreibung", value=data.get("metadata", {}).get("description", ""), height=80)
+    col_meta1, col_meta2 = st.columns(2)
+    with col_meta1:
+        version = st.text_input("Version", value=str(data.get("metadata", {}).get("version", "1.0")))
+    with col_meta2:
+        author = st.text_input("Autor", value=str(data.get("metadata", {}).get("author", "SW-Team EcoVisionLabs")))
 
-        st.markdown("---")
+    st.markdown("---")
 
-        # === LASTPROFIL ===
-        st.subheader("Last (Verbrauch)")
-        load_profile = st.selectbox(
-            "Lastprofil",
-            options=LOAD_PROFILE_OPTIONS,
-            index=LOAD_PROFILE_OPTIONS.index(data.get("load_parameters", {}).get("load_profile", LOAD_PROFILE_OPTIONS[0]))
-            if data.get("load_parameters", {}).get("load_profile") in LOAD_PROFILE_OPTIONS else 0,
+    # === LASTPROFIL ===
+    st.subheader("Last (Verbrauch) - pro Sektor")
+    load_params = data.get("target_load_demand_twh", {})
+    
+    # Sektoren definieren
+    sectors = {
+        "Haushalt_Basis": "Haushalte (Standardlastprofil)",
+        "Gewerbe_Basis": "Gewerbe",
+        "Industrie_Basis": "Industrie",
+        "EMobility": "Elektromobilität",
+        "Heat_Pumps": "Wärmepumpen (Gebäudewärme)",
+    }
+    
+    target_load_demand_twh = {}
+    for sector_key, sector_label in sectors.items():
+        st.markdown(f"**{sector_label}**")
+        sector_data = load_params.get(sector_key, {})
+        load_profile = st.text_input(
+            f"Lastprofil für {sector_key}",
+            value=sector_data.get("load_profile", ""),
+            key=f"lp_{sector_key}",
         )
-        if load_profile == "Benutzerdefiniert":
-            load_profile = st.text_input("Benutzerdef. Lastprofil", value="")
 
-        st.markdown("**Zielwerte [TWh]** - Jahre und Werte eingeben")
-        existing_demand = data.get("load_parameters", {}).get("target_demand_twh", {})
-        base_years = {2030, 2045}
-        demand_rows = []
-        all_years = sorted(base_years.union(existing_demand.keys()))
-        for y in all_years:
-            demand_rows.append({"Jahr": int(y), "Zielverbrauch [TWh]": float(existing_demand.get(y, 0.0))})
-        demand_df = pd.DataFrame(demand_rows).drop_duplicates(subset=["Jahr"], keep="first")
-        edited_demand = st.data_editor(demand_df, use_container_width=True, num_rows="dynamic", key="demand_editor")
+        demand_cols = st.columns(len(valid_years) if valid_years else 2)
+        sector_demands = {}
+        for idx, year in enumerate(valid_years if valid_years else [2030, 2045]):
+            with demand_cols[idx]:
+                demand_val = sector_data.get(year, 0.0)
+                sector_demands[year] = st.number_input(
+                    f"TWh ({year})",
+                    value=float(demand_val),
+                    step=10.0,
+                    key=f"demand_{sector_key}_{year}",
+                )
 
-        st.markdown("---")
+        target_load_demand_twh[sector_key] = {"load_profile": load_profile, **sector_demands}
 
-        # === ERZEUGUNGSPROFILE ===
-        st.subheader("Erzeugungsprofile (SMARD-Daten)")
-        col_gp1, col_gp2 = st.columns(2)
-        with col_gp1:
-            time_resolution = st.selectbox(
-                "Zeitauflösung",
-                options=TIME_RES_OPTIONS,
-                index=TIME_RES_OPTIONS.index(data.get("generation_profile_parameters", {}).get("time_resolution", "15min"))
-                if data.get("generation_profile_parameters", {}).get("time_resolution") in TIME_RES_OPTIONS else 0,
+    st.markdown("---")
+
+    # === ZIEL-KAPAZITÄTEN ===
+    st.subheader("Ziel-Kapazitäten [MW]")
+    
+    years_to_show = valid_years if valid_years else [2030, 2045]
+    
+    # Standard-Technologien definieren
+    default_techs = [
+        "Photovoltaik", "Wind_Onshore", "Wind_Offshore", "Biomasse",
+        "Wasserkraft", "Erdgas", "Steinkohle", "Braunkohle", "Kernenergie"
+    ]
+    
+    # Initialisiere cap_values in session_state
+    if "cap_values" not in st.session_state:
+        st.session_state["cap_values"] = {}
+        for y in years_to_show:
+            st.session_state["cap_values"][y] = {tech: 0.0 for tech in default_techs}
+    
+    # Stelle sicher, dass neue Jahre auch Einträge haben
+    for y in years_to_show:
+        if y not in st.session_state["cap_values"]:
+            st.session_state["cap_values"][y] = {tech: 0.0 for tech in default_techs}
+    
+    
+    
+    # Header-Zeile (Jahre)
+    header_cols = st.columns([2] + [1.5] * len(years_to_show))
+    header_cols[0].write("**Technologie**")
+    for idx, year in enumerate(years_to_show):
+        header_cols[idx + 1].write(f"**{year}**")
+    
+    # Daten-Zeilen (Technologien)
+    for tech in default_techs:
+        row_cols = st.columns([2] + [1.5] * len(years_to_show))
+        row_cols[0].write(f"**{tech} [MW]**")
+        for idx, year in enumerate(years_to_show):
+            st.session_state["cap_values"][year][tech] = row_cols[idx + 1].number_input(
+                f"{tech}_{year}",
+                value=st.session_state["cap_values"][year].get(tech, 0.0),
+                step=1000.0,
+                label_visibility="collapsed",
+                key=f"cap_{year}_{tech}"
             )
-        with col_gp2:
-            source = st.selectbox(
-                "Quelle",
-                options=GEN_SOURCES,
-                index=GEN_SOURCES.index(data.get("generation_profile_parameters", {}).get("source", "SMARD"))
-                if data.get("generation_profile_parameters", {}).get("source") in GEN_SOURCES else 0,
-            )
+    
+    # Konvertiere für später (altes Format)
+    rows = []
+    for y in years_to_show:
+        row = {"Jahr": int(y)}
+        for tech in default_techs:
+            row[tech] = st.session_state["cap_values"][y].get(tech, 0.0)
+        rows.append(row)
+    edited_cap = pd.DataFrame(rows)
+    
+    st.markdown("---")
 
-        st.markdown("**Referenz-Jahre für Profile**")
-        gen_profiles = data.get("generation_profile_parameters", {})
-        good_y = gen_profiles.get("good_year", {})
-        bad_y = gen_profiles.get("bad_year", {})
-        avg_y = gen_profiles.get("average_year", {})
-
-        ref_df_data = {
-            "Typ": ["Gutes Jahr", "Schlechtes Jahr", "Durchschnittsjahr"],
-            "Wind Onshore": [
-                int(good_y.get("wind_onshore", 0)),
-                int(bad_y.get("wind_onshore", 0)),
-                int(avg_y.get("wind_onshore", 0)),
-            ],
-            "Wind Offshore": [
-                int(good_y.get("wind_offshore", 0)),
-                int(bad_y.get("wind_offshore", 0)),
-                int(avg_y.get("wind_offshore", 0)),
-            ],
-            "Photovoltaik": [
-                int(good_y.get("photovoltaics", 0)),
-                int(bad_y.get("photovoltaics", 0)),
-                int(avg_y.get("photovoltaics", 0)),
-            ],
-        }
-        ref_df = pd.DataFrame(ref_df_data)
-        edited_ref = st.data_editor(ref_df, use_container_width=True, disabled=["Typ"], key="ref_editor")
-
-        st.markdown("---")
-
-        # === ZIEL-KAPAZITÄTEN ===
-        st.subheader("Ziel-Kapazitäten [MW]")
-        caps = data.get("generation_capacities_mw", {})
-        techs = list(caps.keys())
-        base_years = {2030, 2045}
-        all_years = set(base_years)
-        for tech_caps in caps.values():
-            all_years.update(tech_caps.keys())
-        rows = []
-        for y in sorted(all_years):
-            row = {"Jahr": int(y)}
-            for tech in techs:
-                row[tech] = float(caps.get(tech, {}).get(y, 0.0))
-            rows.append(row)
-        cap_df = pd.DataFrame(rows).drop_duplicates(subset=["Jahr"], keep="first")
-        edited_cap = st.data_editor(cap_df, use_container_width=True, num_rows="dynamic", key="cap_editor")
-
-        st.markdown("---")
-
-        # === SPEICHER ===
-        st.subheader("Speicher")
-        storage_defaults = data.get("storage_capacities", {})
-
-        # Persistierte Speicherzeilen für Reloads/Toggles
-        def build_row(key: str, label: str, source: dict) -> dict:
-            return {
-                "key": key,
-                "Speichertyp": label,
-                "Kapazität [MWh]": float(source.get("installed_capacity_mwh", 0)),
-                "Ladeleistung [MW]": float(source.get("max_charge_power_mw", 0)),
-                "Entladeleistung [MW]": float(source.get("max_discharge_power_mw", 0)),
-                "η Laden": float(source.get("charge_efficiency", 0.0)),
-                "η Entladen": float(source.get("discharge_efficiency", 0.0)),
-                "SOC initial": float(source.get("soc", {}).get("initial", 0.0)),
-                "SOC min": float(source.get("soc", {}).get("min", 0.0)),
-                "SOC max": float(source.get("soc", {}).get("max", 1.0)),
+    # === WETTERPROFILE ===
+    st.subheader("Wetterprofile für erneuerbare Energien")
+    weather_gen_profiles = data.get("weather_generation_profiles", {})
+    weather_options = ["good", "average", "bad"]
+    edited_weather = {}
+    for year in valid_years if valid_years else [2030, 2045]:
+        st.markdown(f"**Jahr {year}**")
+        year_weather = weather_gen_profiles.get(year, {})
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            edited_weather[year] = {
+                "Wind_Onshore": st.selectbox(
+                    "Wind Onshore",
+                    options=weather_options,
+                    index=weather_options.index(year_weather.get("Wind_Onshore", "average")) if year_weather else 1,
+                    key=f"weather_onshore_{year}",
+                ),
             }
+        with col2:
+            edited_weather[year]["Wind_Offshore"] = st.selectbox(
+                "Wind Offshore",
+                options=weather_options,
+                index=weather_options.index(year_weather.get("Wind_Offshore", "average")) if year_weather else 1,
+                key=f"weather_offshore_{year}",
+            )
+        with col3:
+            edited_weather[year]["Photovoltaik"] = st.selectbox(
+                "Photovoltaik",
+                options=weather_options,
+                index=weather_options.index(year_weather.get("Photovoltaik", "average")) if year_weather else 1,
+                key=f"weather_pv_{year}",
+            )
 
-        if "storage_rows" not in st.session_state:
-            st.session_state["storage_rows"] = [
-                build_row("battery_storage", "Batterie", storage_defaults.get("battery_storage", {})),
-                build_row("pumped_hydro_storage", "Pumpspeicher", storage_defaults.get("pumped_hydro_storage", {})),
-                build_row("h2_storage", "H2", storage_defaults.get("h2_storage", {})),
-            ]
+    st.markdown("---")
 
-        storage_rows_state = st.session_state["storage_rows"]
-        rows_by_key = {r["key"]: r for r in storage_rows_state}
+    # === SPEICHER ===
+    st.subheader(":material/battery_profile: Speicher")
+    storage_caps = data.get("target_storage_capacities", {})
+    storage_types = {
+        "battery_storage": ":material/battery_charging_90: Batteriespeicher (Kurzzeitspeicher)",
+        "pumped_hydro_storage": ":material/water_pump: Pumpspeicherkraftwerke",
+        "h2_storage": ":material/format_h2: Wasserstoff-Speicher",
+    }
 
-        st.markdown("Hinweis: Zur Aktualisierung der Tabelle nach dem Ankreuzen bitte unten auf 'Bestätigen & YAML generieren' klicken.")
+    if "storage_values" not in st.session_state:
+        st.session_state["storage_values"] = {}
+        for stor_key in storage_types.keys():
+            st.session_state["storage_values"][stor_key] = storage_caps.get(stor_key, {}).copy()
 
-        # Aktivierungs-Checkboxen je Speichertyp
-        a, b, c = st.columns(3)
-        battery_on = a.checkbox(
-            "Batterie aktiv",
-            value=storage_defaults.get("battery_storage", {}).get("installed_capacity_mwh", 0) > 0
-            or storage_defaults.get("battery_storage", {}).get("max_charge_power_mw", 0) > 0,
-        )
-        pumped_on = b.checkbox(
-            "Pumpspeicher aktiv",
-            value=storage_defaults.get("pumped_hydro_storage", {}).get("installed_capacity_mwh", 0) > 0
-            or storage_defaults.get("pumped_hydro_storage", {}).get("max_charge_power_mw", 0) > 0,
-        )
-        h2_on = c.checkbox(
-            "H2-Speicher aktiv",
-            value=storage_defaults.get("h2_storage", {}).get("installed_capacity_mwh", 0) > 0
-            or storage_defaults.get("h2_storage", {}).get("max_charge_power_mw", 0) > 0,
-        )
-
-        active_flags = {
-            "battery_storage": battery_on,
-            "pumped_hydro_storage": pumped_on,
-            "h2_storage": h2_on,
-        }
-
-        enabled_pairs = []
-        if battery_on:
-            enabled_pairs.append(("battery_storage", "Batterie"))
-        if pumped_on:
-            enabled_pairs.append(("pumped_hydro_storage", "Pumpspeicher"))
-        if h2_on:
-            enabled_pairs.append(("h2_storage", "H2"))
-
-        storage_rows = []
-        for key, label in enabled_pairs:
-            existing = rows_by_key.get(key)
-            if existing is None:
-                existing = build_row(key, label, storage_defaults.get(key, {}))
-            storage_rows.append({k: v for k, v in existing.items() if k != "key"})
-
-        stor_df = pd.DataFrame(storage_rows)
-        edited_stor = st.data_editor(
-            stor_df,
-            use_container_width=True,
-            disabled=["Speichertyp"],
-            key="storage_editor",
-            num_rows="dynamic",
-        )
-
-        submitted = st.form_submit_button("✅ Bestätigen & YAML generieren")
-
-    # Nach Submit: Update Session-State aus DataFrames
-    if submitted:
-        # Demand aus DataFrame
-        target_demand_twh = {}
-        if not edited_demand.empty:
-            for _, row in edited_demand.iterrows():
-                try:
-                    year = int(row.get("Jahr"))
-                    val = float(row.get("Zielverbrauch [TWh]", 0))
-                    target_demand_twh[year] = val
-                except (ValueError, TypeError):
-                    pass
-
-        # Referenz-Jahre aus DataFrame
-        good_year_dict = {
-            "wind_onshore": int(edited_ref.iloc[0]["Wind Onshore"]),
-            "wind_offshore": int(edited_ref.iloc[0]["Wind Offshore"]),
-            "photovoltaics": int(edited_ref.iloc[0]["Photovoltaik"]),
-        }
-        bad_year_dict = {
-            "wind_onshore": int(edited_ref.iloc[1]["Wind Onshore"]),
-            "wind_offshore": int(edited_ref.iloc[1]["Wind Offshore"]),
-            "photovoltaics": int(edited_ref.iloc[1]["Photovoltaik"]),
-        }
-        avg_year_dict = {
-            "wind_onshore": int(edited_ref.iloc[2]["Wind Onshore"]),
-            "wind_offshore": int(edited_ref.iloc[2]["Wind Offshore"]),
-            "photovoltaics": int(edited_ref.iloc[2]["Photovoltaik"]),
-        }
-
-        # Kapazitäten aus transponiertem DataFrame (Jahr als Zeile)
-        tech_list = list(caps.keys())
-        if not tech_list and not edited_cap.empty:
-            tech_list = [c for c in edited_cap.columns if c != "Jahr"]
-        gen_capacities_mw = {tech: {} for tech in tech_list}
-        if not edited_cap.empty:
-            for _, row in edited_cap.iterrows():
-                try:
-                    year = int(row.get("Jahr"))
-                except (ValueError, TypeError):
-                    continue
-                for tech in tech_list:
-                    try:
-                        gen_capacities_mw.setdefault(tech, {})[year] = float(row.get(tech, 0.0))
-                    except (ValueError, TypeError):
-                        pass
-
-        # Speicher aus DataFrame + Checkbox-Status
-        storage_capacities = {}
-
-        def zero_storage():
-            return {
+    # Stelle sicher, dass neue Jahre auch Default-Werte bekommen
+    for stor_key in storage_types.keys():
+        st.session_state["storage_values"].setdefault(stor_key, {})
+        for y in valid_years:
+            st.session_state["storage_values"][stor_key].setdefault(y, {
                 "installed_capacity_mwh": 0.0,
                 "max_charge_power_mw": 0.0,
                 "max_discharge_power_mw": 0.0,
-                "charge_efficiency": 0.0,
-                "discharge_efficiency": 0.0,
-                "soc": {"initial": 0.0, "min": 0.0, "max": 1.0},
-            }
+                "initial_soc": 0.5,
+            })
 
-        # Update rows_by_key with edited values for enabled storages
-        if not edited_stor.empty:
-            for i, (stor_type, label) in enumerate(enabled_pairs):
-                row = edited_stor.iloc[i]
-                rows_by_key[stor_type] = {
-                    "key": stor_type,
-                    "Speichertyp": label,
-                    "Kapazität [MWh]": float(row.get("Kapazität [MWh]", 0)),
-                    "Ladeleistung [MW]": float(row.get("Ladeleistung [MW]", 0)),
-                    "Entladeleistung [MW]": float(row.get("Entladeleistung [MW]", 0)),
-                    "η Laden": float(row.get("η Laden", 0)),
-                    "η Entladen": float(row.get("η Entladen", 0)),
-                    "SOC initial": float(row.get("SOC initial", 0)),
-                    "SOC min": float(row.get("SOC min", 0)),
-                    "SOC max": float(row.get("SOC max", 1)),
+    target_storage_capacities = {}
+    for stor_key, stor_label in storage_types.items():
+        st.markdown(f"**{stor_label}**")
+        years_list = valid_years if valid_years else [2030, 2045]
+        
+        # Tabs für jedes Jahr
+        tabs = st.tabs([str(year) for year in years_list])
+        
+        for tab_idx, (tab, year) in enumerate(zip(tabs, years_list)):
+            with tab:
+                year_config = st.session_state["storage_values"][stor_key].get(year, {})
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    cap_val = st.number_input(
+                        f"Kapazität [MWh]",
+                        value=float(year_config.get("installed_capacity_mwh", 0)),
+                        step=1000.0,
+                        key=f"stor_{stor_key}_{year}_cap",
+                    )
+                with c2:
+                    charge_val = st.number_input(
+                        f"Ladeleistung [MW]",
+                        value=float(year_config.get("max_charge_power_mw", 0)),
+                        step=1000.0,
+                        key=f"stor_{stor_key}_{year}_charge",
+                    )
+                with c3:
+                    discharge_val = st.number_input(
+                        f"Entladeleistung [MW]",
+                        value=float(year_config.get("max_discharge_power_mw", 0)),
+                        step=1000.0,
+                        key=f"stor_{stor_key}_{year}_discharge",
+                    )
+
+                soc_val = st.slider(
+                    f"Initial SOC",
+                    0.0, 1.0,
+                    value=float(year_config.get("initial_soc", 0.5)),
+                    step=0.05,
+                    key=f"stor_{stor_key}_{year}_soc",
+                )
+
+                st.session_state["storage_values"][stor_key][year] = {
+                    "installed_capacity_mwh": cap_val,
+                    "max_charge_power_mw": charge_val,
+                    "max_discharge_power_mw": discharge_val,
+                    "initial_soc": soc_val,
                 }
 
-        # Disabled Speicher auf 0 setzen und rows_by_key updaten
-        for stor_type, label in [
-            ("battery_storage", "Batterie"),
-            ("pumped_hydro_storage", "Pumpspeicher"),
-            ("h2_storage", "H2"),
-        ]:
-            if stor_type not in rows_by_key:
-                rows_by_key[stor_type] = build_row(stor_type, label, zero_storage())
-
-        # Build storage_capacities; disabled => zero
-        for stor_type, label in [
-            ("battery_storage", "Batterie"),
-            ("pumped_hydro_storage", "Pumpspeicher"),
-            ("h2_storage", "H2"),
-        ]:
-            is_active = active_flags.get(stor_type, False)
-            if not is_active:
-                zero_row = build_row(stor_type, label, zero_storage())
-                rows_by_key[stor_type] = zero_row
-                storage_capacities[stor_type] = {
-                    "installed_capacity_mwh": 0.0,
-                    "max_charge_power_mw": 0.0,
-                    "max_discharge_power_mw": 0.0,
-                    "charge_efficiency": 0.0,
-                    "discharge_efficiency": 0.0,
-                    "soc": {"initial": 0.0, "min": 0.0, "max": 1.0},
-                }
-                continue
-
-            row = rows_by_key.get(stor_type, build_row(stor_type, label, zero_storage()))
-            storage_capacities[stor_type] = {
-                "installed_capacity_mwh": float(row.get("Kapazität [MWh]", 0)),
-                "max_charge_power_mw": float(row.get("Ladeleistung [MW]", 0)),
-                "max_discharge_power_mw": float(row.get("Entladeleistung [MW]", 0)),
-                "charge_efficiency": float(row.get("η Laden", 0)),
-                "discharge_efficiency": float(row.get("η Entladen", 0)),
-                "soc": {
-                    "initial": float(row.get("SOC initial", 0)),
-                    "min": float(row.get("SOC min", 0)),
-                    "max": float(row.get("SOC max", 1)),
-                },
-            }
-
-        # Speichern der UI-Zeilen für spätere Reruns
-        st.session_state["storage_rows"] = list(rows_by_key.values())
-
-        # Update Session State
-        st.session_state["scenario_editor"] = {
-            "metadata": {
-                "name": name,
-                "description": description,
-                "valid_years_from": int(valid_years_from),
-                "valid_years_to": int(valid_years_to),
-                "version": version,
-                "author": author,
-            },
-            "load_parameters": {
-                "target_demand_twh": target_demand_twh,
-                "load_profile": load_profile,
-            },
-            "generation_profile_parameters": {
-                "time_resolution": time_resolution,
-                "source": source,
-                "good_year": good_year_dict,
-                "bad_year": bad_year_dict,
-                "average_year": avg_year_dict,
-            },
-            "generation_capacities_mw": gen_capacities_mw,
-            "storage_capacities": storage_capacities,
+        target_storage_capacities[stor_key] = {
+            year: vals
+            for year, vals in st.session_state["storage_values"][stor_key].items()
+            if year in valid_years
         }
-        st.success("✅ Daten verarbeitet - YAML bereit zum Download!")
+
+    # === LIVE ZUSAMMENFASSUNG IN SESSION STATE ===
+    tech_list = [c for c in edited_cap.columns if c != "Jahr"]
+    target_generation_capacities_mw = {tech: {} for tech in tech_list}
+    for _, row in edited_cap.iterrows():
+        try:
+            year_val = int(row.get("Jahr"))
+        except (ValueError, TypeError):
+            continue
+        for tech in tech_list:
+            try:
+                target_generation_capacities_mw.setdefault(tech, {})[year_val] = float(row.get(tech, 0.0))
+            except (ValueError, TypeError):
+                pass
+
+    weather_generation_profiles_dict = {
+        year: {
+            "Wind_Onshore": edited_weather[year].get("Wind_Onshore", "average"),
+            "Wind_Offshore": edited_weather[year].get("Wind_Offshore", "average"),
+            "Photovoltaik": edited_weather[year].get("Photovoltaik", "average"),
+        }
+        for year in edited_weather
+    }
+
+    st.session_state["scenario_editor"] = {
+        "metadata": {
+            "name": name,
+            "description": description,
+            "valid_for_years": valid_years,
+            "version": version,
+            "author": author,
+        },
+        "target_load_demand_twh": target_load_demand_twh,
+        "target_generation_capacities_mw": target_generation_capacities_mw,
+        "weather_generation_profiles": weather_generation_profiles_dict,
+        "target_storage_capacities": target_storage_capacities,
+    }
+
+    st.success("Daten aktualisiert - YAML immer aktuell.")
+
+    # === GROSSER DOWNLOAD BUTTON AM ENDE ===
+    st.markdown("---")
+    st.markdown("")
+    
+    yaml_output = sm.create_scenario_yaml(st.session_state["scenario_editor"])
+    scenario_name = st.session_state['scenario_editor'].get('metadata', {}).get('name', 'szenario')
+    scenario_version = st.session_state['scenario_editor'].get('metadata', {}).get('version', '1.0')
+    
+    col_empty1, col_button, col_empty2 = st.columns([1, 2, 1])
+    with col_button:
+        st.download_button(
+            ":material/refresh: YAML GENERIEREN & :material/download: HERUNTERLADEN",
+            data=yaml_output,
+            file_name=f"{scenario_name}_{scenario_version}.yaml",
+            mime="text/yaml",
+            use_container_width=True,
+            key="final_download"
+        )
+    
+    col_empty1, col_preview, col_empty2 = st.columns([1, 2, 1])
+    with col_preview:
+        if st.button(":material/preview: YAML-Vorschau anzeigen", use_container_width=True):
+            st.session_state["show_yaml_preview"] = not st.session_state.get("show_yaml_preview", False)
+    
+    if st.session_state.get("show_yaml_preview", False):
+        st.markdown("---")
+        st.markdown("### 📋 YAML-Vorschau")
+        st.code(yaml_output, language="yaml")
+    
+
+    # Neustart-Button: Jahre erneut abfragen und State leeren
+    col_empty1, col_preview, col_empty2 = st.columns([1, 2, 1])
+    if col_preview.button("RESET", use_container_width=True):
+        reset_keys = [
+            "years_confirmed",
+            "valid_years",
+            "modal_years_select",
+            "modal_years_extra",
+            "cap_values",
+            "cap_df_session",
+            "storage_values",
+            "scenario_editor",
+            "show_yaml_preview",
+        ]
+        for key in reset_keys:
+            st.session_state.pop(key, None)
         st.rerun()
 
-    # === DOWNLOAD BEREICH ===
-    st.markdown("---")
-    st.subheader("📥 YAML Download")
-    
-    # Generiere YAML aus aktuellen Session-State Daten
-    yaml_output = sm.create_scenario_yaml(st.session_state["scenario_editor"])
-    
-    st.download_button(
-        "Download YAML",
-        data=yaml_output,
-        file_name=f"{st.session_state['scenario_editor'].get('metadata', {}).get('name', 'szenario')}.yaml",
-        mime="text/yaml",
-        use_container_width=True,
-    )
+    st.markdown("")
 
-    st.markdown("---")
-    with st.expander("📄 Vorschau YAML"):
-        st.code(yaml_output, language="yaml")

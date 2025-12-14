@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 import warnings
 from io_handler import load_data
-from errors import FileLoadError, DataframeNotFoundError, DataProcessingError, WarningMessage
+import warnings
 
 
 class DataManager:
@@ -37,17 +37,17 @@ class DataManager:
             FileLoadError: If any dataset path from the configuration does not exist.
         """
         if not self.config_manager:
-            raise DataProcessingError("No ConfigManager provided to DataManager.")
+            raise ValueError("No ConfigManager provided to DataManager.")
 
         dataframes = self.config_manager.get_dataframes()
         if not dataframes:
-            warnings.warn("No datasets defined in configuration.", WarningMessage)
+            warnings.warn("No datasets defined in configuration.", category=UserWarning)
             return
 
         for df in dataframes[: self.max_datasets]:
             path = df["path"]
             if not path.exists():
-                warnings.warn(f"File not found for dataset '{df['name']}': {path}", WarningMessage)
+                warnings.warn(f"File not found for dataset '{df['name']}': {path}", category=UserWarning)
                 continue
 
             try:
@@ -60,10 +60,10 @@ class DataManager:
                 )
                 print(f"Loaded dataset '{df['name']}' successfully.")
             except Exception as e:
-                warnings.warn(f"Failed to load dataset '{df['name']}': {e}", WarningMessage)
+                warnings.warn(f"Failed to load dataset '{df['name']}': {e}", category=UserWarning)
 
         if not self.dataframes:
-            warnings.warn("No datasets could be loaded from configuration.", WarningMessage)
+            warnings.warn("No datasets could be loaded from configuration.", category=UserWarning)
 
     # -------------------------------------------------------------------------
     def load_from_path(self, path, datatype="SMARD", dataset_id=None, name=None, description=""):
@@ -84,12 +84,12 @@ class DataManager:
         """
         path = Path(path)
         if not path.exists():
-            raise FileLoadError(f"File not found: {path}")
+            raise FileNotFoundError(f"File not found: {path}")
 
         try:
             df = load_data(path=path, datatype=datatype)
         except Exception as e:
-            raise DataProcessingError(f"Failed to load data from {path}: {e}")
+            raise ValueError(f"Failed to load data from {path}: {e}")
 
         if dataset_id is None:
             dataset_id = max(self.dataframes.keys(), default=-1) + 1
@@ -112,7 +112,7 @@ class DataManager:
             list[dict]: List of dataset metadata including ID, name, row count, and path.
         """
         if not self.dataframes:
-            warnings.warn("No datasets are currently loaded.", WarningMessage)
+            warnings.warn("No datasets are currently loaded.", category=UserWarning)
             return []
 
         info = []
@@ -147,7 +147,7 @@ class DataManager:
         for ds_id, meta in self.metadata.items():
             if meta["name"] == name:
                 return ds_id
-        raise DataframeNotFoundError(f"Dataset with name '{name}' not found.")
+        raise KeyError(f"Dataset with name '{name}' not found.")
 
     # -------------------------------------------------------------------------
     def get(self, identifier):
@@ -165,14 +165,14 @@ class DataManager:
         if isinstance(identifier, int):
             if identifier in self.dataframes:
                 return self.dataframes[identifier]
-            raise DataframeNotFoundError(f"Dataset with ID '{identifier}' not found.")
+            raise KeyError(f"Dataset with ID '{identifier}' not found.")
 
         # Search by name
         for ds_id, meta in self.metadata.items():
             if meta["name"] == identifier:
                 return self.dataframes[ds_id]
 
-        raise DataframeNotFoundError(f"Dataset with name '{identifier}' not found.")
+        raise KeyError(f"Dataset with name '{identifier}' not found.")
 
     # -------------------------------------------------------------------------
     def delete(self, identifier):
@@ -190,7 +190,7 @@ class DataManager:
             ds_id = next((id for id, meta in self.metadata.items() if meta["name"] == identifier), None)
 
         if ds_id is None:
-            warnings.warn(f"Dataset '{identifier}' not found. Nothing deleted.", WarningMessage)
+            warnings.warn(f"Dataset '{identifier}' not found. Nothing deleted.", category=UserWarning)
             return False
 
         del self.dataframes[ds_id]

@@ -8,8 +8,7 @@ Ein Projekt von **EcoVision Labs** :)
 ### Shortcuts 
 [![Run Software](https://img.shields.io/badge/Web_App-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)  
 [![Technische Planung](https://img.shields.io/badge/Technische_Planung-docs-blue.svg)](docs/technische_planung.md)   
-[![zum Konzept (alt)](https://img.shields.io/badge/zum_Konzept_(alt)-docs-blue.svg)](docs/konzept.md)  
-[![zu_den_Features_(alt)](https://img.shields.io/badge/zu_den_Features_(alt)-docs-blue.svg)](docs/code_features_aktuell.md)  
+[![raw-input doku](https://img.shields.io/badge/RAW_INPUT_Tabelle-docs-blue.svg)](raw-data/raw-data.md) 
    
 ## 1. Funktionen
 

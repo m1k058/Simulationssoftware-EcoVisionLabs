@@ -823,7 +823,7 @@ def speicher_simulieren() -> None:
 
         c1, c2 = st.columns(2)
         e1, e2 = c1.columns(2)
-        bat_cap = e1.number_input("Kapazität [MWh]", 1000.0, 500_000.0, 50_000.0, step=1000.0, key="bat_cap")
+        bat_cap = e1.number_input("Kapazität [MWh]", 0.0, 500_000.0, 50_000.0, step=100.0, key="bat_cap")
         bat_soc_init_pct = e2.slider("Anfangs-SOC [%]", 0, 100, 50, key="bat_soc_init") / 100
         if st.session_state.bat_args_mode == "Basic":
             bat_power = c2.number_input(
@@ -1082,7 +1082,7 @@ def ergebnisse_speichern() -> None:
 
     @st.cache_data
     def convert_for_download_csv(df: pd.DataFrame) -> bytes:
-        return df.to_csv().encode("utf-8")
+        return df.to_csv(sep=';', decimal=',').encode("utf-8")
 
     if "df_simulation_prod" in st.session_state:
         st.subheader("Produktions Simulation Ergebnisse: ")
@@ -1107,12 +1107,6 @@ def ergebnisse_speichern() -> None:
             mime="text/csv",
             type="primary",
         )
-        st.markdown("---")
-    if False:
-        st.subheader("Energiebilanz Ergebnisse: ")
-        st.dataframe(st.session_state.energie_bilanz.head())
-        csv_eb = convert_for_download_csv(st.session_state.energie_bilanz)
-        st.download_button("Download CSV", data=csv_eb, file_name="energiebilanz.csv", mime="text/csv", type="primary")
         st.markdown("---")
     if "storage_results" in st.session_state:
         for storage_type, storage_df in st.session_state.storage_results.items():

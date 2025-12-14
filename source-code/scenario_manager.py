@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional, Union
 from datetime import datetime
 import copy
 import yaml
-
+import pandas as pd
 
 class ScenarioManager:
     """Verwaltet Szenario-Konfigurationen für Simulationen."""
@@ -13,92 +13,109 @@ class ScenarioManager:
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).resolve().parent.parent
         self.output_dir = Path(output_dir) if output_dir else self.base_dir / "scenarios"
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Aktuell geladenes Szenario speichern
+        self.current_scenario: Dict[str, Any] = {}
+        self.current_path: Optional[Path] = None
 
-    def default_template(self) -> Dict[str, Any]:
-        """Gibt ein plausibles Dummy-Szenario im gewünschten Schema zurück."""
+    def _static_default_template(self) -> Dict[str, Any]:
+        """Fallback-Dummy-Szenario, falls die Beispiel-YAML fehlt."""
         return {
             "metadata": {
                 "name": "Szenario Beispiel",
-                "valid_years_from": 2025,
-                "valid_years_to": 2045,
+                "valid_for_years": [2030, 2045],
                 "description": "Beispielhaftes Szenario mit plausiblen Dummy-Werten zur Simulation.",
-                "version": "1.0",
+                "version": "0.0.0",
                 "author": "SW-Team EcoVisionLabs",
-                "created": datetime.now().isoformat(),
             },
-            "load_parameters": {
-                "target_demand_twh": {
-                    2030: 520,
-                    2035: 540,
-                    2040: 560,
-                    2045: 580,
-                },
-                "load_profile": "2025-BDEW",
+            "target_load_demand_twh": {
+                "Haushalt_Basis": {2030: 130, 2045: 120, "load_profile": "BDEW-25-Haushalte"},
+                "Gewerbe_Basis": {2030: 140, 2045: 130, "load_profile": "BDEW-25-Gewerbe"},
+                "Industrie_Basis": {2030: 280, 2045: 350, "load_profile": "BDEW-25-Industrie"},
+                "EMobility": {2030: 60, 2045: 140, "load_profile": "EMobility-self"},
+                "Heat_Pumps": {2030: 50, 2045: 110, "load_profile": "HeatPumps-self"},
             },
-            "generation_profile_parameters": {
-                "time_resolution": "15min",
-                "source": "SMARD",
-                "good_year": {
-                    "wind_onshore": 2017,
-                    "wind_offshore": 2017,
-                    "photovoltaics": 2019,
-                },
-                "bad_year": {
-                    "wind_onshore": 2021,
-                    "wind_offshore": 2021,
-                    "photovoltaics": 2016,
-                },
-                "average_year": {
-                    "wind_onshore": 2015,
-                    "wind_offshore": 2015,
-                    "photovoltaics": 2018,
-                },
+            "target_generation_capacities_mw": {
+                "Photovoltaik": {2030: 215000, 2045: 400000},
+                "Wind_Onshore": {2030: 115000, 2045: 160000},
+                "Wind_Offshore": {2030: 30000, 2045: 70000},
+                "Biomasse": {2030: 8500, 2045: 6000},
+                "Wasserkraft": {2030: 5000, 2045: 5000},
+                "Erdgas": {2030: 25000, 2045: 40000},
+                "Steinkohle": {2030: 0, 2045: 0},
+                "Braunkohle": {2030: 0, 2045: 0},
+                "Kernenergie": {2030: 0, 2045: 0},
             },
-            "generation_capacities_mw": {
-                "Photovoltaik": {2030: 140_000, 2035: 180_000, 2040: 210_000, 2045: 240_000},
-                "Wind Onshore": {2030: 90_000, 2035: 115_000, 2040: 135_000, 2045: 150_000},
-                "Wind Offshore": {2030: 40_000, 2035: 55_000, 2040: 70_000, 2045: 85_000},
-                "Wasserkraft": {2030: 5_000, 2035: 5_000, 2040: 5_000, 2045: 5_000},
-                "Biomasse": {2030: 4_500, 2035: 4_500, 2040: 4_500, 2045: 4_500},
-                "Erdgas": {2030: 15_000, 2035: 12_000, 2040: 9_000, 2045: 8_000},
-                "Steinkohle": {2030: 0, 2035: 0, 2040: 0, 2045: 0},
-                "Braunkohle": {2030: 0, 2035: 0, 2040: 0, 2045: 0},
-                "Kernenergie": {2030: 0, 2035: 0, 2040: 0, 2045: 0},
+            "weather_generation_profiles": {
+                2030: {"Wind_Offshore": "good", "Wind_Onshore": "average", "Photovoltaik": "average"},
+                2045: {"Wind_Offshore": "bad", "Wind_Onshore": "good", "Photovoltaik": "good"},
             },
-            "storage_capacities": {
+            "target_storage_capacities": {
                 "battery_storage": {
-                    "installed_capacity_mwh": 50000,
-                    "max_charge_power_mw": 12000,
-                    "max_discharge_power_mw": 12000,
-                    "charge_efficiency": 0.92,
-                    "discharge_efficiency": 0.92,
-                    "soc": {"initial": 0.55, "min": 0.10, "max": 0.90},
+                    2030: {
+                        "installed_capacity_mwh": 60000,
+                        "max_charge_power_mw": 20000,
+                        "max_discharge_power_mw": 20000,
+                        "initial_soc": 0.5,
+                    },
+                    2045: {
+                        "installed_capacity_mwh": 180000,
+                        "max_charge_power_mw": 60000,
+                        "max_discharge_power_mw": 60000,
+                        "initial_soc": 0.5,
+                    },
                 },
                 "pumped_hydro_storage": {
-                    "installed_capacity_mwh": 180000,
-                    "max_charge_power_mw": 35000,
-                    "max_discharge_power_mw": 35000,
-                    "charge_efficiency": 0.88,
-                    "discharge_efficiency": 0.88,
-                    "soc": {"initial": 0.60, "min": 0.20, "max": 0.95},
+                    2030: {
+                        "installed_capacity_mwh": 40000,
+                        "max_charge_power_mw": 7000,
+                        "max_discharge_power_mw": 7000,
+                        "initial_soc": 0.6,
+                    },
+                    2045: {
+                        "installed_capacity_mwh": 45000,
+                        "max_charge_power_mw": 8000,
+                        "max_discharge_power_mw": 8000,
+                        "initial_soc": 0.6,
+                    },
                 },
                 "h2_storage": {
-                    "installed_capacity_mwh": 250000,
-                    "max_charge_power_mw": 50000,
-                    "max_discharge_power_mw": 50000,
-                    "charge_efficiency": 0.60,
-                    "discharge_efficiency": 0.60,
-                    "soc": {"initial": 0.45, "min": 0.10, "max": 0.90},
+                    2030: {
+                        "installed_capacity_mwh": 500000,
+                        "max_charge_power_mw": 10000,
+                        "max_discharge_power_mw": 10000,
+                        "initial_soc": 0.4,
+                    },
+                    2045: {
+                        "installed_capacity_mwh": 3000000,
+                        "max_charge_power_mw": 60000,
+                        "max_discharge_power_mw": 40000,
+                        "initial_soc": 0.45,
+                    },
                 },
             },
         }
+
+    def default_template(self) -> Dict[str, Any]:
+        """Lädt das Beispiel-Szenario aus /scenarios/Szenario_Beispiel_SW.yaml, Fallback auf statisch."""
+        example_path = self.base_dir / "scenarios" / "Szenario_Beispiel_SW.yaml"
+        if example_path.exists():
+            try:
+                with open(example_path, "r", encoding="utf-8") as f:
+                    loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    return copy.deepcopy(loaded)
+            except Exception:
+                # Im Fehlerfall auf statische Defaults zurückfallen
+                pass
+        return self._static_default_template()
 
     def create_scenario_yaml(self, scenario_data: Dict[str, Any]) -> str:
         """
         Erstellt einen YAML-String aus Scenario-Daten.
 
-        Erwartet ein Dictionary mit: metadata, load_parameters, generation_profile_parameters,
-        generation_capacities_mw, storage_capacities.
+        Erwartet ein Dictionary mit: metadata, target_load_demand_twh, target_generation_capacities_mw,
+        weather_generation_profiles, target_storage_capacities.
         """
         if "metadata" not in scenario_data or "name" not in scenario_data.get("metadata", {}):
             raise ValueError("Pflichtfeld 'metadata.name' fehlt")
@@ -111,32 +128,26 @@ class ScenarioManager:
             scenario["metadata"].update({
                 "name": meta.get("name", ""),
                 "description": meta.get("description", scenario["metadata"].get("description", "")),
-                "version": meta.get("version", "1.0"),
+                "version": meta.get("version", "0.0.0"),
                 "author": meta.get("author", "SW-Team EcoVisionLabs"),
-                "valid_years_from": meta.get("valid_years_from", 2025),
-                "valid_years_to": meta.get("valid_years_to", 2045),
+                "valid_for_years": meta.get("valid_for_years", [2030, 2045]),
             })
-            scenario["metadata"]["created"] = datetime.now().isoformat()
 
-        # Verbrauchsdaten
-        if "load_parameters" in scenario_data:
-            lp = scenario_data["load_parameters"]
-            if "target_demand_twh" in lp:
-                scenario["load_parameters"]["target_demand_twh"] = lp["target_demand_twh"]
-            if "load_profile" in lp:
-                scenario["load_parameters"]["load_profile"] = lp["load_profile"]
-
-        # Erzeugungsprofile
-        if "generation_profile_parameters" in scenario_data:
-            scenario["generation_profile_parameters"].update(scenario_data["generation_profile_parameters"])
+        # Verbrauchsdaten (pro Sektor)
+        if "target_load_demand_twh" in scenario_data:
+            scenario["target_load_demand_twh"] = scenario_data["target_load_demand_twh"]
 
         # Kapazitäten
-        if "generation_capacities_mw" in scenario_data:
-            scenario["generation_capacities_mw"] = scenario_data["generation_capacities_mw"]
+        if "target_generation_capacities_mw" in scenario_data:
+            scenario["target_generation_capacities_mw"] = scenario_data["target_generation_capacities_mw"]
+
+        # Wetterprofile
+        if "weather_generation_profiles" in scenario_data:
+            scenario["weather_generation_profiles"] = scenario_data["weather_generation_profiles"]
 
         # Speicher
-        if "storage_capacities" in scenario_data:
-            scenario["storage_capacities"] = scenario_data["storage_capacities"]
+        if "target_storage_capacities" in scenario_data:
+            scenario["target_storage_capacities"] = scenario_data["target_storage_capacities"]
 
         return yaml.dump(
             scenario,
@@ -155,10 +166,28 @@ class ScenarioManager:
         filepath.write_text(yaml_content, encoding="utf-8")
         return filepath
 
-    def load_scenario(self, filepath: Path) -> Dict[str, Any]:
-        """Lädt Szenario aus YAML."""
-        with open(filepath, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+    def load_scenario(self, filepath_or_uploadedfile) -> Dict[str, Any]:
+        """
+        Lädt Szenario aus YAML-Datei oder Streamlit UploadedFile.
+        
+        Args:
+            filepath_or_uploadedfile: Path-Objekt oder Streamlit UploadedFile
+            
+        Returns:
+            Dictionary mit den Szenario-Daten
+        """
+        # Streamlit UploadedFile: direkt vom Stream lesen
+        if hasattr(filepath_or_uploadedfile, 'read'):
+            content = filepath_or_uploadedfile.read().decode("utf-8")
+            self.current_scenario = yaml.safe_load(content)
+            self.current_path = None
+        else:
+            # Normale Datei (Path)
+            with open(filepath_or_uploadedfile, "r", encoding="utf-8") as f:
+                self.current_scenario = yaml.safe_load(f)
+            self.current_path = Path(filepath_or_uploadedfile)
+        
+        return self.current_scenario
 
     def delete_scenario(self, name_or_path: Union[str, Path]) -> bool:
         """Löscht ein Szenario im /scenarios-Ordner. Gibt True zurück, wenn gelöscht."""
@@ -187,3 +216,142 @@ class ScenarioManager:
     def _safe_name(name: str) -> str:
         """Erzeugt einen Dateinamen-freundlichen String."""
         return "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+
+    @property
+    def scenario_name(self) -> Optional[str]:
+        """Gibt Namen des aktuellen Szenarios zurück."""
+        return self.current_scenario.get("metadata", {}).get("name")
+
+    @property
+    def scenario_description(self) -> Optional[str]:
+        """Gibt Beschreibung des aktuellen Szenarios zurück."""
+        return self.current_scenario.get("metadata", {}).get("description")
+
+    @property
+    def scenario_data(self) -> Dict[str, Any]:
+        """Gibt die kompletten Szenario-Daten zurück."""
+        return self.current_scenario
+
+    def get_load_demand(self, sector: Optional[str] = None, year: Optional[int] = None) -> Any:
+        """
+        Holt Verbrauchsdaten aus dem Szenario.
+        
+        Args:
+            sector: Spezifischer Sektor (z.B. 'Haushalt_Basis'). Wenn None, alle Sektoren.
+            year: Spezifisches Jahr. Wenn None, alle Jahre.
+            
+        Returns:
+            Verbrauchsdaten in TWh
+        """
+        load_data = self.current_scenario.get("target_load_demand_twh", {})
+        
+        if sector is None:
+            return load_data
+        if year is None:
+            return load_data.get(sector, {})
+        return load_data.get(sector, {}).get(year)
+
+    def get_generation_capacities(self, tech: Optional[str] = None, year: Optional[int] = None) -> Any:
+        """
+        Holt Erzeugungskapazitäten aus dem Szenario.
+        
+        Args:
+            tech: Spezifische Technologie (z.B. 'Photovoltaik'). Wenn None, alle Technologien.
+            year: Spezifisches Jahr. Wenn None, alle Jahre.
+            
+        Returns:
+            Kapazitäten in MW
+        """
+        gen_data = self.current_scenario.get("target_generation_capacities_mw", {})
+        
+        if tech is None:
+            return gen_data
+        if year is None:
+            return gen_data.get(tech, {})
+        return gen_data.get(tech, {}).get(year)
+
+    def get_storage_capacities(self, storage_type: Optional[str] = None, year: Optional[int] = None) -> Any:
+        """
+        Holt Speicherkapazitäten aus dem Szenario.
+        
+        Args:
+            storage_type: Speichertyp (z.B. 'battery_storage'). Wenn None, alle Typen.
+            year: Spezifisches Jahr. Wenn None, alle Jahre.
+            
+        Returns:
+            Speicherkonfiguration
+        """
+        storage_data = self.current_scenario.get("target_storage_capacities", {})
+        
+        if storage_type is None:
+            return storage_data
+        if year is None:
+            return storage_data.get(storage_type, {})
+        return storage_data.get(storage_type, {}).get(year)
+
+    def get_generation_profile_df(self, year: int, include_conv: bool = False) -> pd.DataFrame:
+        """
+        Konvertiert die target_generation_capacities_mw in ein DataFrame kompatibel mit 
+        der generate_generation_profile() Funktion.
+        
+        Args:
+            year: Das Jahr für das die Kapazitäten extrahiert werden sollen
+            include_conv: Ob konventionelle Energieträger eingebunden werden sollen
+            
+        Returns:
+            pd.DataFrame: Ein DataFrame mit einer Zeile, die die installierten Kapazitäten 
+                         für das angegebene Jahr enthält. Spaltenformat: "[Name] [MW]"
+                         
+        Example:
+            >>> df_capacities = sm.get_generation_profile_df(2030, include_conv=True)
+            >>> # df_capacities hat Spalten wie "Photovoltaik [MW]", "Wind Onshore [MW]" etc.
+        """
+        import pandas as pd
+        from constants import ENERGY_SOURCES, SOURCES_GROUPS
+        
+        # Mapping von Szenario-Namen zu technischen Namen
+        tech_mapping = {
+            "Photovoltaik": "PV",
+            "Wind_Offshore": "WOF",
+            "Wind_Onshore": "WON",
+            "Wasserkraft": "WAS",
+            "Biomasse": "BIO",
+            "Kernenergie": "KE",
+            "Braunkohle": "BK",
+            "Steinkohle": "SK",
+            "Erdgas": "EG",
+        }
+        
+        # Relevante Technologien auswählen
+        if include_conv:
+            relevant_sources = SOURCES_GROUPS["Renewable"] + SOURCES_GROUPS["Conventional"]
+        else:
+            relevant_sources = SOURCES_GROUPS["Renewable"]
+        
+        # Daten vorbereiten - hole ALL technologies für das Jahr
+        gen_capacities_raw = self.current_scenario.get("target_generation_capacities_mw", {})
+        if not gen_capacities_raw:
+            raise ValueError(f"Keine Erzeugungskapazitäten im Szenario gefunden.")
+        
+        # DataFrame-Daten sammeln
+        df_data = {}
+        for tech_short in relevant_sources:
+            if tech_short in ENERGY_SOURCES:
+                col_name = ENERGY_SOURCES[tech_short]["colname_MW"]
+                
+                # Finde den entsprechenden Wert aus dem Szenario für das Jahr
+                scenario_value = 0
+                for scenario_name, tech_short_code in tech_mapping.items():
+                    if tech_short_code == tech_short and scenario_name in gen_capacities_raw:
+                        # gen_capacities_raw[scenario_name] ist ein Dict wie {2030: 215000, 2045: 400000}
+                        year_data = gen_capacities_raw[scenario_name]
+                        if isinstance(year_data, dict) and year in year_data:
+                            scenario_value = year_data[year]
+                        break
+                
+                df_data[col_name] = [scenario_value]
+        
+        # Erstelle DataFrame mit einer Zeile (ähnlich wie SMARD-Instalierte Leistung)
+        df = pd.DataFrame(df_data)
+        
+        return df
