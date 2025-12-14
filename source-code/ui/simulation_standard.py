@@ -232,6 +232,8 @@ def standard_simulation_page() -> None:
 
     st.markdown("## Erzeugungssimulation")
 
+    ErzeugungssimulationRun = False
+
     if st.button("Erzeugungssimulation starten"):
         
         # Lade die SMARD Daten
@@ -245,12 +247,11 @@ def standard_simulation_page() -> None:
         smard_generation = pd.concat([smard_generation_2015, smard_generation_2020])
         smard_installed = pd.concat([smard_installed_2015, smard_installed_2020])
 
-        # Ziel Kapazitäten aus dem Szenario für 2030
+        # Ziel Kapazitäten aus dem Szenario
         target_capacities = st.session_state.sm.get_generation_capacities()
 
         # weather_profiles rausholen
         profile = st.session_state.sm.scenario_data.get("weather_generation_profiles", {})
-        simuYear = 2030
 
         
         # Simulation ausführen und Ergebnisse speichern
@@ -267,10 +268,13 @@ def standard_simulation_page() -> None:
                 year
             )
             results[year] = df_res
-        
-        # Anzeige der Ergebnisse Tabele/visuell
+            ErzeugungssimulationRun = True
 
+
+    if ErzeugungssimulationRun == True:    
+        # Anzeige der Ergebnisse Tabele/visuell
         tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"])
+
 
         # Tabs erstellen und DataFrames anzeigen
         with tab1:

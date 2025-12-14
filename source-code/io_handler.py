@@ -3,7 +3,7 @@ import pandas as pd
 import csv
 import re
 import warnings
-from errors import FileLoadError, DataProcessingError, WarningMessage
+import warnings
 from constants import HEADER_CLEAN_PATTERNS, EXPECTED_HEADERS, FILE_FORMAT_OPTIONS
 
 
@@ -26,21 +26,21 @@ def load_data(path: Path, datatype: str = "SMARD"):
         pd.DataFrame: Cleaned and formatted DataFrame ready for analysis.
 
     Raises:
-        FileLoadError: If file is missing, not a file, or cannot be read.
-        DataProcessingError: If header validation or parsing fails.
+        FileNotFoundError: If file is missing or not a file.
+        ValueError: If header validation or parsing fails.
     """
     # --- Validate datatype
     if not datatype:
-        raise DataProcessingError("Datatype must be provided and cannot be None.")
+        raise ValueError("Datatype must be provided and cannot be None.")
 
     if datatype not in EXPECTED_HEADERS:
-        raise DataProcessingError(
+        raise ValueError(
             f"Unsupported datatype '{datatype}'. "
             f"Supported types: {list(EXPECTED_HEADERS.keys())}. "
             f"Update constants.py to add support."
         )
     if datatype not in FILE_FORMAT_OPTIONS:
-        raise DataProcessingError(
+        raise ValueError(
             f"Unsupported datatype '{datatype}'. "
             f"Supported types: {list(FILE_FORMAT_OPTIONS.keys())}. "
             f"Update constants.py to add support."
@@ -51,14 +51,14 @@ def load_data(path: Path, datatype: str = "SMARD"):
     # --- Normalize and verify path
     path = Path(path)
     if not path.exists():
-        raise FileLoadError(f"File not found: {path}")
+        raise FileNotFoundError(f"File not found: {path}")
     if not path.is_file():
-        raise FileLoadError(f"Path is not a valid file: {path}")
+        raise FileNotFoundError(f"Path is not a valid file: {path}")
 
     if path.suffix.lower() not in {".csv", ".txt"}:
         warnings.warn(
             f"File extension '{path.suffix}' is unexpected. Attempting to read anyway.",
-            WarningMessage
+            category=UserWarning
         )
 
     # --- Read and clean header line
@@ -67,10 +67,10 @@ def load_data(path: Path, datatype: str = "SMARD"):
             reader = csv.reader(f, delimiter=cfg["sep"])
             raw_header = next(reader)
             if not raw_header:
-                raise DataProcessingError(f"Header line could not be read from {path}")
+                raise ValueError(f"Header line could not be read from {path}")
             header = [c.strip() for c in raw_header if c.strip() != ""]
     except Exception as e:
-        raise FileLoadError(f"Failed to read file header: {e}")
+        raise OSError(f"Failed to read file header: {e}")
 
     clean_header = header[:]
     for pattern in HEADER_CLEAN_PATTERNS:
@@ -80,7 +80,7 @@ def load_data(path: Path, datatype: str = "SMARD"):
     expected = EXPECTED_HEADERS[datatype]
     unexpected = [c for c in clean_header if c not in expected]
     if clean_header != expected:
-        raise DataProcessingError(
+        raise ValueError(
             f"Header mismatch in file {path} for datatype '{datatype}'.\n"
             f"Unexpected columns: {unexpected}\n"
             f"Expected: {expected}\n"
@@ -90,7 +90,10 @@ def load_data(path: Path, datatype: str = "SMARD"):
     # --- Load data into DataFrame
     try:
         # Identifiziere Datumsspalten anhand der erwarteten Header
-        date_columns = [i for i, col in enumerate(clean_header) if "Datum" in col]
+        date_columns = [
+            i for i, col in enumerate(clean_header)
+            if "Datum" in col or col.lower() == "timestamp"
+        ]
         
         df = pd.read_csv(
             path,
@@ -101,16 +104,17 @@ def load_data(path: Path, datatype: str = "SMARD"):
             decimal=cfg["decimal"],
             thousands=cfg["thousands"],
             na_values=cfg["na_values"],
+            usecols=list(range(len(clean_header))),  # ignore trailing empty tab columns
             dtype={i: str for i in date_columns},  # Datumsspalten als String einlesen
         )
         df.columns = clean_header
     except Exception as e:
-        raise DataProcessingError(f"Failed to parse CSV data from {path}: {e}")
+        raise ValueError(f"Failed to parse CSV data from {path}: {e}")
 
     # --- Convert date columns
     try:
-        for col in [c for c in df.columns if "Datum" in c]:
-            date_format = cfg["date_format"]
+        date_format = cfg["date_format"]
+        for col in [c for c in df.columns if "Datum" in c or c.lower() == "timestamp"]:
             if date_format == "dayfirst":
                 # Deutsches Datumsformat (dd.mm.yyyy) - robuster als striktes Format
                 df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
@@ -118,7 +122,7 @@ def load_data(path: Path, datatype: str = "SMARD"):
                 # Verwende spezifisches Format wenn angegeben
                 df[col] = pd.to_datetime(df[col], format=date_format, errors="coerce")
     except Exception as e:
-        warnings.warn(f"Failed to convert date columns in {path}: {e}", WarningMessage)
+        warnings.warn(f"Failed to convert date columns in {path}: {e}", category=UserWarning)
 
     # --- Create midpoint timestamp column if applicable
     if "Datum von" in df.columns and "Datum bis" in df.columns:
@@ -131,10 +135,16 @@ def load_data(path: Path, datatype: str = "SMARD"):
                 # Für zeitlich höher aufgelöste Daten: Mittelwert berechnen
                 df["Zeitpunkt"] = df["Datum von"] + (df["Datum bis"] - df["Datum von"]) / 2
         except Exception as e:
-            warnings.warn(f"Could not calculate 'Zeitpunkt' for {path}: {e}", WarningMessage)
+            warnings.warn(f"Could not calculate 'Zeitpunkt' for {path}: {e}", category=UserWarning)
+    elif "timestamp" in df.columns:
+        # BDEW-Last liefert einen einzelnen Zeitstempel je Zeile
+        df["Zeitpunkt"] = df["timestamp"]
 
     # --- Fill NaN with 0 to let MatPlot handle it
-    numeric_cols = [c for c in df.columns if "[MWh]" in c]
+    numeric_cols = [
+        c for c in df.columns
+        if "[MWh]" in c or "[kWh]" in c or c.lower().endswith("_kwh")
+    ]
     if numeric_cols:
         missing_count = df[numeric_cols].isna().sum().sum()
         if missing_count > 0:
@@ -154,14 +164,14 @@ def save_data(df: pd.DataFrame, path: Path, datatype: str = "SMARD") -> None:
             Must exist in FILE_FORMAT_OPTIONS. Defaults to "SMARD".
 
     Raises:
-        DataProcessingError: If datatype is unsupported or saving fails.
+        ValueError: If datatype is unsupported or saving fails.
     """
     # --- Validate datatype
     if not datatype:
-        raise DataProcessingError("Datatype must be provided and cannot be None.")
+        raise ValueError("Datatype must be provided and cannot be None.")
 
     if datatype not in FILE_FORMAT_OPTIONS:
-        raise DataProcessingError(
+        raise ValueError(
             f"Unsupported datatype '{datatype}'. "
             f"Supported types: {list(FILE_FORMAT_OPTIONS.keys())}. "
             f"Update constants.py to add support."
@@ -180,7 +190,7 @@ def save_data(df: pd.DataFrame, path: Path, datatype: str = "SMARD") -> None:
             na_rep=cfg["na_values"][0] if cfg["na_values"] else "",
         )
     except Exception as e:
-        raise DataProcessingError(f"Failed to save DataFrame to {path}: {e}")
+        raise OSError(f"Failed to save DataFrame to {path}: {e}")
 
 
 def save_data_excel(df: pd.DataFrame, path: Path) -> None:
@@ -191,7 +201,7 @@ def save_data_excel(df: pd.DataFrame, path: Path) -> None:
         path (Path | str): Destination file path.
 
     Raises:
-        DataProcessingError: If saving fails or openpyxl is not installed.
+        RuntimeError: If saving fails or openpyxl is not installed.
     """
     try:
         df.to_excel(
@@ -200,9 +210,9 @@ def save_data_excel(df: pd.DataFrame, path: Path) -> None:
             engine='openpyxl'
         )
     except ImportError:
-        raise DataProcessingError(
+        raise RuntimeError(
             "Excel export requires 'openpyxl' library. "
             "Install it with: pip install openpyxl"
         )
     except Exception as e:
-        raise DataProcessingError(f"Failed to save DataFrame to Excel {path}: {e}")
+        raise OSError(f"Failed to save DataFrame to Excel {path}: {e}")

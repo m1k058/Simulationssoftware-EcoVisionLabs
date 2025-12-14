@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from constants import ENERGY_SOURCES
-from errors import PlotNotFoundError, DataProcessingError, WarningMessage
+import warnings
 from data_processing import gen
 
 def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, output_dir=None, darkmode=False):

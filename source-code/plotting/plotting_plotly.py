@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from constants import ENERGY_SOURCES # Annahme, dass diese Datei unverändert bleibt
-from errors import PlotNotFoundError, DataProcessingError, WarningMessage
+import warnings
 from data_processing import gen
 
 # --- Haupt-Dispatcher (fast unverändert) ---

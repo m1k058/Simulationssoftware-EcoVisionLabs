@@ -72,7 +72,13 @@ EXPECTED_HEADERS = {
         "Gesamterzeugung [TWh]",
         "Bruttostromverbrauch [TWh]",
         "Anteil Erneuerbare",
-    ]
+    ],
+    "BDEW-Last": [
+        "timestamp",
+        "month",
+        "day_type",
+        "value_kWh",
+    ],
 }
 
 # Format for data in file
@@ -98,6 +104,14 @@ FILE_FORMAT_OPTIONS = {
         "decimal": ",",
         "thousands": ".",
         "date_format": "dayfirst",
+        "encoding": "utf-8",
+        "na_values": ["-", "NaN", "n/a", ""]
+    },    
+    "BDEW-Last": {
+        "sep": "\t",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "%Y-%m-%d %H:%M:%S",
         "encoding": "utf-8",
         "na_values": ["-", "NaN", "n/a", ""]
     },

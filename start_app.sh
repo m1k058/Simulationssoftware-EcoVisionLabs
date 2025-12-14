@@ -16,7 +16,7 @@ fi
 echo "Starte Streamlit-App..."
 
 
-streamlit run source_code/streamlit_ui.py
+streamlit run source-code/streamlit_ui.py
 -
 deactivate
 echo "Streamlit-App beendet."

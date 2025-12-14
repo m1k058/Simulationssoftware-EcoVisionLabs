@@ -29,8 +29,8 @@ black = "^24.0"
 isort = "^6.0"
 mypy = "^1.0"
 
-[tool.poetry.scripts]
-ecovision = "main_custom_calc:main"
+#[tool.poetry.scripts]
+# Streamlit is started via start_app.bat/sh. No console entry needed.
 
 [build-system]
 requires = ["poetry-core"]
