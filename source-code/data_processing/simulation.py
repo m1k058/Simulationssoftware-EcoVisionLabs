@@ -761,3 +761,225 @@ def simulate_production(
         )
     
     return df_result
+
+def simulate_consumption(
+    lastH: pd.DataFrame, 
+    lastG: pd.DataFrame, 
+    lastL: pd.DataFrame, 
+    lastZielH: float, 
+    lastZielG: float, 
+    lastZielL: float, 
+    simu_jahr: int
+) -> pd.DataFrame:
+    """
+    Simuliert den Energieverbrauch basierend auf BDEW-Lastprofilen für Haushalte (H25), 
+    Gewerbe (G25) und Landwirtschaft (L25) und vorgegebenen Jahres-Zielwerten.
+    
+    Die Funktion:
+    1. Lädt die BDEW-Standardlastprofile (H25, G25, L25) aus dem Jahr 2025
+    2. Erstellt einen vollständigen Jahresverlauf basierend auf:
+       - Wochentagen (WT)
+       - Samstagen (SA)
+       - Sonn- und Feiertagen (FT)
+    3. Skaliert die Profile so, dass die Jahressummen den Zielwerten entsprechen
+    4. Gibt einen DataFrame mit Viertelstunden-Auflösung zurück
+    
+    Args:
+        lastH (pd.DataFrame): BDEW H25-Lastprofil (Haushalte)
+        lastG (pd.DataFrame): BDEW G25-Lastprofil (Gewerbe)
+        lastL (pd.DataFrame): BDEW L25-Lastprofil (Landwirtschaft)
+        lastZielH (float): Ziel-Jahresverbrauch Haushalte [TWh]
+        lastZielG (float): Ziel-Jahresverbrauch Gewerbe [TWh]
+        lastZielL (float): Ziel-Jahresverbrauch Landwirtschaft [TWh]
+        simu_jahr (int): Simulationsjahr (z.B. 2030 oder 2045)
+        
+    Returns:
+        pd.DataFrame: DataFrame mit Spalten:
+            - Zeitpunkt: DateTime-Index mit Viertelstunden-Auflösung
+            - Haushalte [MWh]: Verbrauch Haushalte
+            - Gewerbe [MWh]: Verbrauch Gewerbe
+            - Landwirtschaft [MWh]: Verbrauch Landwirtschaft
+            - Gesamt [MWh]: Summe aller Sektoren
+    """
+    
+    def prepare_load_profile(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Bereitet ein BDEW-Lastprofil vor: Komma -> Punkt, sichert numerische Werte.
+        """
+        df = df.copy()
+        
+        # Ersetze Kommas durch Punkte in der value_kWh Spalte
+        if 'value_kWh' in df.columns:
+            # Falls als String eingelesen, konvertieren
+            if df['value_kWh'].dtype == 'object':
+                df['value_kWh'] = df['value_kWh'].astype(str).str.replace(',', '.')
+            df['value_kWh'] = pd.to_numeric(df['value_kWh'], errors='coerce')
+        
+        # Stelle sicher, dass timestamp ein Datetime ist
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        
+        # Stelle sicher, dass month ein int ist
+        if 'month' in df.columns:
+            df['month'] = pd.to_numeric(df['month'], errors='coerce').astype('Int64')
+        
+        return df
+    
+    # Vorbereiten der drei Lastprofile
+    print("Bereite Lastprofile vor...")
+    lastH = prepare_load_profile(lastH)
+    lastG = prepare_load_profile(lastG)
+    lastL = prepare_load_profile(lastL)
+    
+    # Erstelle Kalender für das Simulationsjahr
+    print(f"\nErstelle Kalender für Jahr {simu_jahr}...")
+    
+    # Erzeuge alle Viertelstunden des Jahres
+    start_date = pd.Timestamp(f'{simu_jahr}-01-01 00:00:00')
+    end_date = pd.Timestamp(f'{simu_jahr}-12-31 23:45:00')
+    zeitpunkte = pd.date_range(start=start_date, end=end_date, freq='15min')
+    
+    # Erstelle Basis-DataFrame
+    df_result = pd.DataFrame({'Zeitpunkt': zeitpunkte})
+    df_result['month'] = df_result['Zeitpunkt'].dt.month
+    df_result['weekday'] = df_result['Zeitpunkt'].dt.weekday  # 0=Montag, 6=Sonntag
+    
+    # Deutsche Feiertage für das Simulationsjahr (vereinfacht)
+    # Feste Feiertage
+    feiertage = [
+        pd.Timestamp(f'{simu_jahr}-01-01'),  # Neujahr
+        pd.Timestamp(f'{simu_jahr}-05-01'),  # Tag der Arbeit
+        pd.Timestamp(f'{simu_jahr}-10-03'),  # Tag der Deutschen Einheit
+        pd.Timestamp(f'{simu_jahr}-12-25'),  # 1. Weihnachtstag
+        pd.Timestamp(f'{simu_jahr}-12-26'),  # 2. Weihnachtstag
+    ]
+    
+    # Bewegliche Feiertage (Ostern-basiert) - vereinfachte Berechnung
+    # Für eine genaue Berechnung könnte man das 'holidays' Package verwenden
+    # Hier nutzen wir eine Näherung
+    try:
+        import holidays
+        de_holidays = holidays.Germany(years=simu_jahr)
+        feiertage = [pd.Timestamp(date) for date in de_holidays.keys()]
+    except ImportError:
+        print("Hinweis: Package 'holidays' nicht verfügbar. Verwende vereinfachte Feiertagsliste.")
+    
+    # Bestimme day_type für jeden Zeitpunkt
+    def get_day_type(row):
+        date = row['Zeitpunkt'].date()
+        if pd.Timestamp(date) in feiertage or row['weekday'] == 6:  # Sonntag oder Feiertag
+            return 'FT'
+        elif row['weekday'] == 5:  # Samstag
+            return 'SA'
+        else:  # Montag-Freitag
+            return 'WT'
+    
+    df_result['day_type'] = df_result.apply(get_day_type, axis=1)
+    
+    print(f"Kalendertage: {len(df_result) // 96} Tage mit {len(df_result)} Viertelstunden")
+    print(f"  - Werktage (WT): {(df_result['day_type'] == 'WT').sum() // 96}")
+    print(f"  - Samstage (SA): {(df_result['day_type'] == 'SA').sum() // 96}")
+    print(f"  - Sonn-/Feiertage (FT): {(df_result['day_type'] == 'FT').sum() // 96}")
+    
+    # Funktion zum Zuordnen der Lastprofilwerte (optimiert mit merge)
+    def map_load_profile(df_result: pd.DataFrame, df_profile: pd.DataFrame, sector_name: str) -> pd.Series:
+        """
+        Ordnet jedem Zeitpunkt im Ergebnis-DataFrame den passenden Wert aus dem Lastprofil zu.
+        Verwendet merge für bessere Performance.
+        """
+        # Erstelle Hilfsspalten für das Matching
+        df_work = df_result.copy()
+        df_work['hour'] = df_work['Zeitpunkt'].dt.hour
+        df_work['minute'] = df_work['Zeitpunkt'].dt.minute
+        
+        # Bereite Profil vor
+        df_prof = df_profile.copy()
+        df_prof['hour'] = df_prof['timestamp'].dt.hour
+        df_prof['minute'] = df_prof['timestamp'].dt.minute
+        
+        # Merge basierend auf month, day_type, hour, minute
+        df_merged = df_work.merge(
+            df_prof[['month', 'day_type', 'hour', 'minute', 'value_kWh']],
+            on=['month', 'day_type', 'hour', 'minute'],
+            how='left'
+        )
+        
+        # Prüfe auf fehlende Werte
+        missing = df_merged['value_kWh'].isna().sum()
+        if missing > 0:
+            print(f"Warnung: {missing} Zeitpunkte ohne Lastprofil-Wert für {sector_name} (werden mit 0 gefüllt)")
+            df_merged['value_kWh'].fillna(0.0, inplace=True)
+        
+        return df_merged['value_kWh']
+    
+    print("\nOrdne Lastprofil-Werte zu...")
+    df_result['Haushalte_kWh'] = map_load_profile(df_result, lastH, 'Haushalte')
+    df_result['Gewerbe_kWh'] = map_load_profile(df_result, lastG, 'Gewerbe')
+    df_result['Landwirtschaft_kWh'] = map_load_profile(df_result, lastL, 'Landwirtschaft')
+    
+    # Berechne Skalierungsfaktoren
+    # Die Lastprofile geben relative Werte für 1 MWh Jahresverbrauch an
+    # Wir müssen sie so skalieren, dass die Jahressumme dem Zielwert entspricht
+    
+    print("\nBerechne Skalierungsfaktoren...")
+    
+    # Summe der Profilwerte (in kWh)
+    sum_H_kWh = df_result['Haushalte_kWh'].sum()
+    sum_G_kWh = df_result['Gewerbe_kWh'].sum()
+    sum_L_kWh = df_result['Landwirtschaft_kWh'].sum()
+    
+    # Konvertiere Zielwerte von TWh in kWh
+    ziel_H_kWh = lastZielH * 1e9  # TWh -> kWh
+    ziel_G_kWh = lastZielG * 1e9
+    ziel_L_kWh = lastZielL * 1e9
+    
+    # Berechne Skalierungsfaktoren
+    faktor_H = ziel_H_kWh / sum_H_kWh if sum_H_kWh > 0 else 0
+    faktor_G = ziel_G_kWh / sum_G_kWh if sum_G_kWh > 0 else 0
+    faktor_L = ziel_L_kWh / sum_L_kWh if sum_L_kWh > 0 else 0
+    
+    print(f"  Haushalte: Faktor = {faktor_H:.6f} (Ziel: {lastZielH:.2f} TWh)")
+    print(f"  Gewerbe: Faktor = {faktor_G:.6f} (Ziel: {lastZielG:.2f} TWh)")
+    print(f"  Landwirtschaft: Faktor = {faktor_L:.6f} (Ziel: {lastZielL:.2f} TWh)")
+    
+    # Skaliere und konvertiere zu MWh
+    df_result['Haushalte [MWh]'] = df_result['Haushalte_kWh'] * faktor_H / 1000.0
+    df_result['Gewerbe [MWh]'] = df_result['Gewerbe_kWh'] * faktor_G / 1000.0
+    df_result['Landwirtschaft [MWh]'] = df_result['Landwirtschaft_kWh'] * faktor_L / 1000.0
+    
+    # Berechne Gesamtverbrauch
+    df_result['Gesamt [MWh]'] = (
+        df_result['Haushalte [MWh]'] + 
+        df_result['Gewerbe [MWh]'] + 
+        df_result['Landwirtschaft [MWh]']
+    )
+    
+    # Bereinige DataFrame - entferne Hilfsspalten
+    df_result = df_result[[
+        'Zeitpunkt',
+        'Haushalte [MWh]',
+        'Gewerbe [MWh]',
+        'Landwirtschaft [MWh]',
+        'Gesamt [MWh]'
+    ]]
+    
+    # Validierung der Ergebnisse
+    print("\n" + "="*60)
+    print("VALIDIERUNG DER SIMULATION")
+    print("="*60)
+    
+    sum_H_TWh = df_result['Haushalte [MWh]'].sum() / 1e6
+    sum_G_TWh = df_result['Gewerbe [MWh]'].sum() / 1e6
+    sum_L_TWh = df_result['Landwirtschaft [MWh]'].sum() / 1e6
+    sum_total_TWh = df_result['Gesamt [MWh]'].sum() / 1e6
+    
+    print(f"Haushalte:       {sum_H_TWh:.4f} TWh (Ziel: {lastZielH:.4f} TWh, Abweichung: {abs(sum_H_TWh - lastZielH):.6f} TWh)")
+    print(f"Gewerbe:         {sum_G_TWh:.4f} TWh (Ziel: {lastZielG:.4f} TWh, Abweichung: {abs(sum_G_TWh - lastZielG):.6f} TWh)")
+    print(f"Landwirtschaft:  {sum_L_TWh:.4f} TWh (Ziel: {lastZielL:.4f} TWh, Abweichung: {abs(sum_L_TWh - lastZielL):.6f} TWh)")
+    print(f"GESAMT:          {sum_total_TWh:.4f} TWh (Ziel: {lastZielH + lastZielG + lastZielL:.4f} TWh)")
+    print("="*60)
+    
+    col.show_first_rows(df_result)
+    
+    return df_result
+    
