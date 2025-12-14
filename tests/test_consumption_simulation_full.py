@@ -3,7 +3,8 @@
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / "source-code"))
+# Add source-code directory to Python path (parent of tests folder -> source-code)
+sys.path.insert(0, str(Path(__file__).parent.parent / "source-code"))
 
 from io_handler import load_data
 from data_processing.simulation import simulate_consumption
@@ -14,7 +15,7 @@ print("="*70)
 
 # Lade Lastprofile
 print("\n1. Lade BDEW-Lastprofile...")
-base = Path(__file__).parent / "raw-data"
+base = Path(__file__).parent.parent / "raw-data"
 lastH = load_data(base / "BDEW-Standardlastprofile-H25.csv", datatype="BDEW-Last")
 lastG = load_data(base / "BDEW-Standardlastprofile-G25.csv", datatype="BDEW-Last")
 lastL = load_data(base / "BDEW-Standardlastprofile-L25.csv", datatype="BDEW-Last")

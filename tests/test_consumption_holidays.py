@@ -3,7 +3,8 @@
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / "source-code"))
+# Add source-code directory to Python path
+sys.path.insert(0, str(Path(__file__).parent.parent / "source-code"))
 
 from io_handler import load_data
 from data_processing.simulation import simulate_consumption

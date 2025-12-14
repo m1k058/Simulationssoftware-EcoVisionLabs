@@ -826,13 +826,11 @@ def simulate_consumption(
         return df
     
     # Vorbereiten der drei Lastprofile
-    print("Bereite Lastprofile vor...")
     lastH = prepare_load_profile(lastH)
     lastG = prepare_load_profile(lastG)
     lastL = prepare_load_profile(lastL)
     
     # Erstelle Kalender für das Simulationsjahr
-    print(f"\nErstelle Kalender für Jahr {simu_jahr}...")
     
     # Erzeuge alle Viertelstunden des Jahres
     start_date = pd.Timestamp(f'{simu_jahr}-01-01 00:00:00')
@@ -843,43 +841,43 @@ def simulate_consumption(
     df_result = pd.DataFrame({'Zeitpunkt': zeitpunkte})
     df_result['month'] = df_result['Zeitpunkt'].dt.month
     df_result['weekday'] = df_result['Zeitpunkt'].dt.weekday  # 0=Montag, 6=Sonntag
+    df_result['day'] = df_result['Zeitpunkt'].dt.day
     
-    # Deutsche Feiertage für das Simulationsjahr (vereinfacht)
-    # Feste Feiertage
-    feiertage = [
-        pd.Timestamp(f'{simu_jahr}-01-01'),  # Neujahr
-        pd.Timestamp(f'{simu_jahr}-05-01'),  # Tag der Arbeit
-        pd.Timestamp(f'{simu_jahr}-10-03'),  # Tag der Deutschen Einheit
-        pd.Timestamp(f'{simu_jahr}-12-25'),  # 1. Weihnachtstag
-        pd.Timestamp(f'{simu_jahr}-12-26'),  # 2. Weihnachtstag
-    ]
-    
-    # Bewegliche Feiertage (Ostern-basiert) - vereinfachte Berechnung
-    # Für eine genaue Berechnung könnte man das 'holidays' Package verwenden
-    # Hier nutzen wir eine Näherung
+    # Deutsche Feiertage für das Simulationsjahr
+    # Wir nutzen das holidays Package für bundeseinheitliche Feiertage
     try:
         import holidays
+        # Standardmäßig bundeseinheitliche Feiertage. 
+        # Für bundeslandspezifische Feiertage müsste hier das Bundesland (prov) übergeben werden.
         de_holidays = holidays.Germany(years=simu_jahr)
         feiertage = [pd.Timestamp(date) for date in de_holidays.keys()]
     except ImportError:
-        print("Hinweis: Package 'holidays' nicht verfügbar. Verwende vereinfachte Feiertagsliste.")
+        # Fallback: Feste Feiertage (vereinfacht)
+        feiertage = [
+            pd.Timestamp(f'{simu_jahr}-01-01'),  # Neujahr
+            pd.Timestamp(f'{simu_jahr}-05-01'),  # Tag der Arbeit
+            pd.Timestamp(f'{simu_jahr}-10-03'),  # Tag der Deutschen Einheit
+            pd.Timestamp(f'{simu_jahr}-12-25'),  # 1. Weihnachtstag
+            pd.Timestamp(f'{simu_jahr}-12-26'),  # 2. Weihnachtstag
+        ]
     
     # Bestimme day_type für jeden Zeitpunkt
     def get_day_type(row):
         date = row['Zeitpunkt'].date()
-        if pd.Timestamp(date) in feiertage or row['weekday'] == 6:  # Sonntag oder Feiertag
+        is_holiday = pd.Timestamp(date) in feiertage
+        is_sunday = row['weekday'] == 6
+        
+        # BDEW-Regel: 24.12. und 31.12. gelten als Samstag, sofern sie nicht auf einen Sonntag fallen
+        is_heiligabend_silvester = (row['month'] == 12) and (row['day'] in [24, 31])
+        
+        if is_holiday or is_sunday:
             return 'FT'
-        elif row['weekday'] == 5:  # Samstag
+        elif row['weekday'] == 5 or is_heiligabend_silvester:  # Samstag oder 24./31.12.
             return 'SA'
         else:  # Montag-Freitag
             return 'WT'
     
     df_result['day_type'] = df_result.apply(get_day_type, axis=1)
-    
-    print(f"Kalendertage: {len(df_result) // 96} Tage mit {len(df_result)} Viertelstunden")
-    print(f"  - Werktage (WT): {(df_result['day_type'] == 'WT').sum() // 96}")
-    print(f"  - Samstage (SA): {(df_result['day_type'] == 'SA').sum() // 96}")
-    print(f"  - Sonn-/Feiertage (FT): {(df_result['day_type'] == 'FT').sum() // 96}")
     
     # Funktion zum Zuordnen der Lastprofilwerte (optimiert mit merge)
     def map_load_profile(df_result: pd.DataFrame, df_profile: pd.DataFrame, sector_name: str) -> pd.Series:
@@ -907,13 +905,37 @@ def simulate_consumption(
         # Prüfe auf fehlende Werte
         missing = df_merged['value_kWh'].isna().sum()
         if missing > 0:
-            print(f"Warnung: {missing} Zeitpunkte ohne Lastprofil-Wert für {sector_name} (werden mit 0 gefüllt)")
+            # print(f"Warnung: {missing} Zeitpunkte ohne Lastprofil-Wert für {sector_name} (werden mit 0 gefüllt)")
             df_merged['value_kWh'].fillna(0.0, inplace=True)
         
         return df_merged['value_kWh']
     
-    print("\nOrdne Lastprofil-Werte zu...")
+    # print("\nOrdne Lastprofil-Werte zu...")
     df_result['Haushalte_kWh'] = map_load_profile(df_result, lastH, 'Haushalte')
+    
+    # Dynamisierung für Haushalte (H25)
+    # Formel: x = x_0 * (-3,9E-10*t^4 + 3,20E-7*t^3 - 7,02E-5*t^2 + 2,10E-3*t + 1,24)
+    # t = Tag des Jahres
+    t = df_result['Zeitpunkt'].dt.dayofyear
+    
+    # Berechnung des Dynamisierungsfaktors
+    dyn_faktor = (
+        -3.92e-10 * t**4 + 
+        3.20e-7 * t**3 - 
+        7.02e-5 * t**2 + 
+        2.10e-3 * t + 
+        1.24
+    )
+    
+    # Rundung des Faktors auf 4 Nachkommastellen (empfohlen)
+    dyn_faktor = dyn_faktor.round(4)
+    
+    # Anwenden auf das Haushaltsprofil
+    df_result['Haushalte_kWh'] = df_result['Haushalte_kWh'] * dyn_faktor
+    
+    # Ergebnis auf 3 Nachkommastellen runden (empfohlen)
+    df_result['Haushalte_kWh'] = df_result['Haushalte_kWh'].round(3)
+    
     df_result['Gewerbe_kWh'] = map_load_profile(df_result, lastG, 'Gewerbe')
     df_result['Landwirtschaft_kWh'] = map_load_profile(df_result, lastL, 'Landwirtschaft')
     
@@ -921,7 +943,7 @@ def simulate_consumption(
     # Die Lastprofile geben relative Werte für 1 MWh Jahresverbrauch an
     # Wir müssen sie so skalieren, dass die Jahressumme dem Zielwert entspricht
     
-    print("\nBerechne Skalierungsfaktoren...")
+    # print("\nBerechne Skalierungsfaktoren...")
     
     # Summe der Profilwerte (in kWh)
     sum_H_kWh = df_result['Haushalte_kWh'].sum()
@@ -938,9 +960,9 @@ def simulate_consumption(
     faktor_G = ziel_G_kWh / sum_G_kWh if sum_G_kWh > 0 else 0
     faktor_L = ziel_L_kWh / sum_L_kWh if sum_L_kWh > 0 else 0
     
-    print(f"  Haushalte: Faktor = {faktor_H:.6f} (Ziel: {lastZielH:.2f} TWh)")
-    print(f"  Gewerbe: Faktor = {faktor_G:.6f} (Ziel: {lastZielG:.2f} TWh)")
-    print(f"  Landwirtschaft: Faktor = {faktor_L:.6f} (Ziel: {lastZielL:.2f} TWh)")
+    # print(f"  Haushalte: Faktor = {faktor_H:.6f} (Ziel: {lastZielH:.2f} TWh)")
+    # print(f"  Gewerbe: Faktor = {faktor_G:.6f} (Ziel: {lastZielG:.2f} TWh)")
+    # print(f"  Landwirtschaft: Faktor = {faktor_L:.6f} (Ziel: {lastZielL:.2f} TWh)")
     
     # Skaliere und konvertiere zu MWh
     df_result['Haushalte [MWh]'] = df_result['Haushalte_kWh'] * faktor_H / 1000.0
@@ -964,22 +986,22 @@ def simulate_consumption(
     ]]
     
     # Validierung der Ergebnisse
-    print("\n" + "="*60)
-    print("VALIDIERUNG DER SIMULATION")
-    print("="*60)
+    # print("\n" + "="*60)
+    # print("VALIDIERUNG DER SIMULATION")
+    # print("="*60)
     
     sum_H_TWh = df_result['Haushalte [MWh]'].sum() / 1e6
     sum_G_TWh = df_result['Gewerbe [MWh]'].sum() / 1e6
     sum_L_TWh = df_result['Landwirtschaft [MWh]'].sum() / 1e6
     sum_total_TWh = df_result['Gesamt [MWh]'].sum() / 1e6
     
-    print(f"Haushalte:       {sum_H_TWh:.4f} TWh (Ziel: {lastZielH:.4f} TWh, Abweichung: {abs(sum_H_TWh - lastZielH):.6f} TWh)")
-    print(f"Gewerbe:         {sum_G_TWh:.4f} TWh (Ziel: {lastZielG:.4f} TWh, Abweichung: {abs(sum_G_TWh - lastZielG):.6f} TWh)")
-    print(f"Landwirtschaft:  {sum_L_TWh:.4f} TWh (Ziel: {lastZielL:.4f} TWh, Abweichung: {abs(sum_L_TWh - lastZielL):.6f} TWh)")
-    print(f"GESAMT:          {sum_total_TWh:.4f} TWh (Ziel: {lastZielH + lastZielG + lastZielL:.4f} TWh)")
-    print("="*60)
+    # print(f"Haushalte:       {sum_H_TWh:.4f} TWh (Ziel: {lastZielH:.4f} TWh, Abweichung: {abs(sum_H_TWh - lastZielH):.6f} TWh)")
+    # print(f"Gewerbe:         {sum_G_TWh:.4f} TWh (Ziel: {lastZielG:.4f} TWh, Abweichung: {abs(sum_G_TWh - lastZielG):.6f} TWh)")
+    # print(f"Landwirtschaft:  {sum_L_TWh:.4f} TWh (Ziel: {lastZielL:.4f} TWh, Abweichung: {abs(sum_L_TWh - lastZielL):.6f} TWh)")
+    # print(f"GESAMT:          {sum_total_TWh:.4f} TWh (Ziel: {lastZielH + lastZielG + lastZielL:.4f} TWh)")
+    # print("="*60)
     
-    col.show_first_rows(df_result)
+    # col.show_first_rows(df_result)
     
     return df_result
     
