@@ -30,7 +30,7 @@ def standard_simulation_page() -> None:
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     
     with col_btn1:
-        if st.button(":material/upload_file: Datei laden", use_container_width=True):
+        if st.button(":material/upload_file: Datei laden", width='stretch'):
             if uploaded_file is not None:
                 try:
                     st.session_state.sm.load_scenario(uploaded_file)
@@ -42,7 +42,7 @@ def standard_simulation_page() -> None:
                 st.warning("⚠️ Bitte wähle zuerst eine Datei aus.")
     
     with col_btn2:
-        if st.button(":material/assignment: Beispiel laden", use_container_width=True):
+        if st.button(":material/assignment: Beispiel laden", width='stretch'):
             try:
                 from pathlib import Path
                 # Scenarios folder is at project root, not in source-code
@@ -57,7 +57,7 @@ def standard_simulation_page() -> None:
                 st.error(f"❌ Fehler beim Laden des Beispiels: {e}")
     
     with col_btn3:
-        if st.button(":material/undo: Zurücksetzen", use_container_width=True):
+        if st.button(":material/undo: Zurücksetzen", width='stretch'):
             st.session_state.sm.current_scenario = {}
             st.session_state.sm.current_path = None
             st.success("✅ Datei gelöscht!")
@@ -232,7 +232,11 @@ def standard_simulation_page() -> None:
 
     st.markdown("## Erzeugungssimulation")
 
-    ErzeugungssimulationRun = False
+    # Session keys müssen erhalten bleiben, sonst verschwinden die Ergebnisse nach jedem UI-Refresh
+    if "simuGenRUN" not in st.session_state:
+        st.session_state.simuGenRUN = 0
+    if "resultsGenSim" not in st.session_state:
+        st.session_state.resultsGenSim = {}
 
     if st.button("Erzeugungssimulation starten"):
         
@@ -255,7 +259,7 @@ def standard_simulation_page() -> None:
 
         
         # Simulation ausführen und Ergebnisse speichern
-        results = {}
+        st.session_state.resultsGenSim = {}
         for year in years:
             df_res = simu.simulate_production(
                 st.session_state.cfg,
@@ -267,33 +271,34 @@ def standard_simulation_page() -> None:
                 profile[year]["Photovoltaik"],
                 year
             )
-            results[year] = df_res
-            ErzeugungssimulationRun = True
+            st.session_state.resultsGenSim[year] = df_res
+            st.session_state.simuGenRUN = 1
 
 
-    if ErzeugungssimulationRun == True:    
+    if st.session_state.simuGenRUN >= 1:    
         # Anzeige der Ergebnisse Tabele/visuell
         tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"])
 
 
         # Tabs erstellen und DataFrames anzeigen
         with tab1:
-            selected_year_str = st.segmented_control(
+            selected_year_tab1 = st.segmented_control(
                 "Bitte Jahr auswählen",
                 [str(year) for year in years],
                 default=str(years[0]),
-                selection_mode="single"
+                selection_mode="single",
+                key="segmented_year_table"
             )
             # Konvertiere die Auswahl zurück zu int (falls Jahre als int vorliegen)
             try:
-                selected_year = int(selected_year_str)
+                selected_year = int(selected_year_tab1)
             except (ValueError, TypeError):
                 selected_year = years[0]
 
             st.subheader(f"Erzeugungssimulation {selected_year}")
-            st.dataframe(results[selected_year], use_container_width=True)
+            st.dataframe(st.session_state.resultsGenSim[selected_year], width='stretch')
             # Konvertiere zu CSV mit ; als Separator und , als Dezimalzeichen
-            csv_data = results[selected_year].to_csv(
+            csv_data = st.session_state.resultsGenSim[selected_year].to_csv(
                 index=False,
                 sep=';',
                 decimal=','
@@ -306,20 +311,21 @@ def standard_simulation_page() -> None:
             )
 
         with tab2:
-            selected_year_str_viz = st.segmented_control(
+            selected_year_tab2 = st.segmented_control(
                 "Bitte Jahr auswählen",
                 [str(year) for year in years],
                 default=str(years[0]),
-                selection_mode="single"
+                selection_mode="single",
+                key="segmented_year_viz"
             )
             try:
-                selected_year_viz = int(selected_year_str_viz)
+                selected_year_viz = int(selected_year_tab2)
             except (ValueError, TypeError):
                 selected_year_viz = years[0]
 
             st.subheader(f"Visuelle Darstellung {selected_year_viz}")
             # Einfache visuelle Darstellung (z. B. Linienplot, falls Zeitreihen vorhanden)
             try:
-                st.line_chart(results[selected_year_viz].set_index(results[selected_year_viz].columns[0]))
+                False
             except Exception:
                 st.write("Visualisierung wird später ergänzt.")
