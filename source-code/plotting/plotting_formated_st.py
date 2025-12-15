@@ -105,7 +105,7 @@ def create_stacked_bar_plot(df: pd.DataFrame, energy_keys: list, title: str = "E
             if ENERGY_SOURCES[k]["colname"] in df.columns
         ]
         if not available_cols:
-            raise DataProcessingError(f"No matching columns found for plot '{title}'.")
+            raise ValueError(f"No matching columns found for plot '{title}'.")
 
         labels = [
             ENERGY_SOURCES[k]["name"] for k in energy_keys
@@ -142,7 +142,7 @@ def create_stacked_bar_plot(df: pd.DataFrame, energy_keys: list, title: str = "E
         plt.tight_layout()
         return fig
     except Exception as e:
-        raise DataProcessingError(f"Failed to generate stacked bar plot: {e}")
+        raise ValueError(f"Failed to generate stacked bar plot: {e}")
 
 
 def create_line_chart(df: pd.DataFrame, columns: list = None, title: str = "Line chart", 

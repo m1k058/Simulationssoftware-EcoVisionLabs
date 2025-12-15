@@ -1,13 +1,84 @@
+# Standard Bibliotheken
 import streamlit as st 
-from data_manager import DataManager
-from config_manager import ConfigManager
-from scenario_manager import ScenarioManager
 import pandas as pd
+from datetime import datetime
 
 # Eigene Imports
 import data_processing.generation_profile as genPro
 import data_processing.simulation as simu
 import data_processing.col as col
+import plotting.plotting_plotly_st as ply
+
+# Manager Imports
+from data_manager import DataManager
+from config_manager import ConfigManager
+from scenario_manager import ScenarioManager
+
+
+def create_date_range_selector(df: pd.DataFrame, key_suffix: str = "") -> tuple[pd.Timestamp, pd.Timestamp]:
+    """
+    Erstellt Zeitauswahl-Felder basierend auf den verfügbaren Daten im DataFrame.
+    
+    Args:
+        df: DataFrame mit 'Zeitpunkt' Spalte
+        key_suffix: Suffix für eindeutige Streamlit Keys
+    
+    Returns:
+        Tuple mit (date_from, date_to) als pd.Timestamp
+    """
+    if "Zeitpunkt" not in df.columns:
+        raise KeyError("DataFrame benötigt 'Zeitpunkt' Spalte")
+    
+    # Zeitpunkt konvertieren und Min/Max ermitteln
+    df_time = pd.to_datetime(df["Zeitpunkt"])
+    min_date = df_time.min()
+    max_date = df_time.max()
+    
+    # Standard: 01. Mai - 07. Mai (oder erste verfügbare Woche)
+    year = min_date.year
+    default_start = pd.Timestamp(year=year, month=5, day=1)
+    default_end = pd.Timestamp(year=year, month=5, day=7)
+    
+    # Falls Mai nicht im Datensatz, nimm erste Woche der verfügbaren Daten
+    if default_start < min_date or default_start > max_date:
+        default_start = min_date
+        default_end = min_date + pd.Timedelta(days=7)
+        if default_end > max_date:
+            default_end = max_date
+    
+    # Zeitauswahl UI
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        date_from = st.date_input(
+            "Von",
+            value=default_start.date(),
+            min_value=min_date.date(),
+            max_value=max_date.date(),
+            format="DD.MM.YYYY",
+            key=f"date_from_{key_suffix}"
+        )
+    with col2:
+        date_to = st.date_input(
+            "Bis",
+            value=default_end.date(),
+            min_value=min_date.date(),
+            max_value=max_date.date(),
+            format="DD.MM.YYYY",
+            key=f"date_to_{key_suffix}"
+        )
+    with col3:
+        holeYear = st.button("Ganzes Jahr anzeigen", key=f"full_year_btn_{key_suffix}", on_click=lambda: None)
+    
+    # Konvertiere zu Timestamp (bis enthält den ganzen Tag)
+    if holeYear:
+        date_from_ts = min_date
+        date_to_ts = max_date
+    else:
+        date_from_ts = pd.Timestamp(date_from)
+        date_to_ts = pd.Timestamp(date_to, hour=23, minute=59, second=59)
+    
+    return date_from_ts, date_to_ts
+
 
 def standard_simulation_page() -> None:
     st.title("Simulation")
@@ -322,10 +393,17 @@ def standard_simulation_page() -> None:
                 selected_year_viz = int(selected_year_tab2)
             except (ValueError, TypeError):
                 selected_year_viz = years[0]
-
             st.subheader(f"Visuelle Darstellung {selected_year_viz}")
-            # Einfache visuelle Darstellung (z. B. Linienplot, falls Zeitreihen vorhanden)
-            try:
-                False
-            except Exception:
-                st.write("Visualisierung wird später ergänzt.")
+
+            plot_df = st.session_state.resultsGenSim[selected_year_viz]
+
+            # Zeitauswahl mit Helper-Funktion
+            date_from_ts, date_to_ts = create_date_range_selector(plot_df, key_suffix=str(selected_year_viz))
+
+
+            fig = ply.create_stacked_area_plot(
+                    plot_df,
+                    title="",
+                    date_from=date_from_ts,
+                    date_to=date_to_ts)
+            st.plotly_chart(fig)
