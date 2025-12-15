@@ -30,12 +30,12 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 
         df_ids = plot_cfg.get("dataframes", [])
         if not df_ids:
-            raise DataProcessingError(f"Plot '{plot_cfg['name']}' hat keine DataFrames zugewiesen.")
+            raise ValueError(f"Plot '{plot_cfg['name']}' hat keine DataFrames zugewiesen.")
         
         plot_type = plot_cfg.get("plot_type", "stacked_bar")
         if plot_type == "histogram":
             if len(df_ids) != 2:
-                raise DataProcessingError(
+                raise ValueError(
                     f"Plot '{plot_cfg['name']}' benötigt genau 2 DataFrames (Erzeugung + Verbrauch) für Histogramm."
                 )
         elif len(df_ids) > 1:
@@ -47,18 +47,18 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
         df_id = df_ids[0]
         df = manager.get(df_id)
         if df is None:
-            raise DataProcessingError(
+            raise ValueError(
                 f"DataFrame mit ID '{df_id}' nicht gefunden für Plot '{plot_cfg['name']}'."
             )
 
         date_start = pd.to_datetime(plot_cfg["date_start"], format="%d.%m.%Y %H:%M", errors="coerce")
         date_end = pd.to_datetime(plot_cfg["date_end"], format="%d.%m.%Y %H:%M", errors="coerce")
         if pd.isna(date_start) or pd.isna(date_end):
-            raise DataProcessingError(f"Ungültiges Datumsformat in Plot '{plot_cfg['name']}'.")
+            raise ValueError(f"Ungültiges Datumsformat in Plot '{plot_cfg['name']}'.")
 
         df_filtered = df[(df["Zeitpunkt"] >= date_start) & (df["Zeitpunkt"] <= date_end)]
         if df_filtered.empty:
-            raise DataProcessingError(f"Keine Daten im angegebenen Zeitbereich für Plot '{plot_cfg['name']}' gefunden.")
+            raise ValueError(f"Keine Daten im angegebenen Zeitbereich für Plot '{plot_cfg['name']}' gefunden.")
 
         if plot_type == "stacked_bar":
             plot_stacked_bar(df_filtered, plot_cfg, show=show, save=save, output_dir=output_dir)
@@ -70,19 +70,19 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
             col1 = plot_cfg.get("column1")
             col2 = plot_cfg.get("column2")
             if not col1 or not col2:
-                raise DataProcessingError(f"Plot '{plot_cfg['name']}' fehlen 'column1' oder 'column2' für Bilanzplot.")
+                raise ValueError(f"Plot '{plot_cfg['name']}' fehlen 'column1' oder 'column2' für Bilanzplot.")
             title = plot_cfg.get("name", "Balance plot")
             plot_balance(config_manager, df_filtered, column1=col1, column2=col2, title=title, show=show, save=save, output_dir=output_dir)
         elif plot_type == "histogram":
             df_id_2 = df_ids[1]
             df_2 = manager.get(df_id_2)
             if df_2 is None:
-                raise DataProcessingError(
+                raise ValueError(
                     f"DataFrame mit ID '{df_id_2}' nicht gefunden für Plot '{plot_cfg['name']}'."
                 )
             df_2_filtered = df_2[(df_2["Zeitpunkt"] >= date_start) & (df_2["Zeitpunkt"] <= date_end)]
             if df_2_filtered.empty:
-                raise DataProcessingError(f"Keine Verbrauchsdaten im angegebenen Zeitbereich für Plot '{plot_cfg['name']}' gefunden.")
+                raise ValueError(f"Keine Verbrauchsdaten im angegebenen Zeitbereich für Plot '{plot_cfg['name']}' gefunden.")
             
             title = plot_cfg.get("name", "Renewable Energy Share Histogram")
             plot_ee_consumption_histogram(config_manager, df_filtered, df_2_filtered, title=title, show=show, save=save, output_dir=output_dir)
@@ -90,7 +90,7 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
             raise NotImplementedError(f"Plot-Typ '{plot_type}' ist nicht implementiert.")
 
     except Exception as e:
-        warnings.warn(f"Plotting fehlgeschlagen für '{plot_identifier}': {e}", WarningMessage)
+        warnings.warn(f"Plotting fehlgeschlagen für '{plot_identifier}': {e}", UserWarning)
 
 
 def _handle_plotly_output(fig, fig_title, show=True, save=False, output_dir=None):
@@ -116,10 +116,10 @@ def _handle_plotly_output(fig, fig_title, show=True, save=False, output_dir=None
                 fig.write_image(str(filename_png), width=1920, height=1080, scale=1)
                 print(f"Statischer Plot gespeichert: {filename_png}")
             except ValueError as e:
-                warnings.warn(f"PNG-Speichern fehlgeschlagen. Ist 'kaleido' installiert? (pip install kaleido). Fehler: {e}", WarningMessage)
+                warnings.warn(f"PNG-Speichern fehlgeschlagen. Ist 'kaleido' installiert? (pip install kaleido). Fehler: {e}", UserWarning)
         
         if not show and not save:
-            warnings.warn("Plot wurde weder angezeigt noch gespeichert.", WarningMessage)
+            warnings.warn("Plot wurde weder angezeigt noch gespeichert.", UserWarning)
 
     except Exception as e:
         print(f"Fehler beim Anzeigen/Speichern des Plots: {e}")
@@ -134,7 +134,7 @@ def plot_stacked_bar(df, plot_cfg, show=True, save=False, output_dir=None):
             if ENERGY_SOURCES[k]["colname"] in df.columns
         ]
         if not available_cols:
-            raise DataProcessingError(f"Keine passenden Spalten für Plot '{plot_cfg['name']}' gefunden.")
+            raise ValueError(f"Keine passenden Spalten für Plot '{plot_cfg['name']}' gefunden.")
 
         labels = [
             ENERGY_SOURCES[k]["name"] for k in energy_keys
@@ -172,7 +172,7 @@ def plot_stacked_bar(df, plot_cfg, show=True, save=False, output_dir=None):
         _handle_plotly_output(fig, plot_cfg['name'], show, save, output_dir)
 
     except Exception as e:
-        raise DataProcessingError(f"Fehler beim Erstellen des Stacked Bar Plots: {e}")
+        raise ValueError(f"Fehler beim Erstellen des Stacked Bar Plots: {e}")
 
 
 def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df_verbrauch: pd.DataFrame, title: str = "Renewable Energy Share Histogram", show=True, save=False, output_dir=None):

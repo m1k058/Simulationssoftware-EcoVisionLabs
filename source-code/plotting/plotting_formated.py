@@ -36,7 +36,7 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 
 	Raises:
 		PlotNotFoundError: If the requested plot configuration does not exist.
-		DataProcessingError: If associated data cannot be found or processed.
+		ValueError: If associated data cannot be found or processed.
 		NotImplementedError: If the plot type is not supported.
 	"""
 	try:
@@ -57,13 +57,13 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 		# Check assigned DataFrames
 		df_ids = plot_cfg.get("dataframes", [])
 		if not df_ids:
-			raise DataProcessingError(f"Plot '{plot_cfg['name']}' has no DataFrames assigned.")
+			raise ValueError(f"Plot '{plot_cfg['name']}' has no DataFrames assigned.")
         
 		# Histogram plot type requires exactly 2 DataFrames (generation + consumption)
 		plot_type = plot_cfg.get("plot_type", "stacked_bar")
 		if plot_type == "histogram":
 			if len(df_ids) != 2:
-				raise DataProcessingError(
+				raise ValueError(
 					f"Plot '{plot_cfg['name']}' requires exactly 2 DataFrames (generation + consumption) for histogram."
 				)
 		elif len(df_ids) > 1:
@@ -76,7 +76,7 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 		df_id = df_ids[0]
 		df = manager.get(df_id)
 		if df is None:
-			raise DataProcessingError(
+			raise ValueError(
 				f"DataFrame with ID '{df_id}' not found for plot '{plot_cfg['name']}'."
 			)
 
@@ -84,12 +84,12 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 		date_start = pd.to_datetime(plot_cfg["date_start"], format="%d.%m.%Y %H:%M", errors="coerce")
 		date_end = pd.to_datetime(plot_cfg["date_end"], format="%d.%m.%Y %H:%M", errors="coerce")
 		if pd.isna(date_start) or pd.isna(date_end):
-			raise DataProcessingError(f"Invalid date format in plot '{plot_cfg['name']}'.")
+			raise ValueError(f"Invalid date format in plot '{plot_cfg['name']}'.")
 
 		# Filter by date range
 		df_filtered = df[(df["Zeitpunkt"] >= date_start) & (df["Zeitpunkt"] <= date_end)]
 		if df_filtered.empty:
-			raise DataProcessingError(f"No data found in the given time range for plot '{plot_cfg['name']}'.")
+			raise ValueError(f"No data found in the given time range for plot '{plot_cfg['name']}'.")
 
 		# Choose plot type
 		if plot_type == "stacked_bar":
@@ -103,7 +103,7 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 			col1 = plot_cfg.get("column1")
 			col2 = plot_cfg.get("column2")
 			if not col1 or not col2:
-				raise DataProcessingError(f"Plot '{plot_cfg['name']}' missing 'column1' or 'column2' for balance plot.")
+				raise ValueError(f"Plot '{plot_cfg['name']}' missing 'column1' or 'column2' for balance plot.")
 			title = plot_cfg.get("name", "Balance plot")
 			description = plot_cfg.get("description", "")
 			plot_balance(config_manager, df_filtered, column1=col1, column2=col2, title=title, description=description, show=show, save=save, output_dir=output_dir, darkmode=darkmode)
@@ -112,13 +112,13 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 			df_id_2 = df_ids[1]
 			df_2 = manager.get(df_id_2)
 			if df_2 is None:
-				raise DataProcessingError(
+				raise ValueError(
 					f"DataFrame with ID '{df_id_2}' not found for plot '{plot_cfg['name']}'."
 				)
 			# Filter second DataFrame by date range
 			df_2_filtered = df_2[(df_2["Zeitpunkt"] >= date_start) & (df_2["Zeitpunkt"] <= date_end)]
 			if df_2_filtered.empty:
-				raise DataProcessingError(f"No consumption data found in the given time range for plot '{plot_cfg['name']}'.")
+				raise ValueError(f"No consumption data found in the given time range for plot '{plot_cfg['name']}'.")
             
 			title = plot_cfg.get("name", "Renewable Energy Share Histogram")
 			description = plot_cfg.get("description", "")
@@ -128,7 +128,7 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 
 	except Exception as e:
 		# Catch both handled and unexpected errors for clean output
-		warnings.warn(f"Plotting failed for '{plot_identifier}': {e}", WarningMessage)
+		warnings.warn(f"Plotting failed for '{plot_identifier}': {e}", UserWarning)
 
 
 def _setup_plot_style(darkmode=False):

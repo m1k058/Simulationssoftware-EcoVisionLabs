@@ -659,25 +659,44 @@ def simulate_production(
                             True
                             )
     
+    # Erstelle Ziel-Zeitindex für das Simulationsjahr
+    start_date = pd.Timestamp(year=simu_jahr, month=1, day=1)
+    end_date = pd.Timestamp(year=simu_jahr, month=12, day=31, hour=23, minute=45)
+    target_time_index = pd.date_range(start=start_date, end=end_date, freq='15min')
+    
+    # Funktion zum Anpassen der Profile auf Zieljahr-Länge
+    def align_profile_to_target_year(df_profile, target_index):
+        """Passt ein Profil an die Länge des Zieljahres an (kürzt oder wiederholt)."""
+        profile_len = len(df_profile)
+        target_len = len(target_index)
+        
+        if profile_len == target_len:
+            return df_profile
+        elif profile_len > target_len:
+            # Schaltjahr-Profil auf Normaljahr kürzen
+            return df_profile.iloc[:target_len].copy()
+        else:
+            # Normaljahr-Profil auf Schaltjahr erweitern (letzten Tag wiederholen)
+            # Wiederhole die letzten 96 Viertelstunden (24h)
+            repeat_data = df_profile.iloc[-96:].copy()
+            df_extended = pd.concat([df_profile, repeat_data], ignore_index=True)
+            return df_extended.iloc[:target_len].copy()
+    
+    # Profile auf Zieljahr-Länge anpassen
+    df_windOn_Profile = align_profile_to_target_year(df_windOn_Profile, target_time_index)
+    df_windOff_Profile = align_profile_to_target_year(df_windOff_Profile, target_time_index)
+    df_pv_Profile = align_profile_to_target_year(df_pv_Profile, target_time_index)
+    df_other_Profile = align_profile_to_target_year(df_other_Profile, target_time_index)
+    
     # Simuliere Produktion für alle Technologien
 
     # Konvertiere target_year zu String für Dictionary-Zugriff
     target_year_str = str(simu_jahr)
     target_year_int = int(simu_jahr)
     
-    # Initialisiere Ergebnis-DataFrame mit Zeitpunkt-Spalte
+    # Initialisiere Ergebnis-DataFrame mit Zeitpunkt-Spalte aus Ziel-Index
     df_result = pd.DataFrame()
-    if 'Zeitpunkt' in df_windOn_Profile.columns:
-        df_result['Zeitpunkt'] = df_windOn_Profile['Zeitpunkt'].copy()
-    elif 'Zeitpunkt' in df_windOff_Profile.columns:
-        df_result['Zeitpunkt'] = df_windOff_Profile['Zeitpunkt'].copy()
-    elif 'Zeitpunkt' in df_pv_Profile.columns:
-        df_result['Zeitpunkt'] = df_pv_Profile['Zeitpunkt'].copy()
-    elif 'Zeitpunkt' in df_other_Profile.columns:
-        df_result['Zeitpunkt'] = df_other_Profile['Zeitpunkt'].copy()
-    else:
-        # Wenn keine Zeitpunkt-Spalte, nutze Index von einem der Profile
-        df_result['Zeitpunkt'] = df_windOn_Profile.index
+    df_result['Zeitpunkt'] = target_time_index
     
     # Verarbeitungsfaktor: 0.25 für Viertelstunden
     quarter_hour_factor = 0.25

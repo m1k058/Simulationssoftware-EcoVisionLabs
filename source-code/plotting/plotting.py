@@ -35,12 +35,12 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
 
         df_ids = plot_cfg.get("dataframes", [])
         if not df_ids:
-            raise DataProcessingError(f"Plot '{plot_cfg['name']}' has no DataFrames assigned.")
+            raise ValueError(f"Plot '{plot_cfg['name']}' has no DataFrames assigned.")
 
         plot_type = plot_cfg.get("plot_type", "stacked_bar")
         if plot_type == "histogram":
             if len(df_ids) != 2:
-                raise DataProcessingError(
+                raise ValueError(
                     f"Plot '{plot_cfg['name']}' requires exactly 2 DataFrames (generation + consumption) for histogram."
                 )
         elif len(df_ids) > 1:
@@ -52,18 +52,18 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
         df_id = df_ids[0]
         df = manager.get(df_id)
         if df is None:
-            raise DataProcessingError(
+            raise ValueError(
                 f"DataFrame with ID '{df_id}' not found for plot '{plot_cfg['name']}'."
             )
 
         date_start = pd.to_datetime(plot_cfg["date_start"], format="%d.%m.%Y %H:%M", errors="coerce")
         date_end = pd.to_datetime(plot_cfg["date_end"], format="%d.%m.%Y %H:%M", errors="coerce")
         if pd.isna(date_start) or pd.isna(date_end):
-            raise DataProcessingError(f"Invalid date format in plot '{plot_cfg['name']}'.")
+            raise ValueError(f"Invalid date format in plot '{plot_cfg['name']}'.")
 
         df_filtered = df[(df["Zeitpunkt"] >= date_start) & (df["Zeitpunkt"] <= date_end)]
         if df_filtered.empty:
-            raise DataProcessingError(f"No data found in the given time range for plot '{plot_cfg['name']}'.")
+            raise ValueError(f"No data found in the given time range for plot '{plot_cfg['name']}'.")
 
         if plot_type == "stacked_bar":
             plot_stacked_bar(df_filtered, plot_cfg, show=show, save=save, output_dir=output_dir)
@@ -75,26 +75,26 @@ def plot_auto(config_manager, manager, plot_identifier, show=True, save=False, o
             col1 = plot_cfg.get("column1")
             col2 = plot_cfg.get("column2")
             if not col1 or not col2:
-                raise DataProcessingError(f"Plot '{plot_cfg['name']}' missing 'column1' or 'column2' for balance plot.")
+                raise ValueError(f"Plot '{plot_cfg['name']}' missing 'column1' or 'column2' for balance plot.")
             title = plot_cfg.get("name", "Balance plot")
             plot_balance(config_manager, df_filtered, column1=col1, column2=col2, title=title, show=show, save=save, output_dir=output_dir)
         elif plot_type == "histogram":
             df_id_2 = df_ids[1]
             df_2 = manager.get(df_id_2)
             if df_2 is None:
-                raise DataProcessingError(
+                raise ValueError(
                     f"DataFrame with ID '{df_id_2}' not found for plot '{plot_cfg['name']}'."
                 )
             df_2_filtered = df_2[(df_2["Zeitpunkt"] >= date_start) & (df_2["Zeitpunkt"] <= date_end)]
             if df_2_filtered.empty:
-                raise DataProcessingError(f"No consumption data found in the given time range for plot '{plot_cfg['name']}'.")
+                raise ValueError(f"No consumption data found in the given time range for plot '{plot_cfg['name']}'.")
             title = plot_cfg.get("name", "Renewable Energy Share Histogram")
             plot_ee_consumption_histogram(config_manager, df_filtered, df_2_filtered, title=title, show=show, save=save, output_dir=output_dir)
         else:
             raise NotImplementedError(f"Plot type '{plot_type}' is not implemented.")
 
     except Exception as e:
-        warnings.warn(f"Plotting failed for '{plot_identifier}': {e}", WarningMessage)
+        warnings.warn(f"Plotting failed for '{plot_identifier}': {e}", UserWarning)
 
 
 def plot_stacked_bar(df, plot_cfg, show=True, save=False, output_dir=None):
@@ -106,7 +106,7 @@ def plot_stacked_bar(df, plot_cfg, show=True, save=False, output_dir=None):
             if ENERGY_SOURCES[k]["colname"] in df.columns
         ]
         if not available_cols:
-            raise DataProcessingError(f"No matching columns found for plot '{plot_cfg['name']}'.")
+            raise ValueError(f"No matching columns found for plot '{plot_cfg['name']}'.")
 
         labels = [
             ENERGY_SOURCES[k]["name"] for k in energy_keys
@@ -142,10 +142,10 @@ def plot_stacked_bar(df, plot_cfg, show=True, save=False, output_dir=None):
             plt.show()
             print(f"Plot displayed.")
         elif not save:
-            warnings.warn("Plot was neither shown nor saved.", WarningMessage)
+            warnings.warn("Plot was neither shown nor saved.", UserWarning)
 
     except Exception as e:
-        raise DataProcessingError(f"Failed to generate stacked bar plot: {e}")
+        raise ValueError(f"Failed to generate stacked bar plot: {e}")
 
     finally:
         plt.close()
@@ -214,7 +214,7 @@ def plot_ee_consumption_histogram(config_manager, df_erzeugung: pd.DataFrame, df
             plt.show()
             print("Histogram displayed.")
         elif not save:
-            warnings.warn("Plot was neither shown nor saved.", WarningMessage)
+            warnings.warn("Plot was neither shown nor saved.", UserWarning)
 
     except Exception as e:
         print(f"Error creating histogram: {e}")
@@ -277,7 +277,7 @@ def plot_balance(config_manager, df: pd.DataFrame, column1: str, column2: str, t
             plt.show()
             print("Balance plot displayed.")
         elif not save:
-            warnings.warn("Plot was neither shown nor saved.", WarningMessage)
+            warnings.warn("Plot was neither shown nor saved.", UserWarning)
 
     except Exception as e:
         print(f"Error creating balance plot: {e}")
@@ -333,7 +333,7 @@ def plot_line_chart(config_manager, df: pd.DataFrame, columns=None, title="Line 
             plt.show()
             print("Line chart displayed.")
         elif not save:
-            warnings.warn("Plot was neither shown nor saved.", WarningMessage)
+            warnings.warn("Plot was neither shown nor saved.", UserWarning)
 
     except Exception as e:
         print(f"Error creating line chart: {e}")
