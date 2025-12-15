@@ -285,15 +285,105 @@ def standard_simulation_page() -> None:
     ## =================================== ##
 
     st.markdown("## Verbrauchssimulation")
-    st.warning("🏗️ WARNUNG: Diese Funktion ist noch in der Entwicklung.")
 
-    ## ================================== ##
-    ##                                    ##
-    ##          SIMULATION HIER           ##
-    ##                                    ##
-    ##              @Julian               ##
-    ##                                    ##      
-    ## ================================== ##
+    # Session keys müssen erhalten bleiben
+    if "simuConRUN" not in st.session_state:
+        st.session_state.simuConRUN = 0
+    if "resultsConSim" not in st.session_state:
+        st.session_state.resultsConSim = {}
+
+    if st.button("Verbrauchssimulation starten"):
+
+        # Verbrauchsprofile holen
+        last_H = st.session_state.dm.get(st.session_state.sm.scenario_data
+                                         ["target_load_demand_twh"]["Haushalt_Basis"]["load_profile"])
+        last_G = st.session_state.dm.get(st.session_state.sm.scenario_data
+                                         ["target_load_demand_twh"]["Gewerbe_Basis"]["load_profile"])
+        last_L = st.session_state.dm.get(st.session_state.sm.scenario_data
+                                         ["target_load_demand_twh"]["Landwirtschaft_Basis"]["load_profile"])
+        
+        # Verbrauch Zielwerte holen
+        targets = st.session_state.sm.scenario_data["target_load_demand_twh"]
+
+        # Simulation ausführen und Ergebnisse speichern
+        st.session_state.resultsConSim = {}
+        for year in years:
+            df_res = simu.simulate_consumption(
+                lastH=last_H, 
+                lastG=last_G, 
+                lastL=last_L,
+                lastZielH=targets["Haushalt_Basis"][year], 
+                lastZielG=targets["Gewerbe_Basis"][year], 
+                lastZielL=targets["Landwirtschaft_Basis"][year],
+                simu_jahr=year
+            )
+            st.session_state.resultsConSim[year] = df_res
+            st.session_state.simuConRUN = 1
+
+    if st.session_state.simuConRUN >= 1:    
+        # Anzeige der Ergebnisse Tabele/visuell
+        tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"], default="Visuelle Darstellung")
+
+        # Tabs erstellen und DataFrames anzeigen
+        with tab1:
+            selected_year_con_tab1 = st.segmented_control(
+                "Bitte Jahr auswählen",
+                [str(year) for year in years],
+                default=str(years[0]),
+                selection_mode="single",
+                key="segmented_year_con_table"
+            )
+            try:
+                selected_year_con = int(selected_year_con_tab1)
+            except (ValueError, TypeError):
+                selected_year_con = years[0]
+
+            st.subheader(f"Verbrauchssimulation {selected_year_con}")
+            st.dataframe(st.session_state.resultsConSim[selected_year_con], width='stretch')
+            # Konvertiere zu CSV mit ; als Separator und , als Dezimalzeichen
+            csv_data = st.session_state.resultsConSim[selected_year_con].to_csv(
+                index=False,
+                sep=';',
+                decimal=','
+            ).encode('utf-8')
+            st.download_button(
+                label="Download als CSV",
+                data=csv_data,
+                file_name=f'verbrauchssimulation_{selected_year_con}.csv',
+                mime='text/csv'
+            )
+
+        with tab2:
+            selected_year_con_tab2 = st.segmented_control(
+                "Bitte Jahr auswählen",
+                [str(year) for year in years],
+                default=str(years[0]),
+                selection_mode="single",
+                key="segmented_year_con_viz"
+            )
+            try:
+                selected_year_con_viz = int(selected_year_con_tab2)
+            except (ValueError, TypeError):
+                selected_year_con_viz = years[0]
+            
+            st.subheader(f"Visuelle Darstellung {selected_year_con_viz}")
+
+            plot_df = st.session_state.resultsConSim[selected_year_con_viz]
+
+            # Zeitauswahl mit Helper-Funktion
+            date_from_con, date_to_con = create_date_range_selector(plot_df, key_suffix=f"consumption_{selected_year_con_viz}")
+
+            fig = ply.create_consumption_plot(
+                plot_df,
+                title="",
+                date_from=date_from_con,
+                date_to=date_to_con
+            )
+            st.plotly_chart(fig)
+
+
+
+
 
     st.markdown("---")
 
@@ -303,7 +393,7 @@ def standard_simulation_page() -> None:
 
     st.markdown("## Erzeugungssimulation")
 
-    # Session keys müssen erhalten bleiben, sonst verschwinden die Ergebnisse nach jedem UI-Refresh
+    # Session keys müssen erhalten bleiben
     if "simuGenRUN" not in st.session_state:
         st.session_state.simuGenRUN = 0
     if "resultsGenSim" not in st.session_state:
@@ -348,7 +438,7 @@ def standard_simulation_page() -> None:
 
     if st.session_state.simuGenRUN >= 1:    
         # Anzeige der Ergebnisse Tabele/visuell
-        tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"])
+        tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"], default="Visuelle Darstellung")
 
 
         # Tabs erstellen und DataFrames anzeigen
@@ -398,12 +488,275 @@ def standard_simulation_page() -> None:
             plot_df = st.session_state.resultsGenSim[selected_year_viz]
 
             # Zeitauswahl mit Helper-Funktion
-            date_from_ts, date_to_ts = create_date_range_selector(plot_df, key_suffix=str(selected_year_viz))
+            date_from_gen, date_to_gen = create_date_range_selector(plot_df, key_suffix=f"generation_{selected_year_viz}")
 
 
-            fig = ply.create_stacked_area_plot(
+            fig = ply.create_generation_plot(
                     plot_df,
                     title="",
-                    date_from=date_from_ts,
-                    date_to=date_to_ts)
+                    date_from=date_from_gen,
+                    date_to=date_to_gen)
             st.plotly_chart(fig)
+    
+
+    ## =================================== ##
+    ##          Bilanz Berechnung          ##
+    ## =================================== ##
+    st.markdown("[Zur Verbrauchssimulation](#verbrauchssimulation)")
+
+    st.markdown("---")
+    st.markdown("## Bilanz Berechnung")
+
+    if st.session_state.simuGenRUN <= 0 or st.session_state.simuConRUN <= 0:
+        st.info("Bitte führe zuerst die Verbrauchs- und Erzeugungssimulationen durch.")
+    else:
+        if st.button("Bilanz Berechnung starten"):
+            # Bilanz Berechnung
+            st.session_state.resultsBalanceSim = {}
+            for year in years:
+                df_gen = st.session_state.resultsGenSim[year]
+                df_con = st.session_state.resultsConSim[year]
+                df_balance = simu.calc_balance(df_gen, df_con, year)
+                st.session_state.resultsBalanceSim[year] = df_balance
+
+        if "resultsBalanceSim" in st.session_state and st.session_state.resultsBalanceSim:
+            # Anzeige der Ergebnisse Tabele/visuell
+            tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"], default="Visuelle Darstellung")
+
+            # Tabs erstellen und DataFrames anzeigen
+            with tab1:
+                selected_year_bal_tab1 = st.segmented_control(
+                    "Bitte Jahr auswählen",
+                    [str(year) for year in years],
+                    default=str(years[0]),
+                    selection_mode="single",
+                    key="segmented_year_bal_table"
+                )
+                try:
+                    selected_year_bal = int(selected_year_bal_tab1)
+                except (ValueError, TypeError):
+                    selected_year_bal = years[0]
+
+                st.subheader(f"Bilanz {selected_year_bal}")
+                st.dataframe(st.session_state.resultsBalanceSim[selected_year_bal], width='stretch')
+                # Konvertiere zu CSV mit ; als Separator und , als Dezimalzeichen
+                csv_data = st.session_state.resultsBalanceSim[selected_year_bal].to_csv(
+                    index=False,
+                    sep=';',
+                    decimal=','
+                ).encode('utf-8')
+                st.download_button(
+                    label="Download als CSV",
+                    data=csv_data,
+                    file_name=f'bilanz_{selected_year_bal}.csv',
+                    mime='text/csv'
+                )
+
+            with tab2:
+                selected_year_bal_tab2 = st.segmented_control(
+                    "Bitte Jahr auswählen",
+                    [str(year) for year in years],
+                    default=str(years[0]),
+                    selection_mode="single",
+                    key="segmented_year_bal_viz"
+                )
+                try:
+                    selected_year_bal_viz = int(selected_year_bal_tab2)
+                except (ValueError, TypeError):
+                    selected_year_bal_viz = years[0]
+                
+                st.subheader(f"Visuelle Darstellung Bilanz {selected_year_bal_viz}")
+
+                bal_plot_df = st.session_state.resultsBalanceSim[selected_year_bal_viz]
+
+                # Zeitauswahl mit Helper-Funktion
+                date_from_bal, date_to_bal = create_date_range_selector(bal_plot_df, key_suffix=f"balance_{selected_year_bal_viz}")
+
+                fig = ply.create_balance_area_plot(
+                        bal_plot_df,
+                        title=" ",
+                        date_from=date_from_bal,
+                        date_to=date_to_bal)
+                st.plotly_chart(fig)
+
+    ## =================================== ##
+    ##             Gen X Con               ##
+    ## =================================== ##
+
+    if st.session_state.simuGenRUN <= 0 or st.session_state.simuConRUN <= 0:
+        st.info("Bitte führe zuerst die Verbrauchs- und Erzeugungssimulationen durch.")
+    else:
+        st.markdown("[Zur Verbrauchssimulation](#verbrauchssimulation) | [Zur Erzeugungssimulation](#erzeugungssimulation)")
+
+        st.markdown("---")
+        st.markdown("## Erzeugung X Verbrauch")
+
+        coolViz = st.session_state.resultsGenSim[years[0]].copy()
+        coolViz["Skalierte Netzlast [MWh]"] = st.session_state.resultsConSim[years[0]]["Gesamt [MWh]"]
+        
+        date_from_cool, date_to_cool = create_date_range_selector(coolViz, key_suffix=f"coolviz_{years[0]}")
+
+        fig = ply.create_generation_with_load_plot(
+            df=coolViz,
+            title=" ",
+            date_from=date_from_cool,
+            date_to=date_to_cool)
+    st.plotly_chart(fig)
+
+
+    ## =================================== ##
+    ##         Speicher Berechnung         ##
+    ## =================================== ##
+
+    st.markdown("[Zur Verbrauchssimulation](#verbrauchssimulation) | [Zur Erzeugungssimulation](#erzeugungssimulation) | [Zur Bilanzberechnung](#bilanz-berechnung)")
+    st.markdown("---")
+    st.markdown("## Speicher Berechnung")
+
+    if st.session_state.simuGenRUN <= 0 or st.session_state.simuConRUN <= 0:
+        st.info("Bitte führe zuerst die Verbrauchs- und Erzeugungssimulationen durch.")
+    else:
+
+        # Session keys müssen erhalten bleiben
+        if "simuStorRUN" not in st.session_state:
+            st.session_state.simuStorRUN = 0
+        if "resultsStorSim" not in st.session_state:
+            st.session_state.resultsStorSim = {}
+
+        if st.button("Speichersimulation starten"):
+            
+            # Stelle sicher, dass resultsStorSim ein Dictionary ist
+            if not isinstance(st.session_state.resultsStorSim, dict):
+                st.session_state.resultsStorSim = {}
+
+            for year in years:
+
+                df_balance = st.session_state.resultsBalanceSim[year].copy()
+                
+                # Hole Speicher-Konfigurationen für das spezifische Jahr
+                try:
+                    battery_config = st.session_state.sm.get_storage_capacities("battery_storage", year)
+                    pumped_config = st.session_state.sm.get_storage_capacities("pumped_hydro_storage", year)
+                    h2_config = st.session_state.sm.get_storage_capacities("h2_storage", year)
+                except Exception as e:
+                    st.error(f"❌ Fehler beim Laden der Speicher-Konfiguration für Jahr {year}: {e}")
+                    continue
+
+                # Batteriesimulation
+                try:
+                    result_battery = simu.simulate_battery_storage(
+                        df_balance,
+                        battery_config["installed_capacity_mwh"],
+                        battery_config["max_charge_power_mw"],
+                        battery_config["max_discharge_power_mw"],
+                        battery_config["initial_soc"]
+                    )
+                    st.session_state.simuStorRUN += 1
+                except Exception as e:
+                    st.error(f"❌ Fehler bei der Batteriesimulation für Jahr {year}: {e}")
+                    continue
+                
+                # Pumpspeichersimulation
+                try:
+                    result_pump = simu.simulate_pump_storage(
+                        result_battery,
+                        pumped_config["installed_capacity_mwh"],
+                        pumped_config["max_charge_power_mw"],
+                        pumped_config["max_discharge_power_mw"],
+                        pumped_config["initial_soc"]
+                    )
+                    st.session_state.simuStorRUN += 1
+                except Exception as e:
+                    st.error(f"❌ Fehler bei der Pumpspeichersimulation für Jahr {year}: {e}")
+                    continue
+                
+                # Wasserstoffspeichersimulation
+                try:
+                    result_h2 = simu.simulate_hydrogen_storage(
+                        result_pump,
+                        h2_config["installed_capacity_mwh"],
+                        h2_config["max_charge_power_mw"],
+                        h2_config["max_discharge_power_mw"],
+                        h2_config["initial_soc"]
+                    )
+                    st.session_state.simuStorRUN += 1
+                    # Speichere finales Ergebnis im Dictionary
+                    st.session_state.resultsStorSim[year] = result_h2
+                except Exception as e:
+                    st.error(f"❌ Fehler bei der Wasserstoffspeichersimulation für Jahr {year}: {e}")
+                    continue
+
+        if st.session_state.simuStorRUN >= 1:
+            # Anzeige der Ergebnisse Tabele/visuell
+            tab1, tab2 = st.tabs(["Tabelle und Download", "Visuelle Darstellung"])
+
+            # Tabs erstellen und DataFrames anzeigen
+            with tab1:
+                selected_year_stor_tab1 = st.segmented_control(
+                    "Bitte Jahr auswählen",
+                    [str(year) for year in years],
+                    default=str(years[0]),
+                    selection_mode="single",
+                    key="segmented_year_stor_table"
+                )
+                try:
+                    selected_year_stor = int(selected_year_stor_tab1)
+                except (ValueError, TypeError):
+                    selected_year_stor = years[0]
+
+                st.subheader(f"Speichersimulation {selected_year_stor}")
+                st.dataframe(st.session_state.resultsStorSim[selected_year_stor], width='stretch')
+                # Konvertiere zu CSV mit ; als Separator und , als Dezimalzeichen
+                csv_data = st.session_state.resultsStorSim[selected_year_stor].to_csv(
+                    index=False,
+                    sep=';',
+                    decimal=','
+                ).encode('utf-8')
+                st.download_button(
+                    label="Download als CSV",
+                    data=csv_data,
+                    file_name=f'speichersimulation_{selected_year_stor}.csv',
+                    mime='text/csv'
+                )
+
+            with tab2:
+                selected_year_stor_tab2 = st.segmented_control(
+                    "Bitte Jahr auswählen",
+                    [str(year) for year in years],
+                    default=str(years[0]),
+                    selection_mode="single",
+                    key="segmented_year_stor_viz"
+                )
+                try:
+                    selected_year_stor_viz = int(selected_year_stor_tab2)
+                except (ValueError, TypeError):
+                    selected_year_stor_viz = years[0]
+                
+                st.subheader(f"Visuelle Darstellung Speichersimulation {selected_year_stor_viz}")
+
+                stor_plot_df = st.session_state.resultsStorSim[selected_year_stor_viz]
+                bal_plot_df = st.session_state.resultsBalanceSim[selected_year_stor_viz]
+                stor_plot_df['Bilanz [MWh]'] = bal_plot_df['Bilanz [MWh]']
+                
+
+                # Zeitauswahl mit Helper-Funktion
+                date_from_stor, date_to_stor = create_date_range_selector(stor_plot_df, key_suffix=f"storage_{selected_year_stor_viz}")
+
+                # 1. Geordnete Jahresdauerlinie der Residuallast
+                st.markdown("### Geordnete Jahresdauerlinie der Residuallast")
+                st.caption("Zeigt die sortierte Bilanz über das Jahr - mit und ohne Speicher")
+                fig_duration = ply.create_duration_curve_plot(
+                    stor_plot_df,
+                    title=" "
+                )
+                st.plotly_chart(fig_duration)
+
+                # 2. State of Charge (SOC) - Stacked Area
+                st.markdown("### State of Charge (SOC) der Speicher")
+                st.caption("Zeigt den Ladestand aller Speicher über die Zeit")
+                fig_soc = ply.create_soc_stacked_plot(
+                    stor_plot_df,
+                    title=" ",
+                    date_from=date_from_stor,
+                    date_to=date_to_stor
+                )
+                st.plotly_chart(fig_soc)

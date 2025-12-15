@@ -8,15 +8,15 @@ metadata:
   author: SW-Team EcoVisionLabs
 target_load_demand_twh:
   Haushalt_Basis:
-    load_profile: BDEW-25-Haushalte
+    load_profile: Verbrauchsprofil Haushalte BDEW
     2030: 0.0
     2045: 0.0
   Gewerbe_Basis:
-    load_profile: BDEW-25-Gewerbe
+    load_profile: Verbrauchsprofil Gewerbe BDEW
     2030: 0.0
     2045: 0.0
-  Industrie_Basis:
-    load_profile: BDEW-25-Industrie
+  Landwirtschaft_Basis:
+    load_profile: Verbrauchsprofil Landwirtschaft BDEW
     2030: 0.0
     2045: 0.0
   EMobility:

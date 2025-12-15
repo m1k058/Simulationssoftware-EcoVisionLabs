@@ -41,6 +41,7 @@ def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
     
     return pd.concat(df_list).reset_index(drop=True)
 
+
 def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
                             prog_dat_studie: str, simu_jahr: int, prog_dat_jahr: int = -1,
                             ref_jahr: int = 2023, use_load_profile: bool = True) -> pd.DataFrame:
@@ -198,6 +199,7 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
     col.show_first_rows(df_simu)
     return df_simu
 
+
 def calc_scaled_production_multiyear(produDf: pd.DataFrame, progDf: pd.DataFrame,
                             prod_dat_studie: str, simu_jahr_start: int, simu_jahr_ende: int,
                             ref_jahr: int = 2023, prod_dat_jahr: int = -1) -> pd.DataFrame:
@@ -226,6 +228,7 @@ def calc_scaled_production_multiyear(produDf: pd.DataFrame, progDf: pd.DataFrame
         df_list.append(df_scaled)
     
     return pd.concat(df_list).reset_index(drop=True)
+
 
 def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
                             prod_dat_studie: str, simu_jahr: int,
@@ -450,6 +453,7 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
     col.show_first_rows(df_simu)
     return df_simu
 
+
 def simulate_storage_generic(
     df_balance: pd.DataFrame,
     type_name: str, # "Batteriespeicher" | "Pumpspeicher" | "Wasserstoffspeicher"
@@ -501,7 +505,11 @@ def simulate_storage_generic(
     
     #  DataFrame kopieren und initiale Balance berechnen
     df = df_balance.copy()
-    balance_series = df['Gesamterzeugung [MWh]'] - df['Skalierte Netzlast [MWh]']
+    if 'Rest Bilanz [MWh]' not in df.columns:
+        balance_series = df['Bilanz [MWh]']
+    else:
+        balance_series = df['Rest Bilanz [MWh]']
+
     
     # Initialisiere Arrays für Ergebnisse
     n = len(balance_series)
@@ -516,16 +524,16 @@ def simulate_storage_generic(
     max_charge_energy_per_step = max_charge_mw * dt
     max_discharge_energy_per_step = max_discharge_mw * dt
     
-    print(f"\n{'='*80}")
-    print(f"Simuliere {type_name}:")
-    print(f"{'='*80}")
-    print(f"Kapazität: {capacity_mwh:,.0f} MWh")
-    print(f"Min SOC: {min_soc_mwh:,.0f} MWh ({min_soc_mwh/capacity_mwh*100:.1f}%)")
-    print(f"Max SOC: {max_soc_mwh:,.0f} MWh ({max_soc_mwh/capacity_mwh*100:.1f}%)")
-    print(f"Initial SOC: {initial_soc_mwh:,.0f} MWh ({initial_soc_mwh/capacity_mwh*100:.1f}%)")
-    print(f"Max Ladeleistung: {max_charge_mw:,.0f} MW")
-    print(f"Max Entladeleistung: {max_discharge_mw:,.0f} MW")
-    print(f"Wirkungsgrade: Laden {charge_efficiency*100:.1f}%, Entladen {discharge_efficiency*100:.1f}%")
+    # print(f"\n{'='*80}")
+    # print(f"Simuliere {type_name}:")
+    # print(f"{'='*80}")
+    # print(f"Kapazität: {capacity_mwh:,.0f} MWh")
+    # print(f"Min SOC: {min_soc_mwh:,.0f} MWh ({min_soc_mwh/capacity_mwh*100:.1f}%)")
+    # print(f"Max SOC: {max_soc_mwh:,.0f} MWh ({max_soc_mwh/capacity_mwh*100:.1f}%)")
+    # print(f"Initial SOC: {initial_soc_mwh:,.0f} MWh ({initial_soc_mwh/capacity_mwh*100:.1f}%)")
+    # print(f"Max Ladeleistung: {max_charge_mw:,.0f} MW")
+    # print(f"Max Entladeleistung: {max_discharge_mw:,.0f} MW")
+    # print(f"Wirkungsgrade: Laden {charge_efficiency*100:.1f}%, Entladen {discharge_efficiency*100:.1f}%")
     
     # Iteriere durch alle Zeitschritte
     for i in range(n):
@@ -555,26 +563,141 @@ def simulate_storage_generic(
             
         soc[i] = current_soc
     
-    # Baue Ergebnis-DataFrame
-    result = pd.DataFrame({
-        'Zeitpunkt': df_balance['Zeitpunkt'],
-        f'{type_name}_SOC_MWh': soc,
-        f'{type_name}_Charged_MWh': charged,
-        f'{type_name}_Discharged_MWh': discharged,
-        # Restbilanz berechnen:
-        # Ursprüngliche Balance - Geladen + Entladen
-        'Rest_Balance_MWh': balance_series - charged + discharged
-    })
+    if 'Rest Bilanz [MWh]' not in df.columns:
+        # Baue Ergebnis-DataFrame für das erste Mal
+        result = pd.DataFrame({
+            'Zeitpunkt': df_balance['Zeitpunkt'],
+            f'{type_name} SOC MWh': soc,
+            f'{type_name} Geladene MWh': charged,
+            f'{type_name} Entladene MWh': discharged,
+            # Restbilanz berechnen:
+            # Ursprüngliche Balance - Geladen + Entladen
+            f'Rest Bilanz [MWh]': balance_series - charged + discharged
+        })
+    else:
+        # Nimm alle bestehenden Spalten aus df und füge die neuen Speicherwerte hinzu
+        result = df.copy()
+        # Füge die drei neuen Batterie-Spalten hinzu
+        result[f'{type_name} SOC MWh'] = soc
+        result[f'{type_name} Geladene MWh'] = charged
+        result[f'{type_name} Entladene MWh'] = discharged
+        # Überschreibe Rest Bilanz mit neu berechneter Bilanz
+        result['Rest Bilanz [MWh]'] = balance_series - charged + discharged
     
-    print(f"\nErgebnisse:")
-    print(f"Geladene Energie: {charged.sum():,.0f} MWh")
-    print(f"Entladene Energie: {discharged.sum():,.0f} MWh")
-    print(f"Finaler SOC: {soc[-1]:,.0f} MWh ({soc[-1]/capacity_mwh*100:.1f}%)")
-    print(f"Max SOC erreicht: {soc.max():,.0f} MWh ({soc.max()/capacity_mwh*100:.1f}%)")
-    print(f"Min SOC erreicht: {soc.min():,.0f} MWh ({soc.min()/capacity_mwh*100:.1f}%)")
-    print(f"{'='*80}\n")
+    # print(f"\nErgebnisse:")
+    # print(f"Geladene Energie: {charged.sum():,.0f} MWh")
+    # print(f"Entladene Energie: {discharged.sum():,.0f} MWh")
+    # print(f"Finaler SOC: {soc[-1]:,.0f} MWh ({soc[-1]/capacity_mwh*100:.1f}%)")
+    # print(f"Max SOC erreicht: {soc.max():,.0f} MWh ({soc.max()/capacity_mwh*100:.1f}%)")
+    # print(f"Min SOC erreicht: {soc.min():,.0f} MWh ({soc.min()/capacity_mwh*100:.1f}%)")
+    # print(f"{'='*80}\n")
     
     return result
+
+
+def simulate_battery_storage(
+        df_balance: pd.DataFrame,
+        capacity_mwh: float,
+        max_charge_mw: float,
+        max_discharge_mw: float,
+        initial_soc_mwh: float = 0.0,
+    ) -> pd.DataFrame:
+    """
+    Simuliert einen Batteriespeicher mit typischen Parametern.
+    Args:
+        df_balance: DataFrame mit Spalten 'Zeitpunkt', 'Gesamterzeugung [MWh]', 'Skalierte Netzlast [MWh]'
+        capacity_mwh: Speicherkapazität in MWh
+        max_charge_mw: Maximale Ladeleistung in MW
+        max_discharge_mw: Maximale Entladeleistung in MW
+        initial_soc_mwh: Initialer Ladestand als Anteil der Kapazität (0.0-1.0, z.B. 0.5 = 50%)
+    Returns:
+        DataFrame mit Simulationsergebnissen
+    """
+    # Konvertiere initial_soc von Anteil (0-1) zu absoluten MWh
+    initial_soc_absolute = initial_soc_mwh * capacity_mwh
+    
+    return simulate_storage_generic(
+        df_balance,
+        type_name="Batteriespeicher",
+        capacity_mwh=capacity_mwh,
+        max_charge_mw=max_charge_mw,
+        max_discharge_mw=max_discharge_mw,
+        charge_efficiency=0.95,
+        discharge_efficiency=0.95,
+        initial_soc_mwh=initial_soc_absolute,
+        min_soc_mwh=0.05*capacity_mwh,
+        max_soc_mwh=0.95*capacity_mwh
+    )
+
+
+def simulate_pump_storage(
+        df_balance: pd.DataFrame,
+        capacity_mwh: float,
+        max_charge_mw: float,
+        max_discharge_mw: float,
+        initial_soc_mwh: float = 0.0,
+    ) -> pd.DataFrame:
+    """
+    Simuliert einen Pumpspeicher mit typischen Parametern.
+    Args:
+        df_balance: DataFrame mit Spalten 'Zeitpunkt', 'Gesamterzeugung [MWh]', 'Skalierte Netzlast [MWh]'
+        capacity_mwh: Speicherkapazität in MWh
+        max_charge_mw: Maximale Ladeleistung in MW
+        max_discharge_mw: Maximale Entladeleistung in MW
+        initial_soc_mwh: Initialer Ladestand als Anteil der Kapazität (0.0-1.0, z.B. 0.5 = 50%)
+    Returns:
+        DataFrame mit Simulationsergebnissen
+    """
+    # Konvertiere initial_soc von Anteil (0-1) zu absoluten MWh
+    initial_soc_absolute = initial_soc_mwh * capacity_mwh
+    
+    return simulate_storage_generic(
+        df_balance,
+        type_name="Pumpspeicher",
+        capacity_mwh=capacity_mwh,
+        max_charge_mw=max_charge_mw,
+        max_discharge_mw=max_discharge_mw,
+        charge_efficiency=0.88,
+        discharge_efficiency=0.88,
+        initial_soc_mwh=initial_soc_absolute,
+        min_soc_mwh=0.0,
+        max_soc_mwh=capacity_mwh
+    )
+
+
+def simulate_hydrogen_storage(
+        df_balance: pd.DataFrame,
+        capacity_mwh: float,
+        max_charge_mw: float,
+        max_discharge_mw: float,
+        initial_soc_mwh: float = 0.0,
+    ) -> pd.DataFrame:
+    """
+    Simuliert einen Wasserstoffspeicher mit typischen Parametern.
+    Args:
+        df_balance: DataFrame mit Spalten 'Zeitpunkt', 'Gesamterzeugung [MWh]', 'Skalierte Netzlast [MWh]'
+        capacity_mwh: Speicherkapazität in MWh
+        max_charge_mw: Maximale Ladeleistung in MW
+        max_discharge_mw: Maximale Entladeleistung in MW
+        initial_soc_mwh: Initialer Ladestand als Anteil der Kapazität (0.0-1.0, z.B. 0.5 = 50%)
+    Returns:
+        DataFrame mit Simulationsergebnissen
+    """ 
+    # Konvertiere initial_soc von Anteil (0-1) zu absoluten MWh
+    initial_soc_absolute = initial_soc_mwh * capacity_mwh
+
+    return simulate_storage_generic(
+        df_balance,
+        type_name="Wasserstoffspeicher",
+        capacity_mwh=capacity_mwh,
+        max_charge_mw=max_charge_mw,
+        max_discharge_mw=max_discharge_mw,
+        charge_efficiency=0.67,
+        discharge_efficiency=0.58,
+        initial_soc_mwh=initial_soc_absolute,
+        min_soc_mwh=0.0,
+        max_soc_mwh=capacity_mwh
+    )
 
 
 def simulate_production(
@@ -780,6 +903,7 @@ def simulate_production(
         )
     
     return df_result
+
 
 def simulate_consumption(
     lastH: pd.DataFrame, 
@@ -1024,3 +1148,41 @@ def simulate_consumption(
     
     return df_result
     
+
+def calc_balance(simProd: pd.DataFrame, simCons: pd.DataFrame, simu_jahr: int) -> pd.DataFrame:
+    """
+    Berechnet die Bilanz (Erzeugung - Verbrauch) für jedes Zeitintervall
+    im Simulationsjahr.
+    
+    Args:
+        simProd (pd.DataFrame): DataFrame mit simulierten Produktionsdaten.
+                               Muss eine 'Zeitpunkt' Spalte und MWh-Spalten enthalten.
+        simCons (pd.DataFrame): DataFrame mit simulierten Verbrauchsdaten.
+                               Muss eine 'Zeitpunkt' Spalte und MWh-Spalten enthalten.
+        simu_jahr (int): Das Simulationsjahr (z.B. 2030 oder 2045).
+        
+    Returns:
+        pd.DataFrame: DataFrame mit Bilanzdaten für jedes Zeitintervall.
+                      Enthält 'Zeitpunkt' und 'Bilanz [MWh]' Spalten.
+    """
+    
+    # 1) Sicherstellen, dass beide DataFrames den gleichen Zeitindex haben
+    simProd = simProd.set_index('Zeitpunkt')
+    simCons = simCons.set_index('Zeitpunkt')
+    
+    # 2) Summiere alle MWh-Spalten in Produktion und Verbrauch
+    prod_sum = simProd.select_dtypes(include=[np.number]).sum(axis=1)
+    cons_sum = simCons.select_dtypes(include=[np.number]).sum(axis=1)
+    
+    # 3) Berechne die Bilanz
+    bilance = prod_sum - cons_sum
+    
+    # 4) Erstelle Ergebnis-DataFrame
+    df_bilance = pd.DataFrame({
+        'Zeitpunkt': bilance.index,
+        'Produktion [MWh]': prod_sum.values,
+        'Verbrauch [MWh]': cons_sum.values,
+        'Bilanz [MWh]': bilance.values
+    })
+    
+    return df_bilance
