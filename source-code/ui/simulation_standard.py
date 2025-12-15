@@ -582,21 +582,25 @@ def standard_simulation_page() -> None:
     ## =================================== ##
     ##             Gen X Con               ##
     ## =================================== ##
-    st.markdown("[Zur Verbrauchssimulation](#verbrauchssimulation) | [Zur Erzeugungssimulation](#erzeugungssimulation)")
 
-    st.markdown("---")
-    st.markdown("## Erzeugung X Verbrauch")
+    if st.session_state.simuGenRUN <= 0 or st.session_state.simuConRUN <= 0:
+        st.info("Bitte führe zuerst die Verbrauchs- und Erzeugungssimulationen durch.")
+    else:
+        st.markdown("[Zur Verbrauchssimulation](#verbrauchssimulation) | [Zur Erzeugungssimulation](#erzeugungssimulation)")
 
-    coolViz = st.session_state.resultsGenSim[years[0]].copy()
-    coolViz["Skalierte Netzlast [MWh]"] = st.session_state.resultsConSim[years[0]]["Gesamt [MWh]"]
-    
-    date_from_cool, date_to_cool = create_date_range_selector(coolViz, key_suffix=f"coolviz_{years[0]}")
+        st.markdown("---")
+        st.markdown("## Erzeugung X Verbrauch")
 
-    fig = ply.create_generation_with_load_plot(
-        df=coolViz,
-        title=" ",
-        date_from=date_from_cool,
-        date_to=date_to_cool)
+        coolViz = st.session_state.resultsGenSim[years[0]].copy()
+        coolViz["Skalierte Netzlast [MWh]"] = st.session_state.resultsConSim[years[0]]["Gesamt [MWh]"]
+        
+        date_from_cool, date_to_cool = create_date_range_selector(coolViz, key_suffix=f"coolviz_{years[0]}")
+
+        fig = ply.create_generation_with_load_plot(
+            df=coolViz,
+            title=" ",
+            date_from=date_from_cool,
+            date_to=date_to_cool)
     st.plotly_chart(fig)
 
 
