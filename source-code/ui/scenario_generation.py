@@ -114,7 +114,7 @@ def scenario_generation_page() -> None:
     sectors = {
         "Haushalt_Basis": "Haushalte (Standardlastprofil)",
         "Gewerbe_Basis": "Gewerbe",
-        "Industrie_Basis": "Industrie",
+        "Landwirtschaft_Basis": "Landwirtschaft",
         "EMobility": "Elektromobilität",
         "Heat_Pumps": "Wärmepumpen (Gebäudewärme)",
     }

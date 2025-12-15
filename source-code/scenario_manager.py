@@ -31,7 +31,7 @@ class ScenarioManager:
             "target_load_demand_twh": {
                 "Haushalt_Basis": {2030: 130, 2045: 120, "load_profile": "BDEW-25-Haushalte"},
                 "Gewerbe_Basis": {2030: 140, 2045: 130, "load_profile": "BDEW-25-Gewerbe"},
-                "Industrie_Basis": {2030: 280, 2045: 350, "load_profile": "BDEW-25-Industrie"},
+                "Landwirtschaft_Basis": {2030: 280, 2045: 350, "load_profile": "BDEW-25-Landwirtschaft"},
                 "EMobility": {2030: 60, 2045: 140, "load_profile": "EMobility-self"},
                 "Heat_Pumps": {2030: 50, 2045: 110, "load_profile": "HeatPumps-self"},
             },

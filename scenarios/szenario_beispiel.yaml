@@ -31,11 +31,11 @@ target_load_demand_twh:
     2045: 130
     load_profile: "BDEW-25-Gewerbe"
 
-  # Industrie
-  Industrie_Basis:
+  # Landwirtschaft
+  Landwirtschaft_Basis:
     2030: 280
     2045: 350
-    load_profile: "BDEW-25-Industrie"
+    load_profile: "BDEW-25-Landwirtschaft"
 
   # Elektromobilität
   EMobility:
