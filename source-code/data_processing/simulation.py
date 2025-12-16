@@ -1055,28 +1055,6 @@ def simulate_consumption(
     
     # print("\nOrdne Lastprofil-Werte zu...")
     df_result['Haushalte_kWh'] = map_load_profile(df_result, lastH, 'Haushalte')
-    
-    # Dynamisierung für Haushalte (H25)
-    # Formel: x = x_0 * (-3,9E-10*t^4 + 3,20E-7*t^3 - 7,02E-5*t^2 + 2,10E-3*t + 1,24)
-    # t = Tag des Jahres
-    t = df_result['Zeitpunkt'].dt.dayofyear
-    
-    # Berechnung des Dynamisierungsfaktors
-    dyn_faktor = (
-        -3.92e-10 * t**4 + 
-        3.20e-7 * t**3 - 
-        7.02e-5 * t**2 + 
-        2.10e-3 * t + 
-        1.24
-    )
-    
-    # Rundung des Faktors auf 4 Nachkommastellen (empfohlen)
-    dyn_faktor = dyn_faktor.round(4)
-    
-    # Anwenden auf das Haushaltsprofil
-    df_result['Haushalte_kWh'] = df_result['Haushalte_kWh'] * dyn_faktor
-    
-    # Ergebnis auf 3 Nachkommastellen runden (empfohlen)
     df_result['Haushalte_kWh'] = df_result['Haushalte_kWh'].round(3)
     
     df_result['Gewerbe_kWh'] = map_load_profile(df_result, lastG, 'Gewerbe')
