@@ -3,15 +3,7 @@ import streamlit as st
 from ui.home import home_page
 from ui.analysis import analysis_page
 from ui.simulation_standard import standard_simulation_page
-from ui.step_simulation.step_pages import (
-    step_1_daten_auswaehlen,
-    step_2_verbrauch_simulieren,
-    step_3_erzeugung_simulieren,
-    step_4_defizite_anzeigen,
-    step_5_speicher_simulieren,
-    step_6_gesamt_validieren,
-    step_7_ergebnisse_speichern,
-)
+from ui.simulation_diff import diff_simulation_page
 from ui.scenario_generation import scenario_generation_page
 
 
@@ -39,12 +31,12 @@ def ensure_base_session_state() -> None:
 def main() -> None:
     ensure_base_session_state()
 
-    # Definiere die Navigation mit st.Page Objekten und Unterseiten
-    # ALLE Step-Pages sind immer in der Liste, aber nur verfügbare sind anklickbar
+    # Definiere die Navigation mit st.Page Objekten (ohne Step-by-Step Simulation)
     
     # Erstelle Page-Objekte
     page_home = st.Page(home_page, title="Home", icon=":material/home:", default=True)
-    page_simulation = st.Page(standard_simulation_page, title="Main Simulation", icon=":material/table_chart_view:")
+    page_simulation = st.Page(standard_simulation_page, title="Simulation (Single Mode)", icon=":material/table_chart_view:")
+    page_diff_simulation = st.Page(diff_simulation_page, title="Simulation (Diff Mode)", icon=":material/balance:")
     page_scenario = st.Page(scenario_generation_page, title="Szenario Konfiguration", icon=":material/tune:")
     page_analysis = st.Page(analysis_page, title="Daten Analyse", icon=":material/area_chart:")
     
@@ -52,6 +44,7 @@ def main() -> None:
     st.session_state.pages = {
         "home": page_home,
         "simulation": page_simulation,
+        "diff_simulation": page_diff_simulation,
         "scenario": page_scenario,
         "analysis": page_analysis,
     }
@@ -60,18 +53,10 @@ def main() -> None:
         "Hauptseiten": [
             page_home,
             page_simulation,
+            page_diff_simulation,
             page_scenario,
             page_analysis,
-        ],
-        "Step by Step Simulation": [
-            st.Page(step_1_daten_auswaehlen, title="Step 1: Daten auswählen", icon="1️⃣"),
-            st.Page(step_2_verbrauch_simulieren, title="Step 2: Verbrauch", icon="2️⃣"),
-            st.Page(step_3_erzeugung_simulieren, title="Step 3: Erzeugung", icon="3️⃣"),
-            st.Page(step_4_defizite_anzeigen, title="Step 4: Defizite", icon="4️⃣"),
-            st.Page(step_5_speicher_simulieren, title="Step 5: Speicher", icon="5️⃣"),
-            st.Page(step_6_gesamt_validieren, title="Step 6: Ergebnisse", icon="6️⃣"),
-            st.Page(step_7_ergebnisse_speichern, title="Step 7: Speichern", icon="7️⃣"),
-        ],
+        ]
     }
 
     # Nutze st.navigation für die Navigation
