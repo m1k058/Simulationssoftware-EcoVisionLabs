@@ -1,0 +1,66 @@
+metadata:
+  name: Agora 2030
+  valid_for_years:
+  - 2030
+  description: Referenzlauf mit typischen 2030-Ausbaupfaden
+  version: '1.0'
+  author: SW-Team EcoVisionLabs
+target_load_demand_twh:
+  Haushalt_Basis:
+    load_profile: Verbrauchsprofil Haushalte BDEW
+    2030: 129.4
+  Gewerbe_Basis:
+    load_profile: Verbrauchsprofil Gewerbe BDEW
+    2030: 137.5
+  Landwirtschaft_Basis:
+    load_profile: Verbrauchsprofil Landwirtschaft BDEW
+    2030: 30.0
+  EMobility:
+    load_profile: ''
+    2030: 74.0
+  Heat_Pumps:
+    load_profile: ''
+    2030: 50.0
+target_generation_capacities_mw:
+  Photovoltaik:
+    2030: 149900.0
+  Wind_Onshore:
+    2030: 80500.0
+  Wind_Offshore:
+    2030: 25000.0
+  Biomasse:
+    2030: 8000.0
+  Wasserkraft:
+    2030: 6000.0
+  Erdgas:
+    2030: 60000.0
+  Steinkohle:
+    2030: 0.0
+  Braunkohle:
+    2030: 0.0
+  Kernenergie:
+    2030: 0.0
+weather_generation_profiles:
+  2030:
+    Wind_Onshore: average
+    Wind_Offshore: average
+    Photovoltaik: average
+target_storage_capacities:
+  battery_storage:
+    2030:
+      installed_capacity_mwh: 60000.0
+      max_charge_power_mw: 15000.0
+      max_discharge_power_mw: 15000.0
+      initial_soc: 0.5
+  pumped_hydro_storage:
+    2030:
+      installed_capacity_mwh: 40000.0
+      max_charge_power_mw: 9000.0
+      max_discharge_power_mw: 9000.0
+      initial_soc: 0.5
+  h2_storage:
+    2030:
+      installed_capacity_mwh: 2000000.0
+      max_charge_power_mw: 10000.0
+      max_discharge_power_mw: 10000.0
+      initial_soc: 0.5
