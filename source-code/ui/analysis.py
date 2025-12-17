@@ -179,14 +179,14 @@ def analysis_page() -> None:
                     )
         elif plot_engine == "Plotly":
             energy_keys = [colname_to_code[c] for c in energy_selection] if energy_selection else ["BIO", "WON"]
-            fig = pltp.create_stacked_bar_plot(
+            fig = pltp.create_generation_plot(
                 local_df,
                 energy_keys=energy_keys,
                 title="Energieerzeugung",
-                description="Stacked Bar Plot der Energieerzeugung",
-                darkmode=False,
+                date_from=pd.to_datetime(selected_date_from),
+                date_to=pd.to_datetime(selected_date_to)
             )
-            st.plotly_chart(fig)
+            st.plotly_chart(fig, use_container_width=True)
         elif plot_engine == "Matplotlib":
             energy_keys = [colname_to_code[c] for c in energy_selection] if energy_selection else ["BIO", "WON"]
             fig = pltf.create_stacked_bar_plot(
@@ -194,9 +194,9 @@ def analysis_page() -> None:
                 energy_keys=energy_keys,
                 title="Energieerzeugung",
                 description="Stacked Bar Plot der Energieerzeugung",
-                darkmode=False,
+                darkmode=False
             )
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
         else:
             st.error("Unbekannte Plot Engine ausgewählt.")
 
@@ -216,14 +216,24 @@ def analysis_page() -> None:
             ax.set_ylim(bottom=0)
             st.pyplot(fig)
         elif plot_engine == "Plotly":
-            fig = pltp.create_line_plot(
-                local_df,
-                y_axis=y_col,
+            import plotly.graph_objects as go
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=pd.to_datetime(local_df["Zeitpunkt"]),
+                y=local_df[y_col],
+                mode='lines',
+                name='Netzlast',
+                fill='tozeroy',
+                line=dict(color='blue')
+            ))
+            fig.update_layout(
                 title="Netzlast über die Zeit",
-                description="Line Plot der Netzlast",
-                darkmode=False,
+                xaxis_title="Datum",
+                yaxis_title="Netzlast (MWh)",
+                template="plotly_white",
+                hovermode='x unified'
             )
-            st.plotly_chart(fig)
+            st.plotly_chart(fig, use_container_width=True)
         elif plot_engine == "Altair":
             st.line_chart(local_df, x="Zeitpunkt", y=y_col, x_label="Datum", y_label="MWh")
         else:

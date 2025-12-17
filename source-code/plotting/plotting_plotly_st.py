@@ -1,4 +1,4 @@
-"""
+﻿"""
 Streamlit-optimierte Plotly-Funktionen 
 """
 import pandas as pd
@@ -109,6 +109,92 @@ def create_generation_plot(
             x=1
         ),
         xaxis=dict(range=[df["Zeitpunkt"].min(), df["Zeitpunkt"].max()]),
+    )
+    
+    return fig
+
+
+def plot_parameter_saturation(
+    simulation_results: list[dict] | pd.DataFrame,
+    parameter_name: str,
+    kpi_name: str,
+    title: str = "Parameter-Saettigungskurve"
+) -> go.Figure:
+    """
+    Erstellt eine Saettigungskurve fuer Parameter-Studien (z.B. Speichergroesse vs. Autarkie).
+    
+    Args:
+        simulation_results: Liste von Dicts mit Keys wie 'scenario_label', 'parameter_value', 'kpi_value'
+                           ODER DataFrame mit Spalten 'scenario_label', 'parameter_value', 'kpi_value'
+        parameter_name: Name des Parameters fuer X-Achse (z.B. "Speichergroesse [MWh]")
+        kpi_name: Name des KPI fuer Y-Achse (z.B. "Autarkie [%]")
+        title: Plot-Titel
+    
+    Returns:
+        Plotly Figure mit Liniendiagramm + Markern
+    """
+    # Konvertiere zu DataFrame falls noetig
+    if isinstance(simulation_results, list):
+        df = pd.DataFrame(simulation_results)
+    else:
+        df = simulation_results.copy()
+    
+    # Validierung
+    required_cols = ['scenario_label', 'parameter_value', 'kpi_value']
+    for col in required_cols:
+        if col not in df.columns:
+            raise KeyError(f"Spalte '{col}' fehlt im DataFrame. Benoetigt: {required_cols}")
+    
+    # Sortiere nach Parameter-Wert fuer saubere Linie
+    df = df.sort_values('parameter_value')
+    
+    # Erstelle Figure
+    fig = go.Figure()
+    
+    # Fuege Linie mit Markern hinzu
+    fig.add_trace(go.Scatter(
+        x=df['parameter_value'],
+        y=df['kpi_value'],
+        mode='lines+markers',
+        name=kpi_name,
+        line=dict(
+            color='#1f77b4',  # Blau als Akzentfarbe
+            width=3
+        ),
+        marker=dict(
+            size=10,
+            color='#1f77b4',
+            line=dict(color='white', width=2)
+        ),
+        hovertemplate=(
+            "<b>%{customdata}</b><br>" +
+            f"{parameter_name}: %{{x:.2f}}<br>" +
+            f"{kpi_name}: %{{y:.2f}}<br>" +
+            "<extra></extra>"
+        ),
+        customdata=df['scenario_label']
+    ))
+    
+    # Layout anpassen
+    fig.update_layout(
+        title=title,
+        template="plotly_dark",
+        xaxis_title=parameter_name,
+        yaxis_title=kpi_name,
+        hovermode="closest",
+        showlegend=False,
+        height=500,
+        margin=dict(l=60, r=30, t=50, b=60),
+        xaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='rgba(128, 128, 128, 0.2)'
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='rgba(128, 128, 128, 0.2)'
+        )
     )
     
     return fig
@@ -827,3 +913,4 @@ def create_soc_stacked_plot(
     )
     
     return fig
+

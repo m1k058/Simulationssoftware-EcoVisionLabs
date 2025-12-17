@@ -1164,3 +1164,149 @@ def calc_balance(simProd: pd.DataFrame, simCons: pd.DataFrame, simu_jahr: int) -
     })
     
     return df_bilance
+
+
+# =============================================================================
+# Kombi-Funktion: führt alle Standard-Simulationen in einem Schritt aus
+# =============================================================================
+def kobi(
+    cfg: ConfigManager,
+    dm,
+    sm,
+    years: List[int] | None = None
+) -> dict:
+    """
+    Führt die vollständige Standard-Simulation mit einem Klick aus und liefert
+    alle Zwischenergebnisse für jedes Jahr zurück.
+
+    Pipeline pro Jahr:
+    1) Verbrauchssimulation (BDEW H/G/L basierend auf Ziel-TWh aus Szenario)
+    2) Erzeugungssimulation (SMARD-Profile skaliert mit Ziel-MW-Kapazitäten)
+    3) Bilanz (Produktion minus Verbrauch)
+    4) Speichersimulation (Batterie -> Pumpspeicher -> H2)
+
+    Args:
+        cfg: `ConfigManager` Instanz
+        dm:  `DataManager` Instanz (liefert benötigte Roh-Datenframes über Namen)
+        sm:  `ScenarioManager` Instanz (liefert Szenario-Parameter)
+        years: Liste der zu simulierenden Jahre. Wenn None, dann aus Szenario entnommen.
+
+    Returns:
+        dict: {jahr: {"consumption": df, "production": df, "balance": df, "storage": df}}
+    """
+
+    # Jahre bestimmen
+    if years is None:
+        years = sm.scenario_data.get("metadata", {}).get("valid_for_years", [])
+        if not years:
+            raise ValueError("Keine gültigen Jahre im Szenario gefunden und keine years übergeben.")
+
+    # Verbrauchsprofile laden (Haushalt/Gewerbe/Landwirtschaft)
+    load_cfg = sm.scenario_data.get("target_load_demand_twh", {})
+    try:
+        last_H_name = load_cfg["Haushalt_Basis"]["load_profile"]
+        last_G_name = load_cfg["Gewerbe_Basis"]["load_profile"]
+        last_L_name = load_cfg["Landwirtschaft_Basis"]["load_profile"]
+    except Exception as e:
+        raise KeyError(f"Fehlende Load-Profile in Szenario: {e}")
+
+    last_H = dm.get(last_H_name)
+    last_G = dm.get(last_G_name)
+    last_L = dm.get(last_L_name)
+
+    # SMARD-Daten (Erzeugung/Kapazitäten) laden und zusammenführen
+    smard_generation = pd.concat([
+        dm.get("SMARD_2015-2019_Erzeugung"),
+        dm.get("SMARD_2020-2025_Erzeugung"),
+    ])
+    smard_installed = pd.concat([
+        dm.get("SMARD_Installierte Leistung 2015-2019"),
+        dm.get("SMARD_Installierte Leistung 2020-2025"),
+    ])
+
+    # Ziel-Kapazitäten (MW) und Wetterprofile aus Szenario
+    capacity_dict = sm.get_generation_capacities()
+    weather_profiles = sm.scenario_data.get("weather_generation_profiles", {})
+
+    results: dict = {}
+
+    for year in years:
+        # 1) Verbrauch
+        try:
+            targets = load_cfg
+            df_cons = simulate_consumption(
+                lastH=last_H,
+                lastG=last_G,
+                lastL=last_L,
+                lastZielH=targets["Haushalt_Basis"][year],
+                lastZielG=targets["Gewerbe_Basis"][year],
+                lastZielL=targets["Landwirtschaft_Basis"][year],
+                simu_jahr=year,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Verbrauchssimulation {year} fehlgeschlagen: {e}")
+
+        # 2) Erzeugung
+        try:
+            wprof = weather_profiles.get(year, {})
+            df_prod = simulate_production(
+                cfg,
+                smard_generation,
+                smard_installed,
+                capacity_dict,
+                wprof.get("Wind_Onshore", "average"),
+                wprof.get("Wind_Offshore", "average"),
+                wprof.get("Photovoltaik", "average"),
+                year,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Erzeugungssimulation {year} fehlgeschlagen: {e}")
+
+        # 3) Bilanz
+        try:
+            # Für Konsistenz: Verbrauch Gesamt -> 'Skalierte Netzlast [MWh]' wird in calc_balance nicht benötigt,
+            # da dort Summen aller numerischen Spalten verwendet werden.
+            df_bal = calc_balance(df_prod, df_cons, year)
+        except Exception as e:
+            raise RuntimeError(f"Bilanzberechnung {year} fehlgeschlagen: {e}")
+
+        # 4) Speicher
+        try:
+            stor_bat = sm.get_storage_capacities("battery_storage", year) or {}
+            stor_pump = sm.get_storage_capacities("pumped_hydro_storage", year) or {}
+            stor_h2 = sm.get_storage_capacities("h2_storage", year) or {}
+
+            res_bat = simulate_battery_storage(
+                df_bal,
+                stor_bat.get("installed_capacity_mwh", 0.0),
+                stor_bat.get("max_charge_power_mw", 0.0),
+                stor_bat.get("max_discharge_power_mw", 0.0),
+                stor_bat.get("initial_soc", 0.0),
+            )
+
+            res_pump = simulate_pump_storage(
+                res_bat,
+                stor_pump.get("installed_capacity_mwh", 0.0),
+                stor_pump.get("max_charge_power_mw", 0.0),
+                stor_pump.get("max_discharge_power_mw", 0.0),
+                stor_pump.get("initial_soc", 0.0),
+            )
+
+            res_h2 = simulate_hydrogen_storage(
+                res_pump,
+                stor_h2.get("installed_capacity_mwh", 0.0),
+                stor_h2.get("max_charge_power_mw", 0.0),
+                stor_h2.get("max_discharge_power_mw", 0.0),
+                stor_h2.get("initial_soc", 0.0),
+            )
+        except Exception as e:
+            raise RuntimeError(f"Speichersimulation {year} fehlgeschlagen: {e}")
+
+        results[year] = {
+            "consumption": df_cons,
+            "production": df_prod,
+            "balance": df_bal,
+            "storage": res_h2,
+        }
+
+    return results

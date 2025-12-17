@@ -147,18 +147,18 @@
         "optimal_reference_years_by_technology": {
             "Wind_Onshore": {
                 "good": 2023,
-                "average": 2019,
+                "average": 2015,
                 "bad": 2016
             },            
             "Wind_Offshore": {
                 "good": 2020,
-                "average": 2015,
-                "bad": 2021
+                "average": 2022,
+                "bad": 2023
             },
             "Photovoltaik": {
-                "good": 2024,
-                "average": 2019,
-                "bad": 2016
+                "good": 20222,
+                "average": 2015,
+                "bad": 2024
             },
             "default": 2022
         }
