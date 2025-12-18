@@ -1,0 +1,66 @@
+metadata:
+  name: 2056-HIGH_ELEC
+  valid_for_years:
+  - 2045
+  description: Maximale Elektrifizierung bei Stresstests
+  version: '1.0'
+  author: SW-Team EcoVisionLabs
+target_load_demand_twh:
+  Haushalt_Basis:
+    load_profile: Verbrauchsprofil Haushalte BDEW
+    2045: 160.0
+  Gewerbe_Basis:
+    load_profile: Verbrauchsprofil Gewerbe BDEW
+    2045: 200.0
+  Landwirtschaft_Basis:
+    load_profile: Verbrauchsprofil Landwirtschaft BDEW
+    2045: 35.0
+  EMobility:
+    load_profile: ''
+    2045: 200.0
+  Heat_Pumps:
+    load_profile: ''
+    2045: 150.0
+target_generation_capacities_mw:
+  Photovoltaik:
+    2045: 450000.0
+  Wind_Onshore:
+    2045: 220000.0
+  Wind_Offshore:
+    2045: 80000.0
+  Biomasse:
+    2045: 7000.0
+  Wasserkraft:
+    2045: 5000.0
+  Erdgas:
+    2045: 50000.0
+  Steinkohle:
+    2045: 0.0
+  Braunkohle:
+    2045: 0.0
+  Kernenergie:
+    2045: 0.0
+weather_generation_profiles:
+  2045:
+    Wind_Onshore: average
+    Wind_Offshore: average
+    Photovoltaik: average
+target_storage_capacities:
+  battery_storage:
+    2045:
+      installed_capacity_mwh: 300000.0
+      max_charge_power_mw: 100000.0
+      max_discharge_power_mw: 100000.0
+      initial_soc: 0.5
+  pumped_hydro_storage:
+    2045:
+      installed_capacity_mwh: 50000.0
+      max_charge_power_mw: 10000.0
+      max_discharge_power_mw: 10000.0
+      initial_soc: 0.5
+  h2_storage:
+    2045:
+      installed_capacity_mwh: 12000000.0
+      max_charge_power_mw: 50000.0
+      max_discharge_power_mw: 50000.0
+      initial_soc: 0.5

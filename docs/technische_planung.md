@@ -18,10 +18,10 @@ Im Folgenden wird beschrieben wie welche Module verändert und optimaliesiert we
 ### Aktueller Fortschritt:
 | Teilaufgabe | Zuständig | Fertig? |
 | :----- | :-----: | :-----: |
-| BDEW-Lastprofil mithilfe bestehender IO handling Funktionen in DataManager laden | Julian | ❌ |
-| Neue Last Simulation mithilfe des Lastprofils bauen | Julian | ❌ |
-| Zum Testen an DV-Team übergeben | Julian | ❌ |
-| ¿Todo terminado? | Julian | ❌ |
+| BDEW-Lastprofil mithilfe bestehender IO handling Funktionen in DataManager laden | Julian | ✅ |
+| Neue Last Simulation mithilfe des Lastprofils bauen | Julian | ✅ |
+| Zum Testen an DV-Team übergeben | Julian | ✅ |
+| ¿Todo terminado? | Julian | ✅ |
   
 Der Verbrauch wird jetzt mithilfe des [BDEW-Lastprofils](https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx 'Excel Datei Download') und Vorgegebener Ziel Jahresverbrauchs für die drei Sektoren: Haushalte (H25), Gewerbe (G25), Landwirtschaft (L25) simuliert.  
    
@@ -41,10 +41,10 @@ Hier eine vereinfachte Visualiesierung der Verbrauchssimulation.
 ### Aktueller Fortschritt:
 | Teilaufgabe | Zuständig | Fertig? |
 | :----- | :-----: | :-----: |
-|  | Michal | ❌ |
-|  | Michal | ❌ |
-|  | Michal | ❌ |
-| ¿Todo terminado? | Michal | ❌ |
+| SMARD-Daten laden und Kapazitätsfaktoren berechnen | Michal | ✅ |
+| Skalierung auf Ziel-Kapazitäten (MW) implementieren | Michal | ✅ |
+| Wetterjahre-Logik integrieren | Michal | ✅ |
+| ¿Todo terminado? | Michal | ✅ |
   
 Der Verbrauch wird jetzt mithilfe eines selbst erstellten Erzeugunsprofils aus den SMARD Erzeugungsdaten, dem verbrauchs-DataFrame, einer prozentualen angabe der Erzeuger Anteile und dem hinzugefügten Puffer (zum Verbrauch addiert und wir gehen aus das das die Instlierte Leistung sein soll) simuliert.  
    

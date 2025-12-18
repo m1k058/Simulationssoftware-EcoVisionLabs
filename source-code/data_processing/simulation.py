@@ -46,6 +46,9 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
                             prog_dat_studie: str, simu_jahr: int, prog_dat_jahr: int = -1,
                             ref_jahr: int = 2023, use_load_profile: bool = True) -> pd.DataFrame:
     """
+    DEPRECATED: Diese Funktion implementiert die alte "Top-Down" Logik.
+    Bitte stattdessen `simulate_consumption` (Bottom-Up mit BDEW-Profilen) verwenden.
+
     Skaliert den Energieverbrauch eines Referenzjahres basierend auf Prognosedaten für ein
     Simulationsjahr und eine ausgewählte Studie.
     
@@ -407,7 +410,7 @@ def calc_scaled_production(produDf: pd.DataFrame, progDf: pd.DataFrame,
     else:
         faktor_soe = 1.0
     scaling_factors["Sonstige Erneuerbare [MWh]"] = faktor_soe
-    print(f"Sonstige Erneuerbare [MWh]: Ref={ref_soe:.4f} TWh, Prog={prog_sonstige:.4f} TWh, Faktor={faktor_soe:.6f}")
+    print(f"Sonstige Erneuerung [MWh]: Ref={ref_soe:.4f} TWh, Prog={prog_sonstige:.4f} TWh, Faktor={faktor_soe:.6f}")
 
     # Sonstige Konventionelle [MWh] komplett entfernen (nicht in Ergebnis aufnehmen)
     ref_sok = get_ref_twh("Sonstige Konventionelle [MWh]")
@@ -990,12 +993,16 @@ def simulate_consumption(
     # Wir nutzen das holidays Package für bundeseinheitliche Feiertage
     try:
         import holidays
-        # Standardmäßig bundeseinheitliche Feiertage. 
-        # Für bundeslandspezifische Feiertage müsste hier das Bundesland (prov) übergeben werden.
-        de_holidays = holidays.Germany(years=simu_jahr)
+        # BDEW-Definition: Es gelten die bundeseinheitlichen Feiertage.
+        # holidays.Germany() ohne Provinz liefert genau diese 9 Feiertage:
+        # Neujahr, Karfreitag, Ostermontag, Tag der Arbeit, Christi Himmelfahrt,
+        # Pfingstmontag, Tag der Deutschen Einheit, 1. & 2. Weihnachtstag.
+        de_holidays = holidays.Germany(years=simu_jahr, language='de')
         feiertage = [pd.Timestamp(date) for date in de_holidays.keys()]
     except ImportError:
         # Fallback: Feste Feiertage (vereinfacht)
+        # Warnung: Bewegliche Feiertage fehlen hier!
+        print("Warnung: Package 'holidays' nicht verfügbar. Bewegliche Feiertage fehlen!")
         feiertage = [
             pd.Timestamp(f'{simu_jahr}-01-01'),  # Neujahr
             pd.Timestamp(f'{simu_jahr}-05-01'),  # Tag der Arbeit
@@ -1055,6 +1062,29 @@ def simulate_consumption(
     
     # print("\nOrdne Lastprofil-Werte zu...")
     df_result['Haushalte_kWh'] = map_load_profile(df_result, lastH, 'Haushalte')
+    
+    # Dynamisierung für Haushalte (H25) - AKTIVIERT
+    # Formel: x = x_0 * (-3,92E-10*t^4 + 3,20E-7*t^3 - 7,02E-5*t^2 + 2,10E-3*t + 1,24)
+    # t = Tag des Jahres
+    # WICHTIG: t muss als float behandelt werden, da t^4 bei int32 überlaufen kann (ab Tag 216)
+    t = df_result['Zeitpunkt'].dt.dayofyear.astype(float)
+    
+    # Berechnung des Dynamisierungsfaktors
+    dyn_faktor = (
+        -3.92e-10 * t**4 + 
+        3.20e-7 * t**3 - 
+        7.02e-5 * t**2 + 
+        2.10e-3 * t + 
+        1.24
+    )
+    
+    # Rundung des Faktors auf 4 Nachkommastellen (empfohlen)
+    dyn_faktor = dyn_faktor.round(4)
+    
+    # Anwenden auf das Haushaltsprofil
+    df_result['Haushalte_kWh'] = df_result['Haushalte_kWh'] * dyn_faktor
+    
+    # Ergebnis auf 3 Nachkommastellen runden (empfohlen)
     df_result['Haushalte_kWh'] = df_result['Haushalte_kWh'].round(3)
     
     df_result['Gewerbe_kWh'] = map_load_profile(df_result, lastG, 'Gewerbe')
@@ -1279,7 +1309,7 @@ def kobi(
             res_bat = simulate_battery_storage(
                 df_bal,
                 stor_bat.get("installed_capacity_mwh", 0.0),
-                stor_bat.get("max_charge_power_mw", 0.0),
+                               stor_bat.get("max_charge_power_mw", 0.0),
                 stor_bat.get("max_discharge_power_mw", 0.0),
                 stor_bat.get("initial_soc", 0.0),
             )

@@ -9,16 +9,16 @@ metadata:
 target_load_demand_twh:
   Haushalt_Basis:
     load_profile: Verbrauchsprofil Haushalte BDEW
-    2030: 0.0
-    2045: 0.0
+    2030: 130.0
+    2045: 120.0
   Gewerbe_Basis:
     load_profile: Verbrauchsprofil Gewerbe BDEW
-    2030: 0.0
-    2045: 0.0
+    2030: 140.0
+    2045: 130.0
   Landwirtschaft_Basis:
     load_profile: Verbrauchsprofil Landwirtschaft BDEW
-    2030: 0.0
-    2045: 0.0
+    2030: 10.0
+    2045: 10.0
   EMobility:
     load_profile: ''
     2030: 0.0
@@ -67,34 +67,34 @@ weather_generation_profiles:
 target_storage_capacities:
   battery_storage:
     2030:
-      installed_capacity_mwh: 0.0
-      max_charge_power_mw: 0.0
-      max_discharge_power_mw: 0.0
-      initial_soc: 0.0
+      installed_capacity_mwh: 60000.0
+      max_charge_power_mw: 20000.0
+      max_discharge_power_mw: 20000.0
+      initial_soc: 0.5
     2045:
-      installed_capacity_mwh: 0.0
-      max_charge_power_mw: 0.0
-      max_discharge_power_mw: 0.0
-      initial_soc: 0.0
+      installed_capacity_mwh: 180000.0
+      max_charge_power_mw: 60000.0
+      max_discharge_power_mw: 60000.0
+      initial_soc: 0.5
   pumped_hydro_storage:
     2030:
-      installed_capacity_mwh: 0.0
-      max_charge_power_mw: 0.0
-      max_discharge_power_mw: 0.0
-      initial_soc: 0.0
+      installed_capacity_mwh: 40000.0
+      max_charge_power_mw: 7000.0
+      max_discharge_power_mw: 7000.0
+      initial_soc: 0.6
     2045:
-      installed_capacity_mwh: 0.0
-      max_charge_power_mw: 0.0
-      max_discharge_power_mw: 0.0
-      initial_soc: 0.0
+      installed_capacity_mwh: 45000.0
+      max_charge_power_mw: 8000.0
+      max_discharge_power_mw: 8000.0
+      initial_soc: 0.6
   h2_storage:
     2030:
-      installed_capacity_mwh: 0.0
-      max_charge_power_mw: 0.0
-      max_discharge_power_mw: 0.0
-      initial_soc: 0.0
+      installed_capacity_mwh: 500000.0
+      max_charge_power_mw: 10000.0
+      max_discharge_power_mw: 10000.0
+      initial_soc: 0.4
     2045:
-      installed_capacity_mwh: 0.0
-      max_charge_power_mw: 0.0
-      max_discharge_power_mw: 0.0
-      initial_soc: 0.0
+      installed_capacity_mwh: 3000000.0
+      max_charge_power_mw: 60000.0
+      max_discharge_power_mw: 40000.0
+      initial_soc: 0.45
