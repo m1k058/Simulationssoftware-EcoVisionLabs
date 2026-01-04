@@ -8,6 +8,7 @@ import data_processing.generation_profile as genPro
 import data_processing.simulation as simu
 import data_processing.col as col
 import plotting.plotting_plotly_st as ply
+import plotting.economic_plots as econ_ply
 
 # Manager Imports
 from data_manager import DataManager
@@ -282,8 +283,8 @@ def standard_simulation_page() -> None:
                 sel_year = years_available[0]
 
             # Tabs pro Ergebnis-DF
-            tab_con, tab_prod, tab_bal, tab_stor = st.tabs([
-                "Verbrauch", "Erzeugung", "Bilanz", "Speicher"
+            tab_con, tab_prod, tab_bal, tab_stor, tab_econ = st.tabs([
+                "Verbrauch", "Erzeugung", "Bilanz", "Speicher", "Wirtschaftlichkeit"
             ])
 
             with tab_con:
@@ -329,6 +330,27 @@ def standard_simulation_page() -> None:
                     file_name=f"speicher_{sel_year}.csv",
                     mime="text/csv"
                 )
+
+            with tab_econ:
+                st.subheader("Wirtschaftlichkeit - Rohe Werte")
+                econ_data = results[sel_year].get("economics", {})
+                if econ_data:
+                    # Nur Rohdaten und Kennzahlen anzeigen
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Jahr", f"{econ_data.get('year', 'N/A')}")
+                    with col2:
+                        st.metric("Investitionsbedarf", f"{econ_data.get('total_investment_bn', 0):.3f} Mrd. €")
+                    with col3:
+                        st.metric("Jährliche Kosten", f"{econ_data.get('total_annual_cost_bn', 0):.3f} Mrd. €/Jahr")
+                    with col4:
+                        st.metric("System LCOE", f"{econ_data.get('system_lco_e', 0):.3f} ct/kWh")
+
+                    st.write("**Alle Werte (Raw Data):**")
+                    st.json(econ_data)
+                else:
+                    st.info("Keine Wirtschaftlichkeitsdaten verfügbar.")
+
 
             # Visualisierungen
             st.markdown("---")
@@ -418,5 +440,38 @@ def standard_simulation_page() -> None:
                     date_to=date_to_stor
                 )
                 st.plotly_chart(fig_soc)
+
+                # Wirtschaftlichkeit über alle Jahre (Trend) unterhalb der SOC-Grafiken
+                econ_series = [
+                    results[y].get("economics")
+                    for y in years_available
+                    if results.get(y, {}).get("economics")
+                ]
+                if econ_series:
+                    st.markdown("---")
+                    st.markdown("### Wirtschaftlichkeits-Dashboard")
+                    
+                    # Hauptgraph: Trend
+                    fig_econ = ply.plot_economic_trends(econ_series)
+                    st.plotly_chart(fig_econ, use_container_width=True)
+                    
+                    # Nebendiagramme: Kostenaufschlüsselung und Investitionsmix
+                    col_cost, col_inv = st.columns(2)
+                    
+                    with col_cost:
+                        fig_cost = econ_ply.plot_cost_structure(econ_series)
+                        st.plotly_chart(fig_cost, use_container_width=True)
+                    
+                    with col_inv:
+                        # Investitionsverteilung pro Technologie für das aktuelle Jahr
+                        econ_data = results[sel_year].get("economics", {})
+                        if "investment_by_tech" in econ_data and econ_data["investment_by_tech"]:
+                            fig_donut = econ_ply.plot_investment_donut(
+                                econ_data["investment_by_tech"],
+                                sel_year
+                            )
+                            st.plotly_chart(fig_donut, use_container_width=True)
+                        else:
+                            st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 
 

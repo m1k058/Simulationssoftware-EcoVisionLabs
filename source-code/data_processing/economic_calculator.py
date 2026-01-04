@@ -260,33 +260,64 @@ class EconomicCalculator:
         - Compute System-LCOE = total annual costs / total consumption.
         - Return result dict with values in requested units.
         """
-        technology_costs = getattr(const, "TECHNOLOGY_COSTS", {}) or {}
+        # Verwende ECONOMICS_CONSTANTS aus constants.py
+        econ_consts = getattr(const, "ECONOMICS_CONSTANTS", {}) or {}
+        wacc_default = econ_consts.get("global_parameter", {}).get("wacc", 0.05)
+        source_specific = econ_consts.get("source_specific", {})
 
         total_investment = 0.0  # EUR
         total_annual_cost = 0.0  # EUR per year
 
-        wacc = self._get_wacc(target_year)
+        wacc = wacc_default
+
+        print(f"[CALC DEBUG] WACC: {wacc}")
+        print(f"[CALC DEBUG] Source Specific Costs: {source_specific}")
 
         for tech_id, tech_inputs in (self.inputs or {}).items():
-            params = technology_costs.get(tech_id, {}) or {}
+            print(f"[CALC DEBUG] Verarbeite Tech: {tech_id}")
+            
+            # Mapping: Tech-IDs zu Parametern
+            tech_mapping = {
+                'Photovoltaik': 'Photovoltaik',
+                'Wind_Onshore': 'Wind Onshore',
+                'Wind_Offshore': 'Wind Offshore',
+                'Biomasse': 'Biomasse',
+                'Wasserkraft': 'Wasserkraft',
+                'Erdgas': 'Erdgas',
+                'Steinkohle': 'Steinkohle',
+                'Braunkohle': 'Braunkohle',
+                'Kernenergie': 'Kernenergie'
+            }
+            
+            param_name = tech_mapping.get(tech_id, tech_id)
+            params = source_specific.get(param_name, {}) or {}
 
             # Cost parameters, default safe values
-            capex = float(params.get("capex", 0.0) or 0.0)
-            opex_fix = float(params.get("opex_fix", 0.0) or 0.0)
-            lifetime = float(params.get("lifetime", 0.0) or 0.0)
+            capex = float(params.get("capex_eur_per_mw", 0.0) or 0.0)
+            opex_fix = float(params.get("opex_eur_per_mw_year", 0.0) or 0.0)
+            lifetime = float(params.get("lifetime_years", 0.0) or 0.0)
             efficiency = params.get("efficiency", 1.0)
+
+            print(f"[CALC DEBUG]   {tech_id}: CAPEX={capex}, OpEx={opex_fix}, Lifetime={lifetime}")
 
             p_base = self._get_capacity(tech_inputs, self.base_year)
             p_target = self._get_capacity(tech_inputs, target_year)
+
+            print(f"[CALC DEBUG]   {tech_id}: P_base={p_base} MW, P_target={p_target} MW")
 
             # Investment: only for new build (delta)
             delta_p = max(0.0, p_target - p_base)
             delta_capex = delta_p * capex
             total_investment += delta_capex
 
+            print(f"[CALC DEBUG]   {tech_id}: Delta={delta_p} MW, Delta CAPEX={delta_capex/1e9:.3f} Mrd. €")
+
             # Annual capital cost: on TOTAL capacity (replacement value approach)
-            annuity_factor = self._calculate_annuity_factor(wacc, lifetime)
-            annual_capital_cost = p_target * capex * annuity_factor
+            if lifetime > 0:
+                annuity_factor = self._calculate_annuity_factor(wacc, lifetime)
+                annual_capital_cost = p_target * capex * annuity_factor
+            else:
+                annual_capital_cost = 0.0
 
             # Annual fixed OPEX
             annual_opex_fix = p_target * opex_fix
@@ -301,6 +332,8 @@ class EconomicCalculator:
             )
             annual_opex_var = generation_mwh * var_cost_specific
 
+            print(f"[CALC DEBUG]   {tech_id}: Capital={annual_capital_cost/1e9:.3f}, Fixed OpEx={annual_opex_fix/1e9:.3f}, Var OpEx={annual_opex_var/1e9:.3f} Mrd. €")
+
             total_annual_cost += annual_capital_cost + annual_opex_fix + annual_opex_var
 
         # System LCOE: EUR/MWh -> ct/kWh
@@ -309,6 +342,11 @@ class EconomicCalculator:
             (total_annual_cost / total_consumption_mwh) if total_consumption_mwh > 0 else 0.0
         )
         system_lcoe_ct_per_kwh = system_lcoe_eur_per_mwh * 0.1
+
+        print(f"[CALC DEBUG] Total Investment: {total_investment/1e9:.3f} Mrd. €")
+        print(f"[CALC DEBUG] Total Annual Cost: {total_annual_cost/1e9:.3f} Mrd. €")
+        print(f"[CALC DEBUG] Total Consumption: {total_consumption_mwh/1e6:.3f} TWh")
+        print(f"[CALC DEBUG] System LCOE: {system_lcoe_ct_per_kwh:.2f} ct/kWh")
 
         result = {
             "year": float(target_year),
