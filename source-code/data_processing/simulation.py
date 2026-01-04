@@ -1250,6 +1250,11 @@ def economical_calculation(
         
         # Hole die Erzeugungskapazitäten aus dem Szenario für das Zieljahr
         capacities_target_raw = sm.get_generation_capacities(year=year)
+        storage_targets = {
+            "battery_storage": sm.get_storage_capacities("battery_storage", year) or {},
+            "pumped_hydro_storage": sm.get_storage_capacities("pumped_hydro_storage", year) or {},
+            "h2_storage": sm.get_storage_capacities("h2_storage", year) or {},
+        }
         
         # Entferne nested dict Layer (falls vorhanden)
         capacities_target = {}
@@ -1260,6 +1265,13 @@ def economical_calculation(
             else:
                 # Direkter Wert
                 capacities_target[tech_id] = val
+
+        # Storage Targets: nutze Leistungsangaben (max_charge_power_mw) als Invest-Basis
+        storage_flat = {}
+        for s_id, s_val in storage_targets.items():
+            if isinstance(s_val, dict):
+                cap_mw = s_val.get("max_charge_power_mw") or s_val.get("max_discharge_power_mw") or 0.0
+                storage_flat[s_id] = cap_mw
         
         print(f"[DEBUG] Zielkapazitäten (flach) 2030: {capacities_target}")
         
@@ -1283,7 +1295,7 @@ def economical_calculation(
         
         print(f"[DEBUG] Basis-Kapazitäten 2025 (konvertiert): {capacities_base}")
         
-        # Strukturiere die Eingangsdaten für EconomicCalculator
+        # Strukturiere die Eingangsdaten für EconomicCalculator (Erzeuger + Speicher)
         inputs = {}
         for tech_id in capacities_target.keys():
             if isinstance(capacities_target[tech_id], (int, float)) and capacities_target[tech_id] > 0:
@@ -1291,6 +1303,18 @@ def economical_calculation(
                     2025: capacities_base.get(tech_id, capacities_target[tech_id] * 0.7),
                     year: capacities_target[tech_id]
                 }
+
+        # Speicher (Basis 0, Ziel aus storage_flat)
+        storage_inputs = {}
+        for s_id, cap_mw in storage_flat.items():
+            if isinstance(cap_mw, (int, float)) and cap_mw > 0:
+                storage_inputs[s_id] = {
+                    2025: 0.0,
+                    year: cap_mw
+                }
+
+        if storage_inputs:
+            inputs["storage"] = storage_inputs
         
         print(f"[DEBUG] Inputs für EconomicCalculator: {inputs}")
         

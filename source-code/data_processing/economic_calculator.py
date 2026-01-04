@@ -268,12 +268,27 @@ class EconomicCalculator:
         total_investment = 0.0  # EUR
         total_annual_cost = 0.0  # EUR per year
 
+        # Detail-Tracker
+        investment_by_tech: Dict[str, float] = {}
+        capex_annual_by_tech: Dict[str, float] = {}
+        opex_fix_by_tech: Dict[str, float] = {}
+        opex_var_by_tech: Dict[str, float] = {}
+
         wacc = wacc_default
 
         print(f"[CALC DEBUG] WACC: {wacc}")
         print(f"[CALC DEBUG] Source Specific Costs: {source_specific}")
 
-        for tech_id, tech_inputs in (self.inputs or {}).items():
+        # Flatten inputs: support storage dictionaries under known keys
+        flat_inputs = {}
+        reserved_keys = {"storage", "storage_capacities", "storages"}
+        for key, val in (self.inputs or {}).items():
+            if key in reserved_keys and isinstance(val, dict):
+                flat_inputs.update(val)
+            else:
+                flat_inputs[key] = val
+
+        for tech_id, tech_inputs in flat_inputs.items():
             print(f"[CALC DEBUG] Verarbeite Tech: {tech_id}")
             
             # Mapping: Tech-IDs zu Parametern
@@ -286,7 +301,11 @@ class EconomicCalculator:
                 'Erdgas': 'Erdgas',
                 'Steinkohle': 'Steinkohle',
                 'Braunkohle': 'Braunkohle',
-                'Kernenergie': 'Kernenergie'
+                'Kernenergie': 'Kernenergie',
+                # Speicher
+                'battery_storage': 'Batteriespeicher',
+                'pumped_hydro_storage': 'Pumpspeicher',
+                'h2_storage': 'Wasserstoffspeicher',
             }
             
             param_name = tech_mapping.get(tech_id, tech_id)
@@ -309,6 +328,7 @@ class EconomicCalculator:
             delta_p = max(0.0, p_target - p_base)
             delta_capex = delta_p * capex
             total_investment += delta_capex
+            investment_by_tech[tech_id] = delta_capex
 
             print(f"[CALC DEBUG]   {tech_id}: Delta={delta_p} MW, Delta CAPEX={delta_capex/1e9:.3f} Mrd. €")
 
@@ -336,6 +356,11 @@ class EconomicCalculator:
 
             total_annual_cost += annual_capital_cost + annual_opex_fix + annual_opex_var
 
+            # Detail speichern
+            capex_annual_by_tech[tech_id] = annual_capital_cost
+            opex_fix_by_tech[tech_id] = annual_opex_fix
+            opex_var_by_tech[tech_id] = annual_opex_var
+
         # System LCOE: EUR/MWh -> ct/kWh
         total_consumption_mwh = self._get_total_consumption(target_year)
         system_lcoe_eur_per_mwh = (
@@ -353,5 +378,13 @@ class EconomicCalculator:
             "total_investment_bn": total_investment / 1e9,
             "total_annual_cost_bn": total_annual_cost / 1e9,
             "system_lco_e": system_lcoe_ct_per_kwh,
+            # Detail-Ausgaben
+            "investment_by_tech": {k: v / 1e9 for k, v in investment_by_tech.items()},
+            "capex_annual_bn": sum(capex_annual_by_tech.values()) / 1e9,
+            "opex_fix_bn": sum(opex_fix_by_tech.values()) / 1e9,
+            "opex_var_bn": sum(opex_var_by_tech.values()) / 1e9,
+            "capex_annual_by_tech": {k: v / 1e9 for k, v in capex_annual_by_tech.items()},
+            "opex_fix_by_tech": {k: v / 1e9 for k, v in opex_fix_by_tech.items()},
+            "opex_var_by_tech": {k: v / 1e9 for k, v in opex_var_by_tech.items()},
         }
         return result

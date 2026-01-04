@@ -46,8 +46,10 @@ def plot_cost_structure(results_list: List[Dict[str, Any]]) -> go.Figure:
     }
     
     # Stacks hinzufügen
+    x_vals = df["year"].astype(int).astype(str)
+
     fig.add_trace(go.Bar(
-        x=df["year"],
+        x=x_vals,
         y=df["capex_annual_bn"],
         name="Kapitalkosten (CAPEX)",
         marker_color=colors["Kapitalkosten (CAPEX)"],
@@ -55,7 +57,7 @@ def plot_cost_structure(results_list: List[Dict[str, Any]]) -> go.Figure:
     ))
     
     fig.add_trace(go.Bar(
-        x=df["year"],
+        x=x_vals,
         y=df["opex_fix_bn"],
         name="Fixe Betriebskosten",
         marker_color=colors["Fixe Betriebskosten"],
@@ -63,7 +65,7 @@ def plot_cost_structure(results_list: List[Dict[str, Any]]) -> go.Figure:
     ))
     
     fig.add_trace(go.Bar(
-        x=df["year"],
+        x=x_vals,
         y=df["opex_var_bn"],
         name="Variable Kosten (Brennstoff/CO2)",
         marker_color=colors["Variable Kosten (Brennstoff/CO2)"],
@@ -75,7 +77,7 @@ def plot_cost_structure(results_list: List[Dict[str, Any]]) -> go.Figure:
         template="plotly_white",
         xaxis_title="Jahr",
         yaxis_title="Kosten (Mrd. €/Jahr)",
-        title="Kostenaufschlüsselung nach Komponenten",
+        title="",
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -88,6 +90,8 @@ def plot_cost_structure(results_list: List[Dict[str, Any]]) -> go.Figure:
         height=500,
         hovermode="x unified",
     )
+
+    fig.update_xaxes(type="category")
     
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.1)")
@@ -157,7 +161,7 @@ def plot_investment_donut(investment_dict: Dict[str, float], year: int) -> go.Fi
     )])
     
     fig.update_layout(
-        title=f"Investitions-Mix {year}",
+        title="",
         template="plotly_white",
         showlegend=True,
         legend=dict(

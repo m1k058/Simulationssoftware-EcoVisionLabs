@@ -450,7 +450,8 @@ def standard_simulation_page() -> None:
                 if econ_series:
                     st.markdown("---")
                     st.markdown("### Wirtschaftlichkeits-Dashboard")
-                    
+                    st.markdown("#### Investitions- und LCOE-Trend (Balken = Investition, Linie = LCOE)")
+
                     # Hauptgraph: Trend
                     fig_econ = ply.plot_economic_trends(econ_series)
                     st.plotly_chart(fig_econ, use_container_width=True)
@@ -459,10 +460,12 @@ def standard_simulation_page() -> None:
                     col_cost, col_inv = st.columns(2)
                     
                     with col_cost:
+                        st.markdown("#### Kostenaufschlüsselung (Mrd. €/Jahr)")
                         fig_cost = econ_ply.plot_cost_structure(econ_series)
                         st.plotly_chart(fig_cost, use_container_width=True)
                     
                     with col_inv:
+                        st.markdown(f"#### Investitionsmix {sel_year} (Mrd. €)")
                         # Investitionsverteilung pro Technologie für das aktuelle Jahr
                         econ_data = results[sel_year].get("economics", {})
                         if "investment_by_tech" in econ_data and econ_data["investment_by_tech"]:

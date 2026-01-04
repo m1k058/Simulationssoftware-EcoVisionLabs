@@ -571,7 +571,11 @@ def plot_economic_trends(results_list: list[dict]) -> go.Figure:
         yaxis2_title="LCOE (ct/kWh)",
         hovermode="x unified",
         bargap=0.15,
+        title="",
     )
+
+    # Stelle sicher, dass jede Jahresmarke gezeigt wird
+    fig.update_xaxes(dtick=1)
 
     # Grid nur auf primärer Achse
     fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.1)", secondary_y=False)
