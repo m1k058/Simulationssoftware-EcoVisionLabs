@@ -4,9 +4,10 @@ import data_processing.col as col
 import data_processing.gen as gen
 import data_processing.generation_profile as genPro
 import locale
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from data_processing.load_profile import apply_load_profile_to_simulation
 from config_manager import ConfigManager
+from data_processing.economic_calculator import EconomicCalculator
 
 
 def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
@@ -1196,6 +1197,190 @@ def calc_balance(simProd: pd.DataFrame, simCons: pd.DataFrame, simu_jahr: int) -
     return df_bilance
 
 
+def economical_calculation(
+    sm: "ScenarioManager",
+    dm,
+    sim_results: Dict[str, pd.DataFrame],
+    year: int,
+    smard_installed: pd.DataFrame
+) -> Dict[str, Any]:
+    """
+    Berechnet die wirtschaftlichen Kennzahlen (CAPEX, OPEX, LCOE) basierend auf echten Simulationsergebnissen.
+
+    Args:
+        sm: ScenarioManager mit geladenen Szenario-Daten
+        dm: DataManager
+        sim_results: Dictionary mit Simulationsergebnissen {"consumption", "production", "balance", "storage"}
+        year: Das Simulationsjahr (z.B. 2030 oder 2045)
+        smard_installed: DataFrame mit historischen installierten Leistungen (für Baseline 2025)
+
+    Returns:
+        dict: Ein Dictionary mit den wirtschaftlichen KPIs:
+            - "year": Das Simulationsjahr
+            - "total_investment_bn": Gesamter Investitionsbedarf für den Zubau (Mrd. €)
+            - "total_annual_cost_bn": Jährliche Gesamtkosten des Systems (Mrd. €/Jahr)
+            - "system_lco_e": Durchschnittliche Stromgestehungskosten (ct/kWh)
+    """
+    try:
+        # Mapping: Szenario Tech-IDs zu DataFrame Spalten
+        tech_mapping = {
+            'Photovoltaik': 'Photovoltaik [MWh]',
+            'Wind_Onshore': 'Wind Onshore [MWh]',
+            'Wind_Offshore': 'Wind Offshore [MWh]',
+            'Biomasse': 'Biomasse [MWh]',
+            'Wasserkraft': 'Wasserkraft [MWh]',
+            'Erdgas': 'Erdgas [MWh]',
+            'Steinkohle': 'Steinkohle [MWh]',
+            'Braunkohle': 'Braunkohle [MWh]',
+            'Kernenergie': 'Kernenergie [MWh]'
+        }
+        
+        # Mapping: SMARD Spalten zu Szenario Tech-IDs
+        smard_tech_mapping = {
+            'Photovoltaik [MW]': 'Photovoltaik',
+            'Wind Onshore [MW]': 'Wind_Onshore',
+            'Wind Offshore [MW]': 'Wind_Offshore',
+            'Biomasse [MW]': 'Biomasse',
+            'Wasserkraft [MW]': 'Wasserkraft',
+            'Erdgas [MW]': 'Erdgas',
+            'Steinkohle [MW]': 'Steinkohle',
+            'Braunkohle [MW]': 'Braunkohle',
+            'Kernenergie [MW]': 'Kernenergie'
+        }
+        
+        # Hole die Erzeugungskapazitäten aus dem Szenario für das Zieljahr
+        capacities_target_raw = sm.get_generation_capacities(year=year)
+        storage_targets = {
+            "battery_storage": sm.get_storage_capacities("battery_storage", year) or {},
+            "pumped_hydro_storage": sm.get_storage_capacities("pumped_hydro_storage", year) or {},
+            "h2_storage": sm.get_storage_capacities("h2_storage", year) or {},
+        }
+        
+        # Entferne nested dict Layer (falls vorhanden)
+        capacities_target = {}
+        for tech_id, val in capacities_target_raw.items():
+            if isinstance(val, dict):
+                # Nested dict: nimm den Wert für das target year
+                capacities_target[tech_id] = val.get(year, 0)
+            else:
+                # Direkter Wert
+                capacities_target[tech_id] = val
+
+        # Storage Targets: nutze Leistungsangaben (max_charge_power_mw) als Invest-Basis
+        storage_flat = {}
+        for s_id, s_val in storage_targets.items():
+            if isinstance(s_val, dict):
+                cap_mw = s_val.get("max_charge_power_mw") or s_val.get("max_discharge_power_mw") or 0.0
+                storage_flat[s_id] = cap_mw
+        
+        print(f"[DEBUG] Zielkapazitäten (flach) 2030: {capacities_target}")
+        
+        # Hole die Baseline-Kapazitäten aus SMARD 2025
+        capacities_base = {}
+        if not smard_installed.empty:
+            smard_2025 = smard_installed[smard_installed['Zeitpunkt'].dt.year == 2025]
+            if not smard_2025.empty:
+                # Konvertiere SMARD Spalten zu Tech-IDs
+                for smard_col, tech_id in smard_tech_mapping.items():
+                    if smard_col in smard_2025.columns:
+                        val = pd.to_numeric(smard_2025[smard_col], errors='coerce').max()
+                        if pd.notna(val) and val > 0:
+                            capacities_base[tech_id] = float(val)
+        
+        # Fallback: Verwende 70% der Zielkapazität
+        for tech_id, capacity_mw in capacities_target.items():
+            if isinstance(capacity_mw, (int, float)) and capacity_mw > 0:
+                if tech_id not in capacities_base:
+                    capacities_base[tech_id] = capacity_mw * 0.7
+        
+        print(f"[DEBUG] Basis-Kapazitäten 2025 (konvertiert): {capacities_base}")
+        
+        # Strukturiere die Eingangsdaten für EconomicCalculator (Erzeuger + Speicher)
+        inputs = {}
+        for tech_id in capacities_target.keys():
+            if isinstance(capacities_target[tech_id], (int, float)) and capacities_target[tech_id] > 0:
+                inputs[tech_id] = {
+                    2025: capacities_base.get(tech_id, capacities_target[tech_id] * 0.7),
+                    year: capacities_target[tech_id]
+                }
+
+        # Speicher (Basis 0, Ziel aus storage_flat)
+        storage_inputs = {}
+        for s_id, cap_mw in storage_flat.items():
+            if isinstance(cap_mw, (int, float)) and cap_mw > 0:
+                storage_inputs[s_id] = {
+                    2025: 0.0,
+                    year: cap_mw
+                }
+
+        if storage_inputs:
+            inputs["storage"] = storage_inputs
+        
+        print(f"[DEBUG] Inputs für EconomicCalculator: {inputs}")
+        
+        # Strukturiere Simulationsergebnisse aus echten Simulationen
+        df_prod = sim_results.get("production", pd.DataFrame())
+        df_cons = sim_results.get("consumption", pd.DataFrame())
+        
+        print(f"[DEBUG] Production DataFrame Spalten: {df_prod.columns.tolist()}")
+        
+        # Extrahiere Generierungsdaten pro Technologie (MWh pro Jahr)
+        # Muss mit den DataFrame Spalten gemappt werden
+        generation_by_tech = {}
+        for tech_id, df_col in tech_mapping.items():
+            if df_col in df_prod.columns:
+                try:
+                    gen_mwh = pd.to_numeric(df_prod[df_col], errors='coerce').sum()
+                    if pd.notna(gen_mwh) and gen_mwh > 0:
+                        generation_by_tech[tech_id] = float(gen_mwh)
+                except Exception:
+                    pass
+        
+        print(f"[DEBUG] Generation pro Tech (gemappt): {generation_by_tech}")
+        
+        # Extrahiere Gesamtverbrauch (MWh pro Jahr)
+        total_consumption_mwh = 0.0
+        if "Gesamt [MWh]" in df_cons.columns:
+            total_consumption_mwh = float(pd.to_numeric(df_cons["Gesamt [MWh]"], errors='coerce').sum())
+        
+        print(f"[DEBUG] Gesamtverbrauch: {total_consumption_mwh} MWh")
+        
+        # Strukturiere für EconomicCalculator
+        simulation_results = {
+            "generation": {
+                year: generation_by_tech
+            },
+            "total_consumption": {
+                year: total_consumption_mwh
+            }
+        }
+        
+        print(f"[DEBUG] Simulation Results: {simulation_results}")
+        
+        # Führe die Berechnung durch
+        calc = EconomicCalculator(inputs, simulation_results)
+        result = calc.perform_calculation(year)
+        
+        print(f"[DEBUG] Final Result: {result}")
+        
+        return result
+    
+    except Exception as e:
+        print(f"[ERROR] Fehler in economical_calculation: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "year": float(year),
+            "total_investment_bn": 0.0,
+            "total_annual_cost_bn": 0.0,
+            "system_lco_e": 0.0,
+            "error": str(e)
+        }
+
+
+
+
+
 # =============================================================================
 # Kombi-Funktion: führt alle Standard-Simulationen in einem Schritt aus
 # =============================================================================
@@ -1337,6 +1522,12 @@ def kobi(
             "production": df_prod,
             "balance": df_bal,
             "storage": res_h2,
+            "economics": economical_calculation(sm, dm, {
+                "production": df_prod,
+                "consumption": df_cons,
+                "balance": df_bal,
+                "storage": res_h2
+            }, year, smard_installed),
         }
 
     return results
