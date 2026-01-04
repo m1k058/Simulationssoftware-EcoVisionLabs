@@ -1196,6 +1196,34 @@ def calc_balance(simProd: pd.DataFrame, simCons: pd.DataFrame, simu_jahr: int) -
     return df_bilance
 
 
+def economical_calculation() -> dict:
+    """
+    Berechnet die wirtschaftlichen Kennzahlen (CAPEX, OPEX, LCOE) basierend auf den Simulationsergebnissen.
+
+    Dabei wird ein Delta-Ansatz verfolgt:
+    Es wird die Differenz zwischen der installierten Leistung im Basisjahr (z.B. 2025)
+    und dem Simulationsjahr (z.B. 2030/2045) ermittelt, um den notwendigen Neuinvestitionsbedarf
+    (Expansion CAPEX) zu berechnen.
+
+    Für die Stromgestehungskosten (LCOE) werden die Jahreskosten des *gesamten* Kraftwerksparks
+    (Bestand + Zubau) herangezogen.
+
+    Args:
+        
+
+    Returns:
+        dict: Ein Dictionary mit den wirtschaftlichen KPIs:
+            - "total_investment_needed_bn": Gesamter Investitionsbedarf für den Zubau (Mrd. €).
+            - "total_annual_system_cost_bn": Jährliche Gesamtkosten des Systems (Mrd. €/Jahr).
+            - "system_lco_e_ct_kwh": Durchschnittliche Stromgestehungskosten (ct/kWh).
+            - "details_per_tech": DataFrame oder Dict mit Kosten pro Technologie.
+    """
+
+    
+    
+
+
+
 # =============================================================================
 # Kombi-Funktion: führt alle Standard-Simulationen in einem Schritt aus
 # =============================================================================
