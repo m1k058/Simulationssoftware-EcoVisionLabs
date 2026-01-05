@@ -186,7 +186,7 @@ def analysis_page() -> None:
                 date_from=pd.to_datetime(selected_date_from),
                 date_to=pd.to_datetime(selected_date_to)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         elif plot_engine == "Matplotlib":
             energy_keys = [colname_to_code[c] for c in energy_selection] if energy_selection else ["BIO", "WON"]
             fig = pltf.create_stacked_bar_plot(
@@ -196,7 +196,7 @@ def analysis_page() -> None:
                 description="Stacked Bar Plot der Energieerzeugung",
                 darkmode=False
             )
-            st.pyplot(fig, use_container_width=True)
+            st.pyplot(fig, width='stretch')
         else:
             st.error("Unbekannte Plot Engine ausgewählt.")
 
@@ -233,7 +233,7 @@ def analysis_page() -> None:
                 template="plotly_white",
                 hovermode='x unified'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         elif plot_engine == "Altair":
             st.line_chart(local_df, x="Zeitpunkt", y=y_col, x_label="Datum", y_label="MWh")
         else:

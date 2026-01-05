@@ -130,7 +130,12 @@ def plot_investment_donut(investment_dict: Dict[str, float], year: int) -> go.Fi
         'Erdgas': 'Erdgas',
         'Steinkohle': 'Steinkohle',
         'Braunkohle': 'Braunkohle',
-        'Kernenergie': 'Kernenergie'
+        'Kernenergie': 'Kernenergie',
+        'Elektrolyseur': 'Elektrolyseur',
+        'H2_Elektrifizierung': 'H₂-Elektrifizierung',
+        'Batteriespeicher': 'Batteriespeicher',
+        'Pumpspeicher': 'Pumpspeicher',
+        'Wasserstoffspeicher': 'H₂-Speicher'
     }
     
     # Farben für Technologien (Konsistenz mit anderen Charts)
@@ -143,7 +148,12 @@ def plot_investment_donut(investment_dict: Dict[str, float], year: int) -> go.Fi
         'Erdgas': '#5D5D5D',                 # Grau
         'Steinkohle': '#1F1F1F',             # Dunkelgrau
         'Braunkohle': '#774400',             # Braun
-        'Kernenergie': '#800080'             # Lila
+        'Kernenergie': '#800080',            # Lila
+        'Elektrolyseur': '#FF6B6B',          # Rot
+        'H2_Elektrifizierung': '#FF8A65',    # Orange
+        'Batteriespeicher': '#4CAF50',       # Grün
+        'Pumpspeicher': '#2196F3',           # Blau
+        'Wasserstoffspeicher': '#9C27B0'     # Violett
     }
     
     labels = [label_map.get(k, k) for k in filtered.keys()]

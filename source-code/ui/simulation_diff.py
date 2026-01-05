@@ -141,7 +141,7 @@ def diff_simulation_page() -> None:
                     kpi_name="Durchschnittliche Rest-Bilanz [MWh]",
                     title="KPI-Entwicklung (Gesamt)"
                 )
-                st.plotly_chart(fig_saturation, use_container_width=True)
+                st.plotly_chart(fig_saturation, width='stretch')
 
             # Zeige Winter/Sommer nebeneinander
             if saturation_sets and (saturation_sets.get("winter") or saturation_sets.get("summer")):
@@ -153,7 +153,7 @@ def diff_simulation_page() -> None:
                         kpi_name="Durchschnittliche Rest-Bilanz [MWh]",
                         title="Winter (Dez–Feb)"
                     )
-                    col_w.plotly_chart(fig_w, use_container_width=True)
+                    col_w.plotly_chart(fig_w, width='stretch')
                 else:
                     col_w.info("Keine Winter-Daten")
 
@@ -164,7 +164,7 @@ def diff_simulation_page() -> None:
                         kpi_name="Durchschnittliche Rest-Bilanz [MWh]",
                         title="Sommer (Jun–Aug)"
                     )
-                    col_s.plotly_chart(fig_s, use_container_width=True)
+                    col_s.plotly_chart(fig_s, width='stretch')
                 else:
                     col_s.info("Keine Sommer-Daten")
             
@@ -435,7 +435,7 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
             axis=1
         )
         
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        st.dataframe(styled_df, width='stretch', hide_index=True)
     else:
         st.info("Keine vergleichbaren Parameter gefunden")
 

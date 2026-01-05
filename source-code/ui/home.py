@@ -47,15 +47,15 @@ def home_page() -> None:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("Main Simulation", use_container_width=True, icon=":material/table_chart_view:"):
+        if st.button("Main Simulation", width='stretch', icon=":material/table_chart_view:"):
             st.switch_page(st.session_state.pages["simulation"])
     
     with col2:
-        if st.button("Szenario Konfiguration", use_container_width=True, icon=":material/tune:"):
+        if st.button("Szenario Konfiguration", width='stretch', icon=":material/tune:"):
             st.switch_page(st.session_state.pages["scenario"])
     
     with col3:
-        if st.button("Daten Analyse", use_container_width=True, icon=":material/area_chart:"):
+        if st.button("Daten Analyse", width='stretch', icon=":material/area_chart:"):
             st.switch_page(st.session_state.pages["analysis"])
 
     st.markdown("---")
@@ -69,7 +69,7 @@ def home_page() -> None:
     st.checkbox(":material/bug_report: Debug Modus", value=False, key="debug_mode")
 
     if not is_loaded:
-        if st.button(":material/drive_folder_upload: Daten laden", use_container_width=True, type="primary"):
+        if st.button(":material/drive_folder_upload: Daten laden", width='stretch', type="primary"):
             with st.spinner("Datenmanager/ConfigManager/ScenarioManager laden..."):
                 success = load_data_manager()
             if success:

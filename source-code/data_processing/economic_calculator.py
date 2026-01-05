@@ -25,10 +25,41 @@ class EconomicCalculator:
     - Performs calculation of investments, annual costs, and system LCOE.
     """
 
-    def __init__(self, inputs: Dict[str, Any], simulation_results: Dict[str, Any]) -> None:
+    def __init__(self, inputs: Dict[str, Any], simulation_results: Dict[str, Any], 
+                 target_storage_capacities: Optional[Dict[str, Any]] = None) -> None:
         self.inputs = inputs or {}
         self.simulation_results = simulation_results or {}
+        self.target_storage_capacities = target_storage_capacities or {}
         self.base_year = 2025
+
+    def _get_capex_value(self, capex_data: Any, mode: str = "average") -> float:
+        """Extrahiere CAPEX-Wert aus Liste [Min, Max] oder Skalar.
+        
+        Args:
+            capex_data: Kann sein [Min, Max] oder Skalar
+            mode: "average" (default) für Durchschnitt, "min", "max", "conservative"
+        
+        Returns:
+            float: CAPEX-Wert in EUR/MW
+        """
+        try:
+            if isinstance(capex_data, (list, tuple)):
+                if len(capex_data) >= 2:
+                    min_val = float(capex_data[0])
+                    max_val = float(capex_data[1])
+                    
+                    if mode == "min":
+                        return min_val
+                    elif mode == "max":
+                        return max_val
+                    elif mode == "conservative":  # Nutze Max für konservative Schätzung
+                        return max_val
+                    else:  # average
+                        return (min_val + max_val) / 2.0
+            # Skalar-Wert
+            return float(capex_data or 0.0)
+        except Exception:
+            return 0.0
 
     def _calculate_annuity_factor(self, wacc: float, lifetime: float) -> float:
         """Annuitätenformel: (q^n * i) / (q^n - 1), q = 1 + wacc.
@@ -60,11 +91,15 @@ class EconomicCalculator:
         efficiency: Optional[float],
         params: Dict[str, Any],
     ) -> float:
-        """Berechne variable Kosten in EUR/MWh_el.
+        """Berechne Brennstoffkosten-Beitrag zu variable Kosten in EUR/MWh_el.
 
+        Dies ist NUR die Brennstoff- und CO2-Komponente, nicht die Verschleißkosten!
+        
         Formel: (FuelPrice + (CO2_Price * CO2_Faktor)) / Wirkungsgrad
         - Falls kein `fuel_type` vorhanden ist, 0 zurückgeben.
         - Sucht Preise/Faktoren robust in `const.COMMODITIES`.
+        
+        RÜCKGABEWERT: EUR/MWh (bereits umgerechnet!)
         """
         try:
             commodities = getattr(const, "COMMODITIES", {}) or {}
@@ -73,57 +108,24 @@ class EconomicCalculator:
                 return 0.0
 
             # Efficiency guard
-            eff = float(efficiency) if efficiency not in (None, 0) else 0.0
+            eff = float(efficiency) if efficiency not in (None, 0) else 1.0
             if eff <= 0.0:
                 return 0.0
 
-            # Try to locate fuel prices structure
-            fuel_prices = (
-                commodities.get("FUEL_PRICES")
-                or commodities.get("fuel_prices")
-                or commodities.get("FUEL", {}).get("PRICES")
-                or {}
-            )
+            # Brennstoffpreis
+            fuel_prices = commodities.get("fuel_prices", {}) or {}
+            fuel_price = float(fuel_prices.get(fuel_type, 0.0) or 0.0)
 
-            def _price_for_year(entry: Any, ft: str, y: int) -> float:
-                if isinstance(entry, dict):
-                    val = entry.get(ft)
-                    if isinstance(val, dict):
-                        return float(val.get(y, val.get("default", 0.0)) or 0.0)
-                    return float(val or 0.0)
-                return 0.0
+            # CO2-Preis
+            co2_price = float(commodities.get("co2_price", 0.0) or 0.0)
 
-            fuel_price = _price_for_year(fuel_prices, fuel_type, year)
+            # CO2-Emissionsfaktor
+            co2_factors = commodities.get("co2_emission_factors", {}) or {}
+            co2_factor = float(co2_factors.get(fuel_type, 0.0) or 0.0)
 
-            # CO2 price per year
-            co2_price_map = (
-                commodities.get("CO2_PRICE")
-                or commodities.get("co2_price")
-                or {}
-            )
-            if isinstance(co2_price_map, dict):
-                co2_price = co2_price_map.get(year, co2_price_map.get("default", 0.0))
-            else:
-                co2_price = co2_price_map or 0.0
-            try:
-                co2_price = float(co2_price)
-            except Exception:
-                co2_price = 0.0
-
-            # CO2 factor per fuel type
-            co2_factor_map = (
-                commodities.get("CO2_FACTOR")
-                or commodities.get("co2_factor")
-                or commodities.get("CO2_EMISSION_FACTOR")
-                or commodities.get("co2_emission_factor")
-                or {}
-            )
-            if isinstance(co2_factor_map, dict):
-                co2_factor = float(co2_factor_map.get(fuel_type, 0.0) or 0.0)
-            else:
-                co2_factor = 0.0
-
-            return (fuel_price + (co2_price * co2_factor)) / eff
+            # Brennstoffkosten in EUR/MWh
+            fuel_cost_eur_per_mwh = (fuel_price + (co2_price * co2_factor)) / eff
+            return fuel_cost_eur_per_mwh
         except Exception:
             return 0.0
 
@@ -251,20 +253,69 @@ class EconomicCalculator:
                     continue
         return 0.0
 
+    def _normalize_cost_value(self, value: Any) -> float:
+        """Normalisiere CAPEX/OPEX-Werte.
+        
+        Falls value eine Liste [Min, Max] ist: Durchschnitt ((Min+Max)/2).
+        Sonst: zu float konvertieren.
+        Gibt 0.0 zurück bei Fehler.
+        """
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            try:
+                return (float(value[0]) + float(value[1])) / 2.0
+            except (TypeError, ValueError):
+                return 0.0
+        try:
+            return float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _is_thermal_technology(self, tech_id: str, params: Dict[str, Any]) -> bool:
+        """Prüfe, ob Technologie thermisch ist (Brennstoff hat).
+        
+        Thermische Technologien: Erdgas, Biomasse, Kohle (Stein/Braun), H2-Kraftwerke.
+        """
+        thermal_keywords = [
+            "erdgas", "gas", "h2", "hydrogen", "wasserstoff",
+            "biomasse", "steinkohle", "braunkohle", "kohle"
+        ]
+        tech_id_lower = tech_id.lower()
+        
+        # Check in tech_id
+        if any(kw in tech_id_lower for kw in thermal_keywords):
+            return True
+        
+        # Check fuel_type in params
+        fuel_type = params.get("fuel_type", "").lower()
+        if fuel_type and any(kw in fuel_type for kw in thermal_keywords):
+            return True
+        
+        return False
+
     def perform_calculation(self, target_year: int) -> Dict[str, float]:
         """Run the economic calculation for a given `target_year`.
 
-        Steps:
-        - Iterate technologies in `inputs`.
-        - Compute investment (delta from base to target) and annual costs.
-        - Compute System-LCOE = total annual costs / total consumption.
-        - Return result dict with values in requested units.
+        Implementiert präzise CAPEX und OPEX Berechnungen gemäß Spezifikation:
+        
+        CAPEX:
+        - Eingabe: [Min, Max] in EUR/MW
+        - Durchschnitt: (Min + Max) / 2
+        - Investitionsbedarf (Delta): (Cap_Zieljahr - Cap_Basisjahr) * CAPEX_avg
+        - Kapitalkosten (LCOE): Cap_Zieljahr * CAPEX_avg * Annuitätenfaktor
+        
+        OPEX FIX:
+        - Eingabe: EUR/MW/Jahr (direkt)
+        - Annual_Fix_Cost = Cap_Zieljahr_MW * Input_EUR_per_MW
+        
+        OPEX VAR:
+        - Eingabe: EUR/MWh
+        - Base_Var_Cost = Input_EUR_per_MWh
+        - Für Thermisch: + (Brennstoffpreis + CO2 / Wirkungsgrad)
         """
-        # Verwende ECONOMICS_CONSTANTS aus constants.py
-        econ_consts = getattr(const, "ECONOMICS_CONSTANTS", {}) or {}
-        wacc_default = econ_consts.get("global_parameter", {}).get("wacc", 0.05)
-        source_specific = econ_consts.get("source_specific", {})
-
+        # Neue Struktur mit TECHNOLOGY_COSTS und COMMODITIES
+        tech_costs = getattr(const, "TECHNOLOGY_COSTS", {}) or {}
+        wacc_default = 0.05  # Default WACC
+        
         total_investment = 0.0  # EUR
         total_annual_cost = 0.0  # EUR per year
 
@@ -276,10 +327,9 @@ class EconomicCalculator:
 
         wacc = wacc_default
 
-        print(f"[CALC DEBUG] WACC: {wacc}")
-        print(f"[CALC DEBUG] Source Specific Costs: {source_specific}")
+        print(f"[CALC DEBUG] Berechnung für Zieljahr: {target_year}")
 
-        # Flatten inputs: support storage dictionaries under known keys
+        # ===== ERZEUGUNG (aus inputs) =====
         flat_inputs = {}
         reserved_keys = {"storage", "storage_capacities", "storages"}
         for key, val in (self.inputs or {}).items():
@@ -288,90 +338,119 @@ class EconomicCalculator:
             else:
                 flat_inputs[key] = val
 
+        # ===== SPEICHER (aus target_storage_capacities) =====
+        storage_techs = {
+            "Batteriespeicher": self.target_storage_capacities.get("battery_storage", {}),
+            "Wasserstoffspeicher": self.target_storage_capacities.get("h2_storage", {}),
+            "Pumpspeicher": self.target_storage_capacities.get("pumped_hydro_storage", {}),
+        }
+        flat_inputs.update(storage_techs)
+
         for tech_id, tech_inputs in flat_inputs.items():
-            print(f"[CALC DEBUG] Verarbeite Tech: {tech_id}")
+            # Skip if empty
+            if not isinstance(tech_inputs, dict) or not tech_inputs:
+                continue
+                
+            print(f"\n[CALC DEBUG] Verarbeite: {tech_id}")
             
-            # Mapping: Tech-IDs zu Parametern
-            tech_mapping = {
-                'Photovoltaik': 'Photovoltaik',
-                'Wind_Onshore': 'Wind Onshore',
-                'Wind_Offshore': 'Wind Offshore',
-                'Biomasse': 'Biomasse',
-                'Wasserkraft': 'Wasserkraft',
-                'Erdgas': 'Erdgas',
-                'Steinkohle': 'Steinkohle',
-                'Braunkohle': 'Braunkohle',
-                'Kernenergie': 'Kernenergie',
-                # Speicher
-                'battery_storage': 'Batteriespeicher',
-                'pumped_hydro_storage': 'Pumpspeicher',
-                'h2_storage': 'Wasserstoffspeicher',
-            }
+            # Get parameters aus TECHNOLOGY_COSTS
+            params = tech_costs.get(tech_id, {}) or {}
+            if not params:
+                print(f"[CALC DEBUG]   WARNUNG: Keine Parameter für {tech_id}")
+                continue
+
+            # ===== CAPEX =====
+            capex_data = params.get("capex_eur_per_mw", [0, 0])
+            capex_eur_per_mw = self._get_capex_value(capex_data, mode="average")
             
-            param_name = tech_mapping.get(tech_id, tech_id)
-            params = source_specific.get(param_name, {}) or {}
+            lifetime = float(params.get("lifetime_years", 20.0) or 20.0)
+            efficiency = float(params.get("efficiency", 1.0) or 1.0)
 
-            # Cost parameters, default safe values
-            capex = float(params.get("capex_eur_per_mw", 0.0) or 0.0)
-            opex_fix = float(params.get("opex_eur_per_mw_year", 0.0) or 0.0)
-            lifetime = float(params.get("lifetime_years", 0.0) or 0.0)
-            efficiency = params.get("efficiency", 1.0)
+            # ===== OPEX FIX =====
+            opex_fix_eur_per_mw = float(params.get("opex_fix_eur_per_mw", 0.0) or 0.0)
+            
+            # ===== OPEX VAR =====
+            opex_var_eur_per_mwh = float(params.get("opex_var_eur_per_mwh", 0.0) or 0.0)
 
-            print(f"[CALC DEBUG]   {tech_id}: CAPEX={capex}, OpEx={opex_fix}, Lifetime={lifetime}")
+            print(f"[CALC DEBUG]   CAPEX={capex_eur_per_mw:.0f} EUR/MW, "
+                  f"OPEX_FIX={opex_fix_eur_per_mw:.0f} EUR/MW, "
+                  f"OPEX_VAR={opex_var_eur_per_mwh:.2f} EUR/MWh")
 
-            p_base = self._get_capacity(tech_inputs, self.base_year)
-            p_target = self._get_capacity(tech_inputs, target_year)
+            # ===== KAPAZITÄTEN =====
+            p_base_mw = self._get_capacity(tech_inputs, self.base_year)
+            p_target_mw = self._get_capacity(tech_inputs, target_year)
 
-            print(f"[CALC DEBUG]   {tech_id}: P_base={p_base} MW, P_target={p_target} MW")
+            print(f"[CALC DEBUG]   P_base={p_base_mw:.2f} MW, P_target={p_target_mw:.2f} MW")
 
-            # Investment: only for new build (delta)
-            delta_p = max(0.0, p_target - p_base)
-            delta_capex = delta_p * capex
-            total_investment += delta_capex
-            investment_by_tech[tech_id] = delta_capex
+            # ===== CAPEX BERECHNUNG =====
+            # 1. Investitionsbedarf (Delta)
+            delta_p_mw = max(0.0, p_target_mw - p_base_mw)
+            investment = delta_p_mw * capex_eur_per_mw
+            total_investment += investment
+            investment_by_tech[tech_id] = investment
 
-            print(f"[CALC DEBUG]   {tech_id}: Delta={delta_p} MW, Delta CAPEX={delta_capex/1e9:.3f} Mrd. €")
-
-            # Annual capital cost: on TOTAL capacity (replacement value approach)
-            if lifetime > 0:
+            # 2. Kapitalkosten (Annual Capital Cost)
+            if lifetime > 0 and capex_eur_per_mw > 0:
                 annuity_factor = self._calculate_annuity_factor(wacc, lifetime)
-                annual_capital_cost = p_target * capex * annuity_factor
+                annual_capital_cost = p_target_mw * capex_eur_per_mw * annuity_factor
             else:
                 annual_capital_cost = 0.0
 
-            # Annual fixed OPEX
-            annual_opex_fix = p_target * opex_fix
+            print(f"[CALC DEBUG]   Investment={investment/1e9:.3f} Mrd. €, "
+                  f"Annual_Capital={annual_capital_cost/1e9:.3f} Mrd. €/Jahr")
 
-            # Annual variable OPEX
+            # ===== OPEX FIX BERECHNUNG =====
+            annual_opex_fix = p_target_mw * opex_fix_eur_per_mw
+
+            print(f"[CALC DEBUG]   Annual_OPEX_FIX={annual_opex_fix/1e9:.3f} Mrd. €/Jahr")
+
+            # ===== OPEX VAR BERECHNUNG =====
             generation_mwh = self._get_generation(tech_id, target_year)
-            var_cost_specific = self._get_variable_opex_cost(
+            
+            # Base variable cost
+            base_var_cost_eur_per_mwh = opex_var_eur_per_mwh
+            
+            # Zusatz für thermische Kraftwerke: Brennstoffkosten
+            additional_var_cost = self._get_variable_opex_cost(
                 tech_id=tech_id,
                 year=target_year,
                 efficiency=efficiency,
                 params=params,
             )
-            annual_opex_var = generation_mwh * var_cost_specific
+            
+            # Total variable cost
+            total_var_cost_eur_per_mwh = base_var_cost_eur_per_mwh + additional_var_cost
+            
+            # Annual variable cost
+            annual_opex_var = generation_mwh * total_var_cost_eur_per_mwh
 
-            print(f"[CALC DEBUG]   {tech_id}: Capital={annual_capital_cost/1e9:.3f}, Fixed OpEx={annual_opex_fix/1e9:.3f}, Var OpEx={annual_opex_var/1e9:.3f} Mrd. €")
+            is_thermal = "fuel_type" in params and params.get("fuel_type") is not None
+            print(f"[CALC DEBUG]   Generation={generation_mwh/1e6:.2f} TWh, "
+                  f"Var_Cost={total_var_cost_eur_per_mwh:.2f} EUR/MWh "
+                  f"(Base={base_var_cost_eur_per_mwh:.2f}, Fuel={additional_var_cost:.2f}, Thermal={is_thermal}), "
+                  f"Annual_OPEX_VAR={annual_opex_var/1e9:.3f} Mrd. €/Jahr")
 
-            total_annual_cost += annual_capital_cost + annual_opex_fix + annual_opex_var
+            # ===== SUMMEN =====
+            annual_cost = annual_capital_cost + annual_opex_fix + annual_opex_var
+            total_annual_cost += annual_cost
 
             # Detail speichern
             capex_annual_by_tech[tech_id] = annual_capital_cost
             opex_fix_by_tech[tech_id] = annual_opex_fix
             opex_var_by_tech[tech_id] = annual_opex_var
 
-        # System LCOE: EUR/MWh -> ct/kWh
+        # ===== SYSTEM LCOE =====
         total_consumption_mwh = self._get_total_consumption(target_year)
         system_lcoe_eur_per_mwh = (
             (total_annual_cost / total_consumption_mwh) if total_consumption_mwh > 0 else 0.0
         )
         system_lcoe_ct_per_kwh = system_lcoe_eur_per_mwh * 0.1
 
-        print(f"[CALC DEBUG] Total Investment: {total_investment/1e9:.3f} Mrd. €")
-        print(f"[CALC DEBUG] Total Annual Cost: {total_annual_cost/1e9:.3f} Mrd. €")
-        print(f"[CALC DEBUG] Total Consumption: {total_consumption_mwh/1e6:.3f} TWh")
-        print(f"[CALC DEBUG] System LCOE: {system_lcoe_ct_per_kwh:.2f} ct/kWh")
+        print(f"\n[CALC DEBUG] SUMMARY für {target_year}:")
+        print(f"  Total Investment: {total_investment/1e9:.3f} Mrd. €")
+        print(f"  Total Annual Cost: {total_annual_cost/1e9:.3f} Mrd. €")
+        print(f"  Total Consumption: {total_consumption_mwh/1e6:.3f} TWh")
+        print(f"  System LCOE: {system_lcoe_ct_per_kwh:.2f} ct/kWh ({system_lcoe_eur_per_mwh:.2f} EUR/MWh)")
 
         result = {
             "year": float(target_year),

@@ -454,7 +454,7 @@ def standard_simulation_page() -> None:
 
                     # Hauptgraph: Trend
                     fig_econ = ply.plot_economic_trends(econ_series)
-                    st.plotly_chart(fig_econ, use_container_width=True)
+                    st.plotly_chart(fig_econ, width='stretch')
                     
                     # Nebendiagramme: Kostenaufschlüsselung und Investitionsmix
                     col_cost, col_inv = st.columns(2)
@@ -462,7 +462,7 @@ def standard_simulation_page() -> None:
                     with col_cost:
                         st.markdown("#### Kostenaufschlüsselung (Mrd. €/Jahr)")
                         fig_cost = econ_ply.plot_cost_structure(econ_series)
-                        st.plotly_chart(fig_cost, use_container_width=True)
+                        st.plotly_chart(fig_cost, width='stretch')
                     
                     with col_inv:
                         st.markdown(f"#### Investitionsmix {sel_year} (Mrd. €)")
@@ -473,7 +473,7 @@ def standard_simulation_page() -> None:
                                 econ_data["investment_by_tech"],
                                 sel_year
                             )
-                            st.plotly_chart(fig_donut, use_container_width=True)
+                            st.plotly_chart(fig_donut, width='stretch')
                         else:
                             st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 

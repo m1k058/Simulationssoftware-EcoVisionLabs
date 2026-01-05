@@ -65,7 +65,7 @@ def _show_year_modal() -> list:
                 
                 st.markdown(f"**Aktivierte Jahre:** {', '.join(map(str, valid_years))}")
                 
-                if st.button("✅ Jahre bestätigen", use_container_width=True, key="confirm_years"):
+                if st.button("✅ Jahre bestätigen", width='stretch', key="confirm_years"):
                     st.session_state["years_confirmed"] = True
                     st.session_state["valid_years"] = valid_years
                     st.rerun()
@@ -87,7 +87,7 @@ def scenario_generation_page() -> None:
     valid_years = _show_year_modal()
 
     # Schneller Reset auf die Beispielwerte aus der Vorlage
-    if st.button(":material/lab_profile: Beispielwerte laden", use_container_width=True):
+    if st.button(":material/lab_profile: Beispielwerte laden", width='stretch'):
         st.session_state["scenario_editor"] = sm.default_template()
         st.session_state.pop("storage_values", None)
         st.rerun()
@@ -369,13 +369,13 @@ def scenario_generation_page() -> None:
             data=yaml_output,
             file_name=f"{scenario_name}_{scenario_version}.yaml",
             mime="text/yaml",
-            use_container_width=True,
+            width='stretch',
             key="final_download"
         )
     
     col_empty1, col_preview, col_empty2 = st.columns([1, 2, 1])
     with col_preview:
-        if st.button(":material/preview: YAML-Vorschau anzeigen", use_container_width=True):
+        if st.button(":material/preview: YAML-Vorschau anzeigen", width='stretch'):
             st.session_state["show_yaml_preview"] = not st.session_state.get("show_yaml_preview", False)
     
     if st.session_state.get("show_yaml_preview", False):
@@ -386,7 +386,7 @@ def scenario_generation_page() -> None:
 
     # Neustart-Button: Jahre erneut abfragen und State leeren
     col_empty1, col_preview, col_empty2 = st.columns([1, 2, 1])
-    if col_preview.button("RESET", use_container_width=True):
+    if col_preview.button("RESET", width='stretch'):
         reset_keys = [
             "years_confirmed",
             "valid_years",

@@ -187,7 +187,7 @@ def verbrauch_simulieren() -> None:
         key="checkbox_lastprofile",
     )
 
-    if st.button("Simulation starten", type="primary", use_container_width=True):
+    if st.button("Simulation starten", type="primary", width='stretch'):
         if st.session_state.sim_datei_verbrauch:
             with st.spinner("Simulation läuft..."):
                 try:
@@ -261,7 +261,7 @@ def verbrauch_simulieren() -> None:
                             description="",
                             darkmode=False,
                         )
-                        st.plotly_chart(fig_winter, use_container_width=True)
+                        st.plotly_chart(fig_winter, width='stretch')
                     else:
                         st.warning("⚠️ Keine Winterdaten")
 
@@ -275,7 +275,7 @@ def verbrauch_simulieren() -> None:
                             description="",
                             darkmode=False,
                         )
-                        st.plotly_chart(fig_summer, use_container_width=True)
+                        st.plotly_chart(fig_summer, width='stretch')
                     else:
                         st.warning("⚠️ Keine Sommerdaten")
 
@@ -293,7 +293,7 @@ def verbrauch_simulieren() -> None:
                         description="",
                         darkmode=False,
                     )
-                    st.plotly_chart(fig_year, use_container_width=True, width="stretch")
+                    st.plotly_chart(fig_year, width='stretch')
                 df_stats = df_full_year
 
             col1, col2, col3 = st.columns(3, border=True, gap="small")
@@ -329,7 +329,7 @@ def erzeugung_simulieren() -> None:
         key="selectbox_studie_erzeugung",
     )
 
-    if st.button("🚀 Erzeugung simulieren", type="primary", use_container_width=True):
+    if st.button("🚀 Erzeugung simulieren", type="primary", width='stretch'):
         if st.session_state.sim_datei_erzeugung:
             with st.spinner("Erzeugungssimulation läuft..."):
                 try:
@@ -399,7 +399,7 @@ def erzeugung_simulieren() -> None:
                             description="",
                             darkmode=False,
                         )
-                        st.plotly_chart(fig_winter, use_container_width=True)
+                        st.plotly_chart(fig_winter, width='stretch')
                     else:
                         st.warning("⚠️ Keine Winterdaten")
 
@@ -413,7 +413,7 @@ def erzeugung_simulieren() -> None:
                             description="",
                             darkmode=False,
                         )
-                        st.plotly_chart(fig_summer, use_container_width=True)
+                        st.plotly_chart(fig_summer, width='stretch')
                     else:
                         st.warning("⚠️ Keine Sommerdaten")
 
@@ -462,7 +462,7 @@ def erzeugung_simulieren() -> None:
                         height=300,
                         margin=dict(l=20, r=20, t=40, b=20),
                     )
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    st.plotly_chart(fig_pie, width='stretch')
 
                 st.session_state.step_valid = True
             else:
@@ -540,7 +540,7 @@ def defizite_anzeigen() -> None:
                     "",
                     darkmode=False,
                 )
-                st.plotly_chart(fig_winter, use_container_width=True)
+                st.plotly_chart(fig_winter, width='stretch')
             else:
                 st.warning("Keine Winterdaten verfügbar.")
 
@@ -555,7 +555,7 @@ def defizite_anzeigen() -> None:
                     "",
                     darkmode=False,
                 )
-                st.plotly_chart(fig_summer, use_container_width=True)
+                st.plotly_chart(fig_summer, width='stretch')
             else:
                 st.warning("Keine Sommerdaten verfügbar.")
     else:
@@ -567,7 +567,7 @@ def defizite_anzeigen() -> None:
             "",
             darkmode=False,
         )
-        st.plotly_chart(fig_year, use_container_width=True)
+        st.plotly_chart(fig_year, width='stretch')
 
     try:
         balance_series = stats_df["Gesamterzeugung [MWh]"].values - stats_df["Skalierte Netzlast [MWh]"].values
@@ -740,7 +740,7 @@ def speicher_simulieren() -> None:
         color=alt.Color("MeineFarbe:N", scale=None, legend=None),
     ).properties(height=200, padding={"left": 10, "right": 10, "top": 10, "bottom": 10})
 
-    st.altair_chart(bars, use_container_width=True)
+    st.altair_chart(bars, width='stretch')
 
     st.markdown("---")
     st.subheader("Energiespeicher simulieren")
@@ -795,14 +795,14 @@ def speicher_simulieren() -> None:
             st.markdown("#### ❄️ Winter SOC")
             if len(df_winter) > 0:
                 fig_w = pltp.create_line_plot(df_winter, y_axis=soc_col_name, title="", description="", darkmode=False)
-                st.plotly_chart(fig_w, use_container_width=True)
+                st.plotly_chart(fig_w, width='stretch')
             else:
                 st.warning("Keine Winterdaten")
         with col_s:
             st.markdown("#### ☀️ Sommer SOC")
             if len(df_summer) > 0:
                 fig_s = pltp.create_line_plot(df_summer, y_axis=soc_col_name, title="", description="", darkmode=False)
-                st.plotly_chart(fig_s, use_container_width=True)
+                st.plotly_chart(fig_s, width='stretch')
             else:
                 st.warning("Keine Sommerdaten")
 

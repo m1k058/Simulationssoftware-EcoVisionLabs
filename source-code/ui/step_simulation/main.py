@@ -22,16 +22,16 @@ def step_simulation_page() -> None:
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        if st.button("▶️ Weiter zum aktuellen Schritt", use_container_width=True, type="primary"):
+        if st.button("▶️ Weiter zum aktuellen Schritt", width='strectch', type="primary"):
             st.switch_page(f"pages/step_{step_index + 1}:_*.py")
     
     with col2:
-        if st.button("🔄 Von vorne beginnen", use_container_width=True):
+        if st.button("🔄 Von vorne beginnen", width='strectch'):
             reset_step_simulation()
             st.rerun()
     
     with col3:
-        if st.button("🏠 Zurück zur Startseite", use_container_width=True):
+        if st.button("🏠 Zurück zur Startseite", width='strectch'):
             st.switch_page("pages/home.py")
     
     st.markdown("---")
@@ -50,7 +50,7 @@ def step_simulation_page() -> None:
                 st.warning("⬜")
         
         with col2:
-            if st.button(f"{schritt}", use_container_width=True, key=f"step_btn_{i}"):
+            if st.button(f"{schritt}", width='strectch', key=f"step_btn_{i}"):
                 if i <= step_index:  # Nur zu abgeschlossenen oder aktuellem Step
                     st.session_state.step_index = i
                     # Navigiere zum entsprechenden Step

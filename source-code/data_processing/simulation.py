@@ -1358,7 +1358,8 @@ def economical_calculation(
         print(f"[DEBUG] Simulation Results: {simulation_results}")
         
         # Führe die Berechnung durch
-        calc = EconomicCalculator(inputs, simulation_results)
+        # Speicher werden bereits in inputs["storage"] übergeben
+        calc = EconomicCalculator(inputs, simulation_results, target_storage_capacities=storage_inputs)
         result = calc.perform_calculation(year)
         
         print(f"[DEBUG] Final Result: {result}")

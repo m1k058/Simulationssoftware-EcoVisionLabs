@@ -23,22 +23,22 @@ def render_navigation_buttons(current_step: int, can_proceed: bool = True):
     
     with col1:
         if current_step > 0:
-            if st.button("⬅️ Zurück", use_container_width=True, key=f"back_{current_step}"):
+            if st.button("⬅️ Zurück", width='stretch', key=f"back_{current_step}"):
                 st.session_state.step_index = current_step - 1
                 # Nutze query_params um die Page zu kontrollieren
                 st.query_params.update({"step": current_step - 1})
         else:
-            st.button("⬅️ Zurück", disabled=True, use_container_width=True, key=f"back_{current_step}")
+            st.button("⬅️ Zurück", disabled=True, width='stretch', key=f"back_{current_step}")
     
     with col2:
         if current_step < len(SIMULATION_SCHRITTE) - 1:
-            if st.button("Weiter ➡️", use_container_width=True, type="primary", disabled=not can_proceed, key=f"next_{current_step}"):
+            if st.button("Weiter ➡️", width='stretch', type="primary", disabled=not can_proceed, key=f"next_{current_step}"):
                 if can_proceed:
                     st.session_state.step_index = current_step + 1
                     # Nutze query_params um die Page zu kontrollieren
                     st.query_params.update({"step": current_step + 1})
         else:
-            if st.button("✅ Fertig", use_container_width=True, type="primary", key=f"finish_{current_step}"):
+            if st.button("✅ Fertig", width='stretch', type="primary", key=f"finish_{current_step}"):
                 # Simulation zurücksetzen und zur Home-Page
                 st.session_state.step_index = 0
                 st.query_params.clear()

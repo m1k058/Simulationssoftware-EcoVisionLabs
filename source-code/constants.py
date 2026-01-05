@@ -157,61 +157,99 @@ SOURCES_GROUPS = {
     "All": ["KE", "BK", "SK", "EG", "SOK", "SOE", "BIO", "PS", "WAS", "WOF", "WON", "PV"]
 }
 
-ECONOMICS_CONSTANTS = {
-    "global_parameter": {
-        "wacc": 0.05
+TECHNOLOGY_COSTS = {
+    "Erdgas": {
+        "capex_eur_per_mw": [450000, 700000],
+        "opex_fix_eur_per_mw": 23000,
+        "opex_var_eur_per_mwh": 4.0,
+        "lifetime_years": 30,
+        "efficiency": 0.40,
+        "fuel_type": "Erdgas"
     },
-    "source_specific": {
-        "Erdgas":{
-            "capex_eur_per_mw": 600000,
-            "opex_eur_per_mw_year": 9000,
-            "lifetime_years":25
-        },
-        "Biomasse":{
-            "capex_eur_per_mw": 600000,
-            "opex_eur_per_mw_year": 9000,
-            "lifetime_years":25
-        },
-        "Wasserkraft":{
-            "opex_eur_per_mw_year": 9000
-        },
-        "Wind Onshore":{
-            "capex_eur_per_mw": 1500000,
-            "opex_eur_per_mw_year": 22500,
-            "lifetime_years":20
-        },
-        "Wind Offshore":{
-            "capex_eur_per_mw": 3000000,
-            "opex_eur_per_mw_year": 45000,
-            "lifetime_years":20
-        },
-        "Photovoltaik":{
-            "capex_eur_per_mw": 800000,
-            "opex_eur_per_mw_year": 12000,
-            "lifetime_years":25
-        },
-        "Elektrolyseur":{
-            "capex_eur_per_mw": 1000000,
-            "opex_eur_per_mw_year": 15000,
-            "lifetime_years":20
-        },
-        "H2_Elektrifizierung":{
-            "capex_eur_per_mw": 500000,
-            "opex_eur_per_mw_year": 7500,
-            "lifetime_years":25
-        },
-        "Batteriespeicher":{
-            "capex_eur_per_mw": 400000,
-            "opex_eur_per_mw_year": 6000,
-            "lifetime_years":15
-        },
-        "Pumpspeicher":{
-            "opex_eur_per_mw_year": 30000
-        },
-        "Wasserstoffspeicher":{
-            "capex_eur_per_mw": 200000,
-            "opex_eur_per_mw_year": 3000,
-            "lifetime_years":30
-        }        
+    "Biomasse": {
+        "capex_eur_per_mw": [3470000, 5790000],
+        "opex_fix_eur_per_mw": 185000,
+        "opex_var_eur_per_mwh": 4.0,
+        "lifetime_years": 25,
+        "efficiency": 0.45,
+        "fuel_type": "Biomasse"
+    },
+    "Wasserkraft": {
+        "capex_eur_per_mw": [0, 0],
+        "opex_fix_eur_per_mw": 15000,
+        "opex_var_eur_per_mwh": 0.0,
+        "lifetime_years": 60,
+        "efficiency": 0.90
+    },
+    "Wind Offshore": {
+        "capex_eur_per_mw": [2200000, 3400000],
+        "opex_fix_eur_per_mw": 39000,
+        "opex_var_eur_per_mwh": 8.0,
+        "lifetime_years": 25,
+        "efficiency": 1.00
+    },
+    "Wind Onshore": {
+        "capex_eur_per_mw": [1300000, 1900000],
+        "opex_fix_eur_per_mw": 32000,
+        "opex_var_eur_per_mwh": 7.0,
+        "lifetime_years": 25,
+        "efficiency": 1.00
+    },
+    "Photovoltaik": {
+        "capex_eur_per_mw": [700000, 900000],
+        "opex_fix_eur_per_mw": 13300,
+        "opex_var_eur_per_mwh": 0.0,
+        "lifetime_years": 30,
+        "efficiency": 1.00
+    },
+    "Elektrolyseur": {
+        "capex_eur_per_mw": [800000, 1200000],
+        "opex_fix_eur_per_mw": 20000,
+        "opex_var_eur_per_mwh": 0.0,
+        "lifetime_years": 20,
+        "efficiency": 0.68
+    },
+    "H2_Elektrifizierung": {
+        "capex_eur_per_mw": [550000, 1200000],
+        "opex_fix_eur_per_mw": 23000,
+        "opex_var_eur_per_mwh": 5.0,
+        "lifetime_years": 30,
+        "efficiency": 0.40,
+        "fuel_type": "Wasserstoff"
+    },
+    "Batteriespeicher": {
+        "capex_eur_per_mw": [400000, 600000],
+        "opex_fix_eur_per_mw": 10000,
+        "opex_var_eur_per_mwh": 0.0,
+        "lifetime_years": 15,
+        "efficiency": 0.92
+    },
+    "Pumpspeicher": {
+        "capex_eur_per_mw": [0, 0],
+        "opex_fix_eur_per_mw": 10000,
+        "opex_var_eur_per_mwh": 0.0,
+        "lifetime_years": 60,
+        "efficiency": 0.85
+    },
+    "Wasserstoffspeicher": {
+        "capex_eur_per_mw": [400000, 600000],
+        "opex_fix_eur_per_mw": 5000,
+        "opex_var_eur_per_mwh": 0.0,
+        "lifetime_years": 30,
+        "efficiency": 1.00
+    }
+}
+
+COMMODITIES = {
+    "fuel_prices": {
+        "Erdgas": 35.0,
+        "Wasserstoff": 140.0,
+        "Biomasse": 30.0
+    },
+    "co2_price": 125.0,
+    "co2_emission_factors": {
+        "Erdgas": 0.198,
+        "Biomasse": 0.0,
+        "Wasserstoff": 0.0
     }
 }
