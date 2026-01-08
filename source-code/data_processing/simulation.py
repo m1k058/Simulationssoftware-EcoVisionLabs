@@ -1158,42 +1158,53 @@ def simulate_consumption(
     return df_result
     
 
+def _align_to_quarter_hour(df: pd.DataFrame, simu_jahr: int, label: str) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
+    """Bringt ein DataFrame auf das vollstaendige 15-Minuten-Raster des Simulationsjahres."""
+
+    if "Zeitpunkt" not in df.columns:
+        raise KeyError(f"{label}: Spalte 'Zeitpunkt' fehlt.")
+
+    df_local = df.copy()
+    df_local["Zeitpunkt"] = pd.to_datetime(df_local["Zeitpunkt"])
+    df_local = df_local.sort_values("Zeitpunkt").drop_duplicates(subset="Zeitpunkt", keep="last")
+
+    start = pd.Timestamp(f"{simu_jahr}-01-01 00:00:00")
+    end = pd.Timestamp(f"{simu_jahr}-12-31 23:45:00")
+    target_index = pd.date_range(start=start, end=end, freq="15min")
+
+    aligned = df_local.set_index("Zeitpunkt").reindex(target_index)
+    if aligned.isnull().any().any():
+        missing = aligned.isnull().all(axis=1).sum()
+        raise ValueError(f"{label}: {missing} Viertelstunden fehlen im Jahr {simu_jahr}; Eingabedaten sind lueckenhaft.")
+
+    return aligned, target_index
+
+
 def calc_balance(simProd: pd.DataFrame, simCons: pd.DataFrame, simu_jahr: int) -> pd.DataFrame:
-    """
-    Berechnet die Bilanz (Erzeugung - Verbrauch) für jedes Zeitintervall
-    im Simulationsjahr.
+    """Berechnet die Bilanz (Erzeugung - Verbrauch) je 15-Minuten-Zeitschritt des Simulationsjahres."""
+
+    prod_aligned, target_index = _align_to_quarter_hour(simProd, simu_jahr, "Produktion")
+    cons_aligned, _ = _align_to_quarter_hour(simCons, simu_jahr, "Verbrauch")
+
+    # Summiere nur relevante Spalten, nicht die Gesamt-Spalte (sonst Doppelzählung!)
+    # Wenn "Gesamt [MWh]" vorhanden ist, verwende nur diese, ansonsten summiere alle MWh-Spalten
+    if "Gesamt [MWh]" in cons_aligned.columns:
+        cons_sum = cons_aligned["Gesamt [MWh]"]
+    else:
+        cons_sum = cons_aligned.select_dtypes(include=[np.number]).sum(axis=1)
     
-    Args:
-        simProd (pd.DataFrame): DataFrame mit simulierten Produktionsdaten.
-                               Muss eine 'Zeitpunkt' Spalte und MWh-Spalten enthalten.
-        simCons (pd.DataFrame): DataFrame mit simulierten Verbrauchsdaten.
-                               Muss eine 'Zeitpunkt' Spalte und MWh-Spalten enthalten.
-        simu_jahr (int): Das Simulationsjahr (z.B. 2030 oder 2045).
-        
-    Returns:
-        pd.DataFrame: DataFrame mit Bilanzdaten für jedes Zeitintervall.
-                      Enthält 'Zeitpunkt' und 'Bilanz [MWh]' Spalten.
-    """
+    # Für Produktion: Summiere alle MWh-Spalten (es gibt dort keine Gesamt-Spalte)
+    prod_sum = prod_aligned.select_dtypes(include=[np.number]).sum(axis=1)
     
-    # 1) Sicherstellen, dass beide DataFrames den gleichen Zeitindex haben
-    simProd = simProd.set_index('Zeitpunkt')
-    simCons = simCons.set_index('Zeitpunkt')
-    
-    # 2) Summiere alle MWh-Spalten in Produktion und Verbrauch
-    prod_sum = simProd.select_dtypes(include=[np.number]).sum(axis=1)
-    cons_sum = simCons.select_dtypes(include=[np.number]).sum(axis=1)
-    
-    # 3) Berechne die Bilanz
     bilance = prod_sum - cons_sum
-    
-    # 4) Erstelle Ergebnis-DataFrame
+
     df_bilance = pd.DataFrame({
-        'Zeitpunkt': bilance.index,
-        'Produktion [MWh]': prod_sum.values,
-        'Verbrauch [MWh]': cons_sum.values,
-        'Bilanz [MWh]': bilance.values
+        "Zeitpunkt": target_index,
+        "Produktion [MWh]": prod_sum.values,
+        "Verbrauch [MWh]": cons_sum.values,
+        "Bilanz [MWh]": bilance.values
     })
-    
+
     return df_bilance
 
 
