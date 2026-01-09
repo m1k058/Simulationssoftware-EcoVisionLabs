@@ -203,7 +203,7 @@ TECHNOLOGY_COSTS = {
         "efficiency": 1.00
     },
     "Elektrolyseur": {
-        "capex_eur_per_mw": [800000, 1200000],
+        "capex_eur_per_mw": [1800000, 2400000], # Update: IEA 2024 DE
         "opex_fix_eur_per_mw": 20000,
         "opex_var_eur_per_mwh": 0.0,
         "lifetime_years": 20,
@@ -225,8 +225,8 @@ TECHNOLOGY_COSTS = {
         "efficiency": 0.92
     },
     "Pumpspeicher": {
-        "capex_eur_per_mw": [0, 0],
-        "opex_fix_eur_per_mw": 10000,
+        "capex_eur_per_mw": [1200000, 3000000], # Update: Wuppertal Paper
+        "opex_fix_eur_per_mw": 75000,           # Update: Mittelwert (50k-100k)
         "opex_var_eur_per_mwh": 0.0,
         "lifetime_years": 60,
         "efficiency": 0.85
@@ -243,10 +243,10 @@ TECHNOLOGY_COSTS = {
 COMMODITIES = {
     "fuel_prices": {
         "Erdgas": 35.0,
-        "Wasserstoff": 140.0,
-        "Biomasse": 30.0
+        "Wasserstoff": 142.5, # Update: Mittelwert aus WD-5-029-20
+        "Biomasse": 24.0      # Update: Fraunhofer ISE 2024
     },
-    "co2_price": 125.0,
+    "co2_price": 55.0,        # Update: Preis 2025
     "co2_emission_factors": {
         "Erdgas": 0.198,
         "Biomasse": 0.0,
