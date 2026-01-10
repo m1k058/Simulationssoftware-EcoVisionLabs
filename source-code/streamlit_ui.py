@@ -1,6 +1,6 @@
 import streamlit as st
 
-from ui.home import home_page
+from ui.home import home_page, load_data_manager
 from ui.analysis import analysis_page
 from ui.simulation_standard import standard_simulation_page
 from ui.simulation_diff import diff_simulation_page
@@ -16,16 +16,24 @@ st.set_page_config(
 
 
 def ensure_base_session_state() -> None:
-    """Stellt die zentralen Session-State Variablen bereit."""
+    """Stellt die zentralen Session-State Variablen bereit und lädt Daten automatisch."""
     defaults = {
         "dm": None,
         "cfg": None,
+        "sm": None,
         "load_log": "",
         "debug_mode": False,
+        "auto_load_attempted": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    
+    # Automatisches Laden der Daten beim ersten Start
+    if not st.session_state.auto_load_attempted:
+        st.session_state.auto_load_attempted = True
+        if st.session_state.dm is None:
+            load_data_manager()
 
 
 def main() -> None:

@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from data_processing.load_profile import apply_load_profile_to_simulation
 from config_manager import ConfigManager
 from data_processing.economic_calculator import EconomicCalculator
+from data_processing.simulation_logger import SimulationLogger
 
 
 def calc_scaled_consumption_multiyear(conDf: pd.DataFrame, progDf: pd.DataFrame,
@@ -48,7 +49,7 @@ def calc_scaled_consumption(conDf: pd.DataFrame, progDf: pd.DataFrame,
                             ref_jahr: int = 2023, use_load_profile: bool = True) -> pd.DataFrame:
     """
     DEPRECATED: Diese Funktion implementiert die alte "Top-Down" Logik.
-    Bitte stattdessen `simulate_consumption` (Bottom-Up mit BDEW-Profilen) verwenden.
+    Bitte stattdessen `simulate_consumption_BDEW` (Bottom-Up mit BDEW-Profilen) verwenden.
 
     Skaliert den Energieverbrauch eines Referenzjahres basierend auf Prognosedaten für ein
     Simulationsjahr und eine ausgewählte Studie.
@@ -909,7 +910,7 @@ def simulate_production(
     return df_result
 
 
-def simulate_consumption(
+def simulate_consumption_BDEW(
     lastH: pd.DataFrame, 
     lastG: pd.DataFrame, 
     lastL: pd.DataFrame, 
@@ -1156,7 +1157,319 @@ def simulate_consumption(
     # col.show_first_rows(df_result)
     
     return df_result
+
+
+def simulate_consumption_heatpump(
+    weather_df: pd.DataFrame,
+    hp_profile_matrix: pd.DataFrame,
+    n_heatpumps: int,
+    Q_th_a: float,
+    COP_avg: float,
+    dt: float,
+    simu_jahr: int,
+    debug: bool = False
+) -> pd.DataFrame:
+    """
+    Simuliert den Energieverbrauch für Wärmepumpen basierend auf vorgegebenen Lastprofil und Parametern.
     
+    Args:
+        weather_df (pd.DataFrame): Lastprofil für Wärmepumpen
+        hp_profile_matrix (pd.DataFrame): Matrix mit Lastprofilen für verschiedene Wetterlagen
+        n_heatpumps (int): Anzahl der Wärmepumpen
+        Q_th_a (float): Jahreswärmebedarf pro Wärmepumpe [kWh]
+        COP_avg (float): Durchschnittlicher COP der Wärmepumpen
+        dt (float): Zeitintervall in Stunden (z.B. 0.25 für 15 Minuten)
+        simu_jahr (int): Simulationsjahr (z.B. 2030 oder 2045)
+        
+    Returns:
+        pd.DataFrame: DataFrame mit Spalten:
+            - Zeitpunkt: DateTime-Index mit Viertelstunden-Auflösung
+            - Wärmepumpen [MWh]: Verbrauch Wärmepumpen
+    """
+    # Stelle sicher, dass alle Spaltennamen Strings sind (für konsistenten Matrix-Zugriff)
+    hp_profile_matrix.columns = hp_profile_matrix.columns.astype(str)
+
+    # Vorbereiten der HP-Lastprofilmatrix: Zeitspalten parsen, Kommas als Dezimalpunkte wandeln
+    hp_profile_matrix = hp_profile_matrix.copy()
+    if 'Zeitpunkt' in hp_profile_matrix.columns:
+        time_str = hp_profile_matrix['Zeitpunkt'].astype(str).str.split('-', n=1).str[0]
+        parsed_time = pd.to_datetime(time_str, format='%H:%M', errors='coerce')
+        hp_profile_matrix['hour'] = parsed_time.dt.hour
+        hp_profile_matrix['minute'] = parsed_time.dt.minute
+    else:
+        hp_profile_matrix['hour'] = hp_profile_matrix.index
+        hp_profile_matrix['minute'] = 0
+
+    value_cols = [c for c in hp_profile_matrix.columns if c not in {'Zeitpunkt', 'hour', 'minute'}]
+    for c in value_cols:
+        hp_profile_matrix[c] = pd.to_numeric(
+            hp_profile_matrix[c].astype(str).str.replace(',', '.'),
+            errors='coerce'
+        )
+    
+    # HILFSFUNKTIONEN
+    def prep_temp_df(df: pd.DataFrame, location: str = "AVERAGE") -> pd.DataFrame:
+        """
+        Bereitet das Wetter-DataFrame vor:
+        - Konvertiert Zeitpunkt von 'DD.MM.YY HH:MM' zu DateTime
+        - Wählt die angegebene Spalte aus (location)
+        - Interopliert zu Viertelstunden (aktuell nur stündliche Werte)
+        """
+        df_local = df.copy()
+        
+        # Konvertiere Zeitpunkt-Format "01.01.19 01:00" zu DateTime
+        df_local['Zeitpunkt'] = pd.to_datetime(df_local['Zeitpunkt'], format='%d.%m.%y %H:%M')
+        
+        # Wähle nur AVERAGE Spalte
+        if location not in df_local.columns:
+            raise ValueError(f"Spalte '{location}' nicht gefunden im Weather-DataFrame")
+        
+        df_local = df_local[['Zeitpunkt', location]].copy()
+        df_local.columns = ['Zeitpunkt', 'Temperatur [°C]']
+        
+        # Sortiere nach Zeitpunkt
+        df_local = df_local.sort_values('Zeitpunkt').reset_index(drop=True)
+        
+        return df_local
+
+    def get_hp_faktor(time_index: pd.Timestamp, temp: float) -> float:
+        """
+        Gibt den Lastprofilfaktor für eine bestimmte Temperatur und Uhrzeit zurück.
+        
+        Args:
+            time_index: DateTime Objekt mit Uhrzeit (0-23)
+            temp: Außentemperatur in °C
+            
+        Returns:
+            Lastprofilfaktor (dimensionslos, 0-1 oder höher) aus der Matrix
+            
+        Raises:
+            KeyError: Wenn Spalte nicht in Matrix gefunden
+        """
+        # Temperatur Clamping: -14 bis 17 oder String 'LOW'/'HIGH'
+        t_lookup = int(round(temp))
+        if t_lookup < -14:
+            t_lookup = 'LOW'
+        elif t_lookup >= 18:
+            t_lookup = 'HIGH'
+        
+        
+        t_col = str(t_lookup) if isinstance(t_lookup, int) else t_lookup
+        
+        # Zeile anhand Stunde und Minute finden (Matrix hat 96 Zeilen/Tag)
+        row = hp_profile_matrix[(hp_profile_matrix['hour'] == time_index.hour) & (hp_profile_matrix['minute'] == time_index.minute)]
+        if row.empty:
+            raise KeyError(
+                f"Matrix-Zeile nicht gefunden für Stunde={time_index.hour}, Minute={time_index.minute}"
+            )
+        if t_col not in row.columns:
+            raise KeyError(
+                f"Temperaturspalte '{t_col}' nicht in Matrix gefunden. Verfügbare: {value_cols[:5]}"
+            )
+        factor = row.iloc[0][t_col]
+        return float(factor)
+
+    # Bereite Wetterdaten vor: Konvertiere, bereinige und interpoliere auf Viertelstunden-Auflösung
+    df_weather = prep_temp_df(weather_df, location="AVERAGE")
+    df_weather = df_weather.drop_duplicates(subset='Zeitpunkt', keep='first')
+    df_weather = df_weather.sort_values('Zeitpunkt').reset_index(drop=True)
+    
+    # Erstelle vollständigen 15-Minuten-Zeitindex für das Wetterjahr
+    # (Alternative zu resample, vermeidet Probleme mit Zeitumstellung/Duplikaten)
+    weather_year = int(df_weather['Zeitpunkt'].dt.year.iloc[0])
+    start = pd.Timestamp(f'{weather_year}-01-01 00:00')
+    end = pd.Timestamp(f'{weather_year}-12-31 23:45')
+    full_index = pd.date_range(start=start, end=end, freq='15min')
+    df_full = pd.DataFrame({'Zeitpunkt': full_index})
+    
+    # Merge und interpoliere Temperaturdaten (forward-fill + backward-fill für Lücken am Anfang/Ende)
+    df_weather = df_full.merge(df_weather, on='Zeitpunkt', how='left')
+    df_weather['Temperatur [°C]'] = df_weather['Temperatur [°C]'].ffill().bfill()
+    
+    # Verschiebe Jahr auf Simulationsjahr für Merge mit BDEW-Daten
+    df_weather['Zeitpunkt'] = df_weather['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
+    
+    # Berechne Normierungsfaktor für Lastprofile
+    summe_lp_dt = 0.0
+    for index, row in df_weather.iterrows():
+        time = row['Zeitpunkt']
+        temp = row['Temperatur [°C]']
+        lp_faktor = get_hp_faktor(time, temp)
+        summe_lp_dt += lp_faktor * dt
+
+    # VALIDIERUNG
+    if summe_lp_dt <= 0:
+        raise ValueError(f"Fehler: Normierungssumme summe_lp_dt={summe_lp_dt} ist nicht positiv!")
+    
+    # Skalierungsfaktor: Jahreslast / Summe aller Profile
+    f = Q_th_a / summe_lp_dt
+    if debug:
+        print(f"Normierungsfaktor f: {f:.2f} kW (Q_th_a={Q_th_a} kWh, summe={summe_lp_dt:.1f} h-äquiv)")
+    
+    # Berechne Leistungen und Energieverbrauch für jede Viertelstunde
+    ergebnisse = []
+    
+    for index, row in df_weather.iterrows():
+        time = row['Zeitpunkt']
+        temp = row['Temperatur [°C]']
+        
+        # A. Profilwert holen (dimensionslos, 0-1 oder höher)
+        lp_wert = get_hp_faktor(time, temp)
+        
+        # B. Thermische Leistung EINER WP (kW)
+        p_th = lp_wert * f
+        
+        # C. Elektrische Leistung EINER WP (kW)
+        p_el = p_th / COP_avg
+        
+        # D. Gesamtleistung ALLER n WP (kW)
+        p_el_ges = p_el * n_heatpumps
+        
+        # Speichern (für Debug/Validierung)
+        ergebnisse.append({
+            "Zeitpunkt": time,
+            "Temperatur [°C]": temp,
+            "P_th [kW]": p_th,
+            "P_el [kW]": p_el,
+            "P_el_ges [kW]": p_el_ges,
+            "P_el_ges [MW]": p_el_ges / 1000  # Umrechnung zu MW
+        })
+    
+    # Konvertiere zu DataFrame
+    df_result = pd.DataFrame(ergebnisse)
+    
+    # --- SCHRITT 5: KONVERTIERUNG ZU ENERGIEERZEUGUNG (MWh) ---
+    df_result['Wärmepumpen [MWh]'] = df_result['P_el_ges [MW]'] * dt
+    
+    # Rückgabe nur mit Zeitpunkt und Verbrauch
+    df_result = df_result[['Zeitpunkt', 'Wärmepumpen [MWh]']]
+    
+    # VALIDIERUNG
+    if debug:
+        jahres_verbrauch_mwh = df_result['Wärmepumpen [MWh]'].sum()
+        jahres_verbrauch_twh = jahres_verbrauch_mwh / 1e6
+        target_twh = (Q_th_a * n_heatpumps) / (COP_avg * 1e6)
+        print(f"Jahres-Stromverbrauch: {jahres_verbrauch_twh:.4f} TWh")
+    
+    return df_result
+
+
+def simulate_consumption_emobility(
+    lastEMobility: pd.DataFrame,
+    zielEMobility: float,
+    simu_jahr: int
+) -> pd.DataFrame:
+    """
+    Simuliert den Energieverbrauch für Elektromobilität basierend auf vorgegebenen Lastprofilen.
+    
+    Args:
+        lastEMobility (pd.DataFrame): Lastprofil für E-Autos
+        zielEMobility (float): Ziel-Jahresverbrauch E-Mobilität [TWh]
+        simu_jahr (int): Simulationsjahr (z.B. 2030 oder 2045)
+        
+    Returns:
+        pd.DataFrame: DataFrame mit Spalten:
+            - Zeitpunkt: DateTime-Index mit Viertelstunden-Auflösung
+            - E-Mobilität [MWh]: Verbrauch E-Autos
+    """
+    pass
+
+
+def simulate_consumption_all(
+    lastH: pd.DataFrame,
+    lastG: pd.DataFrame,
+    lastL: pd.DataFrame,
+    wetter_df: pd.DataFrame,
+    hp_profile_matrix: pd.DataFrame,
+    lastZielH: float,
+    lastZielG: float,
+    lastZielL: float,
+    anzahl_heatpumps: int,
+    Q_th_a: float,
+    COP_avg: float,
+    dt: float,
+    simu_jahr: int,
+    debug: bool = False
+) -> pd.DataFrame:
+    """
+    Simuliert den gesamten Energieverbrauch (BDEW + Wärmepumpen + E-Mobilität) für ein Jahr.
+    
+    Diese Funktion führt alle drei Verbrauchssimulationen aus und kombiniert sie in einem
+    einzelnen DataFrame. Die Gesammtwerte werden erst am Ende berechnet.
+    
+    Args:
+        lastH (pd.DataFrame): BDEW H25-Lastprofil (Haushalte)
+        lastG (pd.DataFrame): BDEW G25-Lastprofil (Gewerbe)
+        lastL (pd.DataFrame): BDEW L25-Lastprofil (Landwirtschaft)
+        wetter_df (pd.DataFrame): Wetterdaten für Wärmepumpen
+        hp_profile_matrix (pd.DataFrame): Matrix mit Lastprofilen für Wärmepump
+        lastZielH (float): Ziel-Jahresverbrauch Haushalte [TWh]
+        lastZielG (float): Ziel-Jahresverbrauch Gewerbe [TWh]
+        lastZielL (float): Ziel-Jahresverbrauch Landwirtschaft [TWh]
+        anzahl_heatpumps (int): Anzahl der Wärmepumpen
+        Q_th_a (float): Jahreswärmebedarf pro Wärmepumpe [kWh]
+        COP_avg (float): Durchschnittlicher COP der Wärmepumpen
+        dt (float): Zeitintervall in Stunden (z.B. 0.25 für 15 Minuten)
+        simu_jahr (int): Simulationsjahr (z.B. 2030 oder 2045)
+        debug (bool): Debug-Informationen ausgeben
+        
+    Returns:
+        pd.DataFrame: DataFrame mit Spalten:
+            - Zeitpunkt: DateTime-Index mit Viertelstunden-Auflösung
+            - Haushalte [MWh]: Verbrauch Haushalte (BDEW)
+            - Gewerbe [MWh]: Verbrauch Gewerbe (BDEW)
+            - Landwirtschaft [MWh]: Verbrauch Landwirtschaft (BDEW)
+            - Wärmepumpen [MWh]: Verbrauch Wärmepumpen
+            - E-Mobilität [MWh]: Verbrauch E-Autos
+            - Gesamt [MWh]: Summe aller Sektoren (berechnet am Ende)
+    """
+    # 1. Simuliere BDEW-Verbrauch (Haushalte, Gewerbe, Landwirtschaft)
+    df_bdew = simulate_consumption_BDEW(
+        lastH, lastG, lastL,
+        lastZielH, lastZielG, lastZielL,
+        simu_jahr
+    )
+    
+    # 2. Simuliere Wärmepumpen-Verbrauch (optional, nur wenn Daten vorhanden)
+    df_result = df_bdew.copy()
+    
+    if wetter_df is not None and hp_profile_matrix is not None and anzahl_heatpumps > 0:
+        try:
+            df_heatpump = simulate_consumption_heatpump(
+                wetter_df,
+                hp_profile_matrix,
+                anzahl_heatpumps,
+                Q_th_a,
+                COP_avg,
+                dt,
+                simu_jahr,
+                debug=debug
+            )
+            # Merge mit BDEW-Daten (outer-merge, damit keine Zeitpunkte verloren gehen)
+            df_result = df_result.merge(df_heatpump, on='Zeitpunkt', how='outer')
+            df_result['Wärmepumpen [MWh]'] = df_result['Wärmepumpen [MWh]'].fillna(0.0)
+        except Exception as e:
+            if debug:
+                print(f"Warnung: Wärmepumpen-Simulation fehlgeschlagen: {e}")
+            df_result['Wärmepumpen [MWh]'] = 0.0
+    else:
+        # Falls keine Wärmepumpen konfiguriert, Spalte mit Nullen anlegen
+        df_result['Wärmepumpen [MWh]'] = 0.0
+    
+    # 3. Simuliere E-Mobilität-Verbrauch (TODO: Noch nicht implementiert)
+    # Wenn E-Mobilität implementiert wird, analog zu Wärmepumpen hinzufügen:
+    # df_result = df_result.merge(df_emobility, on='Zeitpunkt', how='outer')
+    # df_result['E-Mobilität [MWh]'] = df_result['E-Mobilität [MWh]'].fillna(0.0)
+    
+    # 4. Berechne Gesamtverbrauch: Summe aller Sektoren
+    mwh_cols = [col for col in df_result.columns if '[MWh]' in col and col != 'Gesamt [MWh]']
+    if mwh_cols:
+        df_result['Gesamt [MWh]'] = df_result[mwh_cols].sum(axis=1)
+    
+    return df_result
+
+
+
 
 def _align_to_quarter_hour(df: pd.DataFrame, simu_jahr: int, label: str) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
     """Bringt ein DataFrame auf das vollstaendige 15-Minuten-Raster des Simulationsjahres."""
@@ -1209,7 +1522,7 @@ def calc_balance(simProd: pd.DataFrame, simCons: pd.DataFrame, simu_jahr: int) -
 
 
 def economical_calculation(
-    sm: "ScenarioManager",
+    sm,
     dm,
     sim_results: Dict[str, pd.DataFrame],
     year: int,
@@ -1284,8 +1597,6 @@ def economical_calculation(
                 cap_mw = s_val.get("max_charge_power_mw") or s_val.get("max_discharge_power_mw") or 0.0
                 storage_flat[s_id] = cap_mw
         
-        print(f"[DEBUG] Zielkapazitäten (flach) 2030: {capacities_target}")
-        
         # Hole die Baseline-Kapazitäten aus SMARD 2025
         capacities_base = {}
         if not smard_installed.empty:
@@ -1303,8 +1614,6 @@ def economical_calculation(
             if isinstance(capacity_mw, (int, float)) and capacity_mw > 0:
                 if tech_id not in capacities_base:
                     capacities_base[tech_id] = capacity_mw * 0.7
-        
-        print(f"[DEBUG] Basis-Kapazitäten 2025 (konvertiert): {capacities_base}")
         
         # Strukturiere die Eingangsdaten für EconomicCalculator (Erzeuger + Speicher)
         inputs = {}
@@ -1327,13 +1636,9 @@ def economical_calculation(
         if storage_inputs:
             inputs["storage"] = storage_inputs
         
-        print(f"[DEBUG] Inputs für EconomicCalculator: {inputs}")
-        
         # Strukturiere Simulationsergebnisse aus echten Simulationen
         df_prod = sim_results.get("production", pd.DataFrame())
         df_cons = sim_results.get("consumption", pd.DataFrame())
-        
-        print(f"[DEBUG] Production DataFrame Spalten: {df_prod.columns.tolist()}")
         
         # Extrahiere Generierungsdaten pro Technologie (MWh pro Jahr)
         # Muss mit den DataFrame Spalten gemappt werden
@@ -1347,14 +1652,10 @@ def economical_calculation(
                 except Exception:
                     pass
         
-        print(f"[DEBUG] Generation pro Tech (gemappt): {generation_by_tech}")
-        
         # Extrahiere Gesamtverbrauch (MWh pro Jahr)
         total_consumption_mwh = 0.0
         if "Gesamt [MWh]" in df_cons.columns:
             total_consumption_mwh = float(pd.to_numeric(df_cons["Gesamt [MWh]"], errors='coerce').sum())
-        
-        print(f"[DEBUG] Gesamtverbrauch: {total_consumption_mwh} MWh")
         
         # Strukturiere für EconomicCalculator
         simulation_results = {
@@ -1366,19 +1667,14 @@ def economical_calculation(
             }
         }
         
-        print(f"[DEBUG] Simulation Results: {simulation_results}")
-        
         # Führe die Berechnung durch
         # Speicher werden bereits in inputs["storage"] übergeben
         calc = EconomicCalculator(inputs, simulation_results, target_storage_capacities=storage_inputs)
         result = calc.perform_calculation(year)
         
-        print(f"[DEBUG] Final Result: {result}")
-        
         return result
     
     except Exception as e:
-        print(f"[ERROR] Fehler in economical_calculation: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -1400,7 +1696,8 @@ def kobi(
     cfg: ConfigManager,
     dm,
     sm,
-    years: List[int] | None = None
+    years: List[int] | None = None,
+    verbose: bool = False
 ) -> dict:
     """
     Führt die vollständige Standard-Simulation mit einem Klick aus und liefert
@@ -1411,45 +1708,63 @@ def kobi(
     2) Erzeugungssimulation (SMARD-Profile skaliert mit Ziel-MW-Kapazitäten)
     3) Bilanz (Produktion minus Verbrauch)
     4) Speichersimulation (Batterie -> Pumpspeicher -> H2)
+    5) Wirtschaftlichkeitsanalyse
 
     Args:
         cfg: `ConfigManager` Instanz
         dm:  `DataManager` Instanz (liefert benötigte Roh-Datenframes über Namen)
         sm:  `ScenarioManager` Instanz (liefert Szenario-Parameter)
         years: Liste der zu simulierenden Jahre. Wenn None, dann aus Szenario entnommen.
+        verbose: Wenn True, zeige detaillierte Informationen
 
     Returns:
-        dict: {jahr: {"consumption": df, "production": df, "balance": df, "storage": df}}
+        dict: {jahr: {"consumption": df, "production": df, "balance": df, "storage": df, "economics": dict}}
     """
+    
+    # Initialisiere Logger
+    logger = SimulationLogger(verbose=verbose)
+    logger.start_step("Simulation wird vorbereitet", "Laden von Konfiguration und Daten")
 
     # Jahre bestimmen
     if years is None:
         years = sm.scenario_data.get("metadata", {}).get("valid_for_years", [])
         if not years:
+            logger.finish_step(False, "Keine gültigen Jahre im Szenario gefunden")
             raise ValueError("Keine gültigen Jahre im Szenario gefunden und keine years übergeben.")
 
+    logger.finish_step(True, f"{len(years)} Jahre identifiziert: {years}")
+
     # Verbrauchsprofile laden (Haushalt/Gewerbe/Landwirtschaft)
-    load_cfg = sm.scenario_data.get("target_load_demand_twh", {})
+    logger.start_step("Verbrauchsprofile werden geladen")
     try:
+        load_cfg = sm.scenario_data.get("target_load_demand_twh", {})
         last_H_name = load_cfg["Haushalt_Basis"]["load_profile"]
         last_G_name = load_cfg["Gewerbe_Basis"]["load_profile"]
         last_L_name = load_cfg["Landwirtschaft_Basis"]["load_profile"]
+        
+        last_H = dm.get(last_H_name)
+        last_G = dm.get(last_G_name)
+        last_L = dm.get(last_L_name)
+        logger.finish_step(True, "H/G/L-Profile erfolgreich geladen")
     except Exception as e:
+        logger.finish_step(False, str(e))
         raise KeyError(f"Fehlende Load-Profile in Szenario: {e}")
 
-    last_H = dm.get(last_H_name)
-    last_G = dm.get(last_G_name)
-    last_L = dm.get(last_L_name)
-
     # SMARD-Daten (Erzeugung/Kapazitäten) laden und zusammenführen
-    smard_generation = pd.concat([
-        dm.get("SMARD_2015-2019_Erzeugung"),
-        dm.get("SMARD_2020-2025_Erzeugung"),
-    ])
-    smard_installed = pd.concat([
-        dm.get("SMARD_Installierte Leistung 2015-2019"),
-        dm.get("SMARD_Installierte Leistung 2020-2025"),
-    ])
+    logger.start_step("SMARD-Erzeugungsdaten werden geladen")
+    try:
+        smard_generation = pd.concat([
+            dm.get("SMARD_2015-2019_Erzeugung"),
+            dm.get("SMARD_2020-2025_Erzeugung"),
+        ])
+        smard_installed = pd.concat([
+            dm.get("SMARD_Installierte Leistung 2015-2019"),
+            dm.get("SMARD_Installierte Leistung 2020-2025"),
+        ])
+        logger.finish_step(True)
+    except Exception as e:
+        logger.finish_step(False, str(e))
+        raise
 
     # Ziel-Kapazitäten (MW) und Wetterprofile aus Szenario
     capacity_dict = sm.get_generation_capacities()
@@ -1458,22 +1773,73 @@ def kobi(
     results: dict = {}
 
     for year in years:
+        year_num = len(results) + 1
+        total_years = len(years)
+        
         # 1) Verbrauch
+        logger.start_step(f"[{year_num}/{total_years}] Verbrauchssimulation {year}")
         try:
             targets = load_cfg
-            df_cons = simulate_consumption(
+
+            # Bereite Wärmepumpen-Parameter vor (falls verfügbar)
+            hp_params = {}
+            # Hole Jahres-HP-Konfiguration aus ScenarioManager, falls verfügbar
+            if hasattr(sm, "get_heat_pump_parameters"):
+                hp_config = sm.get_heat_pump_parameters(year) or {}
+            else:
+                hp_config = sm.scenario_data.get("target_heat_pump_parameters", {}).get(year, {})
+
+            if hp_config:
+                # Versuche per-Jahres Datensätze zu laden
+                wetter_df_year = None
+                hp_profile_matrix_year = None
+                # Wetterdaten
+                try:
+                    wd_name = hp_config.get("weather_data")
+                    if wd_name:
+                        wetter_df_year = dm.get(wd_name)
+                except Exception:
+                    wetter_df_year = None
+                # Lastprofil-Matrix: Nutze feste Konstante aus constants.py
+                try:
+                    from constants import HEATPUMP_LOAD_PROFILE_NAME
+                    hp_profile_matrix_year = dm.get(HEATPUMP_LOAD_PROFILE_NAME)
+                except Exception:
+                    hp_profile_matrix_year = None
+
+                # Nur setzen, wenn Daten vorhanden sind; sonst None, dann wird HP übersprungen
+                hp_params["wetter_df"] = wetter_df_year
+                hp_params["hp_profile_matrix"] = hp_profile_matrix_year
+                hp_params["n_heatpumps"] = hp_config.get("installed_units", 0)
+                hp_params["Q_th_a"] = hp_config.get("annual_heat_demand_kwh", 51000)  # [kWh/WP/Jahr]
+                hp_params["COP_avg"] = hp_config.get("cop_avg", 3.4)
+                hp_params["dt"] = 0.25  # Viertelstunden
+            
+            # Rufe simulieren_consumption_all() auf
+            df_cons = simulate_consumption_all(
                 lastH=last_H,
                 lastG=last_G,
                 lastL=last_L,
+                wetter_df=hp_params.get("wetter_df"),
+                hp_profile_matrix=hp_params.get("hp_profile_matrix"),
                 lastZielH=targets["Haushalt_Basis"][year],
                 lastZielG=targets["Gewerbe_Basis"][year],
                 lastZielL=targets["Landwirtschaft_Basis"][year],
+                anzahl_heatpumps=hp_params.get("n_heatpumps", 0),
+                Q_th_a=hp_params.get("Q_th_a", 0.0),
+                COP_avg=hp_params.get("COP_avg", 3.4),
+                dt=hp_params.get("dt", 0.25),
                 simu_jahr=year,
+                debug=verbose,
             )
+            cons_mwh = df_cons['Gesamt [MWh]'].sum() if 'Gesamt [MWh]' in df_cons.columns else 0
+            logger.finish_step(True, f"{cons_mwh/1e6:.1f} TWh")
         except Exception as e:
+            logger.finish_step(False, str(e))
             raise RuntimeError(f"Verbrauchssimulation {year} fehlgeschlagen: {e}")
 
         # 2) Erzeugung
+        logger.start_step(f"[{year_num}/{total_years}] Erzeugungssimulation {year}")
         try:
             wprof = weather_profiles.get(year, {})
             df_prod = simulate_production(
@@ -1486,18 +1852,23 @@ def kobi(
                 wprof.get("Photovoltaik", "average"),
                 year,
             )
+            prod_mwh = df_prod[df_prod.columns[1:]].sum().sum() if len(df_prod.columns) > 1 else 0
+            logger.finish_step(True, f"{prod_mwh/1e6:.1f} TWh")
         except Exception as e:
+            logger.finish_step(False, str(e))
             raise RuntimeError(f"Erzeugungssimulation {year} fehlgeschlagen: {e}")
 
         # 3) Bilanz
+        logger.start_step(f"[{year_num}/{total_years}] Bilanzberechnung {year}")
         try:
-            # Für Konsistenz: Verbrauch Gesamt -> 'Skalierte Netzlast [MWh]' wird in calc_balance nicht benötigt,
-            # da dort Summen aller numerischen Spalten verwendet werden.
             df_bal = calc_balance(df_prod, df_cons, year)
+            logger.finish_step(True)
         except Exception as e:
+            logger.finish_step(False, str(e))
             raise RuntimeError(f"Bilanzberechnung {year} fehlgeschlagen: {e}")
 
         # 4) Speicher
+        logger.start_step(f"[{year_num}/{total_years}] Speichersimulation {year}")
         try:
             stor_bat = sm.get_storage_capacities("battery_storage", year) or {}
             stor_pump = sm.get_storage_capacities("pumped_hydro_storage", year) or {}
@@ -1506,7 +1877,7 @@ def kobi(
             res_bat = simulate_battery_storage(
                 df_bal,
                 stor_bat.get("installed_capacity_mwh", 0.0),
-                               stor_bat.get("max_charge_power_mw", 0.0),
+                stor_bat.get("max_charge_power_mw", 0.0),
                 stor_bat.get("max_discharge_power_mw", 0.0),
                 stor_bat.get("initial_soc", 0.0),
             )
@@ -1526,20 +1897,33 @@ def kobi(
                 stor_h2.get("max_discharge_power_mw", 0.0),
                 stor_h2.get("initial_soc", 0.0),
             )
+            logger.finish_step(True)
         except Exception as e:
+            logger.finish_step(False, str(e))
             raise RuntimeError(f"Speichersimulation {year} fehlgeschlagen: {e}")
+
+        # 5) Wirtschaftlichkeit
+        logger.start_step(f"[{year_num}/{total_years}] Wirtschaftlichkeitsanalyse {year}")
+        try:
+            econ_result = economical_calculation(sm, dm, {
+                "production": df_prod,
+                "consumption": df_cons,
+                "balance": df_bal,
+                "storage": res_h2
+            }, year, smard_installed)
+            logger.finish_step(True, f"LCOE: {econ_result.get('system_lco_e', 0):.2f} ct/kWh")
+        except Exception as e:
+            logger.finish_step(False, str(e))
+            raise RuntimeError(f"Wirtschaftlichkeitsanalyse {year} fehlgeschlagen: {e}")
 
         results[year] = {
             "consumption": df_cons,
             "production": df_prod,
             "balance": df_bal,
             "storage": res_h2,
-            "economics": economical_calculation(sm, dm, {
-                "production": df_prod,
-                "consumption": df_cons,
-                "balance": df_bal,
-                "storage": res_h2
-            }, year, smard_installed),
+            "economics": econ_result,
         }
 
+    # Abschließende Zusammenfassung
+    logger.print_summary()
     return results

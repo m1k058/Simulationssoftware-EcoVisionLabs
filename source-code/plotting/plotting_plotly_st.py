@@ -53,7 +53,16 @@ def create_generation_plot(
             color_map[source.get("name", key)] = source.get("color", "#cccccc")
     
     if not plot_data:
-        raise ValueError("Keine passenden Energiespalten im DataFrame gefunden")
+        # Fallback: nimm alle MWh-Spalten (ohne Gesamt) aus dem DF, um wenigstens etwas anzuzeigen
+        fallback_cols = [c for c in df.columns if "[MWh]" in c and "Gesamt" not in c]
+        if not fallback_cols:
+            raise ValueError("Keine passenden Energiespalten im DataFrame gefunden")
+        plot_data = [{
+            "colname": c,
+            "label": c.replace(" [MWh]", ""),
+            "color": "#999999",
+        } for c in fallback_cols]
+        color_map = {item["label"]: item["color"] for item in plot_data}
     
     # Daten in Long-Format umwandeln
     colnames = [item["colname"] for item in plot_data]

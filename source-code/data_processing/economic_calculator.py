@@ -327,8 +327,6 @@ class EconomicCalculator:
 
         wacc = wacc_default
 
-        print(f"[CALC DEBUG] Berechnung für Zieljahr: {target_year}")
-
         # ===== ERZEUGUNG (aus inputs) =====
         flat_inputs = {}
         reserved_keys = {"storage", "storage_capacities", "storages"}
@@ -350,13 +348,10 @@ class EconomicCalculator:
             # Skip if empty
             if not isinstance(tech_inputs, dict) or not tech_inputs:
                 continue
-                
-            print(f"\n[CALC DEBUG] Verarbeite: {tech_id}")
             
             # Get parameters aus TECHNOLOGY_COSTS
             params = tech_costs.get(tech_id, {}) or {}
             if not params:
-                print(f"[CALC DEBUG]   WARNUNG: Keine Parameter für {tech_id}")
                 continue
 
             # ===== CAPEX =====
@@ -372,15 +367,9 @@ class EconomicCalculator:
             # ===== OPEX VAR =====
             opex_var_eur_per_mwh = float(params.get("opex_var_eur_per_mwh", 0.0) or 0.0)
 
-            print(f"[CALC DEBUG]   CAPEX={capex_eur_per_mw:.0f} EUR/MW, "
-                  f"OPEX_FIX={opex_fix_eur_per_mw:.0f} EUR/MW, "
-                  f"OPEX_VAR={opex_var_eur_per_mwh:.2f} EUR/MWh")
-
             # ===== KAPAZITÄTEN =====
             p_base_mw = self._get_capacity(tech_inputs, self.base_year)
             p_target_mw = self._get_capacity(tech_inputs, target_year)
-
-            print(f"[CALC DEBUG]   P_base={p_base_mw:.2f} MW, P_target={p_target_mw:.2f} MW")
 
             # ===== CAPEX BERECHNUNG =====
             # 1. Investitionsbedarf (Delta)
@@ -396,13 +385,8 @@ class EconomicCalculator:
             else:
                 annual_capital_cost = 0.0
 
-            print(f"[CALC DEBUG]   Investment={investment/1e9:.3f} Mrd. €, "
-                  f"Annual_Capital={annual_capital_cost/1e9:.3f} Mrd. €/Jahr")
-
             # ===== OPEX FIX BERECHNUNG =====
             annual_opex_fix = p_target_mw * opex_fix_eur_per_mw
-
-            print(f"[CALC DEBUG]   Annual_OPEX_FIX={annual_opex_fix/1e9:.3f} Mrd. €/Jahr")
 
             # ===== OPEX VAR BERECHNUNG =====
             generation_mwh = self._get_generation(tech_id, target_year)
@@ -425,39 +409,27 @@ class EconomicCalculator:
             annual_opex_var = generation_mwh * total_var_cost_eur_per_mwh
 
             is_thermal = "fuel_type" in params and params.get("fuel_type") is not None
-            print(f"[CALC DEBUG]   Generation={generation_mwh/1e6:.2f} TWh, "
-                  f"Var_Cost={total_var_cost_eur_per_mwh:.2f} EUR/MWh "
-                  f"(Base={base_var_cost_eur_per_mwh:.2f}, Fuel={additional_var_cost:.2f}, Thermal={is_thermal}), "
-                  f"Annual_OPEX_VAR={annual_opex_var/1e9:.3f} Mrd. €/Jahr")
 
             # ===== SUMMEN =====
             annual_cost = annual_capital_cost + annual_opex_fix + annual_opex_var
             total_annual_cost += annual_cost
 
-            # Detail speichern
+            # ===== DETAILS SPEICHERN =====
             capex_annual_by_tech[tech_id] = annual_capital_cost
             opex_fix_by_tech[tech_id] = annual_opex_fix
             opex_var_by_tech[tech_id] = annual_opex_var
 
-        # ===== SYSTEM LCOE =====
         total_consumption_mwh = self._get_total_consumption(target_year)
         system_lcoe_eur_per_mwh = (
             (total_annual_cost / total_consumption_mwh) if total_consumption_mwh > 0 else 0.0
         )
         system_lcoe_ct_per_kwh = system_lcoe_eur_per_mwh * 0.1
 
-        print(f"\n[CALC DEBUG] SUMMARY für {target_year}:")
-        print(f"  Total Investment: {total_investment/1e9:.3f} Mrd. €")
-        print(f"  Total Annual Cost: {total_annual_cost/1e9:.3f} Mrd. €")
-        print(f"  Total Consumption: {total_consumption_mwh/1e6:.3f} TWh")
-        print(f"  System LCOE: {system_lcoe_ct_per_kwh:.2f} ct/kWh ({system_lcoe_eur_per_mwh:.2f} EUR/MWh)")
-
         result = {
             "year": float(target_year),
             "total_investment_bn": total_investment / 1e9,
             "total_annual_cost_bn": total_annual_cost / 1e9,
             "system_lco_e": system_lcoe_ct_per_kwh,
-            # Detail-Ausgaben
             "investment_by_tech": {k: v / 1e9 for k, v in investment_by_tech.items()},
             "capex_annual_bn": sum(capex_annual_by_tech.values()) / 1e9,
             "opex_fix_bn": sum(opex_fix_by_tech.values()) / 1e9,

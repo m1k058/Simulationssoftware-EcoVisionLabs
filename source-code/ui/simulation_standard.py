@@ -165,8 +165,8 @@ def standard_simulation_page() -> None:
             
             st.write(f"**Simulationsjahr: {selected_year}**")
 
-            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher)
-            tab1, tab2, tab3 = st.tabs(["Erzeugung", "Verbrauch", "Speicher"])
+            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher / Wärmepumpen / E-Mobilität)
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["Erzeugung", "Verbrauch", "Speicher", "Wärmepumpen", "E-Mobilität"])
 
             with tab1:
                 st.subheader("Installierte Erzeugungskapazitäten")
@@ -246,6 +246,38 @@ def standard_simulation_page() -> None:
                                 st.metric("Initialer SOC", f"{h2.get('initial_soc', 0):.1%}")
                 else:
                     st.info("Keine Speicherdaten im Szenario definiert.")
+
+            with tab4:
+                st.subheader("Wärmepumpen - Parameter")
+                hp_params = st.session_state.sm.get_heat_pump_parameters(selected_year) if hasattr(st.session_state.sm, "get_heat_pump_parameters") else {}
+                if hp_params:
+                    col_hp = st.columns(2)
+                    with col_hp[0]:
+                        st.metric("Installierte Einheiten", f"{hp_params.get('installed_units', 0):,}")
+                        st.metric("Jahreswärmebedarf/Einheit", f"{hp_params.get('annual_heat_demand_kwh', 0):,.0f} kWh")
+                    with col_hp[1]:
+                        st.metric("COP (Durchschnitt)", f"{hp_params.get('cop_avg', 0):.2f}")
+                        st.metric("Zeitintervall dt", "0.25 h")
+                    st.caption("Datenquellen")
+                    st.write({
+                        "Wetterdaten": hp_params.get("weather_data", "—"),
+                        "Lastprofil-Matrix": hp_params.get("load_profile", "—"),
+                    })
+                else:
+                    st.info("Keine Wärmepumpen-Parameter für das ausgewählte Jahr definiert.")
+
+            with tab5:
+                st.subheader("E-Mobilität - Parameter")
+                em_params = st.session_state.sm.get_emobility_parameters(selected_year) if hasattr(st.session_state.sm, "get_emobility_parameters") else {}
+                if em_params:
+                    col_em = st.columns(2)
+                    with col_em[0]:
+                        st.metric("Installierte Einheiten", f"{em_params.get('installed_units', 0):,}")
+                        st.metric("Jahresverbrauch/Einheit", f"{em_params.get('annual_consumption_kwh', 0):,.0f} kWh")
+                    with col_em[1]:
+                        st.metric("Lastprofil", em_params.get("load_profile", "—"))
+                else:
+                    st.info("Keine E-Mobilitäts-Parameter für das ausgewählte Jahr definiert.")
 
 
         # ==============================================================

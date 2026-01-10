@@ -1,4 +1,6 @@
 
+# Konstanten für Verbrauchssimulation
+HEATPUMP_LOAD_PROFILE_NAME = "Wärmepumpen Lastprofile"
 
 # Words that should be cleaed from columns
 HEADER_CLEAN_PATTERNS = [
@@ -79,6 +81,17 @@ EXPECTED_HEADERS = {
         "day_type",
         "value_kWh",
     ],
+    "WP-Last": [
+        "Zeitpunkt", "LOW", "-13", "-12", "-11", "-10",
+        "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2",
+        "-1", "0", "1", "2", "3", "4", "5", "6", "7",
+        "8", "9", "10", "11", "12", "13", "14", "15",
+        "16", "17", "HIGH"
+    ],
+    "Temperature": [
+        "Zeitpunkt", "AVERAGE", "Berlin", "Chemnitz", "Diepholz", "Frankfurt/Main",
+        "Hamburg", "München", "Villingen-Schwenningen", "Itzehoe"
+    ]
 }
 
 # Format for data in file
@@ -121,6 +134,22 @@ FILE_FORMAT_OPTIONS = {
         "thousands": ".",
         "date_format": "%d.%m.%Y %H:%M",
         "encoding": "utf-8",
+        "na_values": ["-", "NaN", "n/a", ""]
+    },
+    "WP-Last": {
+        "sep": "\t",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+        "na_values": ["-", "NaN", "n/a", ""]
+    },
+    "Temperature": {
+        "sep": ";",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "cp1252",
         "na_values": ["-", "NaN", "n/a", ""]
     },
     "OTHER": {
