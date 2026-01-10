@@ -5,8 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from constants import ENERGY_SOURCES
-from data_processing import gen
+from constants import ENERGY_SOURCES, SOURCES_GROUPS
 
 
 def create_generation_plot(
@@ -490,7 +489,14 @@ def create_renewable_histogram(
     
     # Prüfe/berechne Gesamterzeugung Erneuerbare
     if "Gesamterzeugung Erneuerbare [MWh]" not in df_generation.columns:
-        df_generation = gen.add_total_renewable_generation(df_generation.copy())
+        # Inline-Berechnung statt gen.add_total_renewable_generation()
+        shortcodes = SOURCES_GROUPS.get("Renewable", [])
+        renewable_cols = [
+            ENERGY_SOURCES[sc]["colname"]
+            for sc in shortcodes
+            if sc in ENERGY_SOURCES and ENERGY_SOURCES[sc]["colname"] in df_generation.columns
+        ]
+        df_generation["Gesamterzeugung Erneuerbare [MWh]"] = df_generation[renewable_cols].sum(axis=1)
     
     if "Netzlast [MWh]" not in df_demand.columns:
         raise KeyError("Spalte 'Netzlast [MWh]' fehlt im Demand-DataFrame")

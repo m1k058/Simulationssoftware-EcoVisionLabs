@@ -13,7 +13,8 @@ Dieser Ordner enthält alten Code, der aus dem aktiven Projekt entfernt wurde.
 legacy/
 ├── deprecated_code/     # Alte Utility-Module
 │   ├── col.py          # Spalten-Utilities (ersetzt durch inline-Code)
-│   └── gen.py          # Erzeugungs-Utilities (nicht mehr verwendet)
+│   ├── gen.py          # Erzeugungs-Utilities (ersetzt durch inline-Code)
+│   └── simulation_backup.py
 ├── old_plotting/        # Alte Plotting-Module (Matplotlib, non-Streamlit)
 │   ├── plotting.py
 │   ├── plotting_plotly.py
@@ -34,8 +35,9 @@ legacy/
 - Andere Funktionen wurden nicht mehr verwendet
 
 **gen.py** - Erzeugungs-Utilities
-- Wurde überhaupt nicht mehr verwendet
-- Funktionalität wurde in `generation_profile.py` integriert
+- `add_total_renewable_generation()` → Inline-Berechnung in plotting_plotly_st.py
+- Funktionalität wurde durch direkte SOURCES_GROUPS-Nutzung ersetzt
+- Letzte Verwendung war in plotting_plotly_st.py (Zeile 493)
 
 ### old_plotting/
 

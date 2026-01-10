@@ -6,7 +6,6 @@ from datetime import datetime
 # Eigene Imports
 import data_processing.generation_profile as genPro
 import data_processing.simulation as simu
-import data_processing.col as col
 import plotting.plotting_plotly_st as ply
 import plotting.economic_plots as econ_ply
 
