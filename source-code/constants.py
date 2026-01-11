@@ -186,99 +186,127 @@ SOURCES_GROUPS = {
     "All": ["KE", "BK", "SK", "EG", "SOK", "SOE", "BIO", "PS", "WAS", "WOF", "WON", "PV"]
 }
 
+# ECONOMICS_CONSTANTS basierend auf Fraunhofer ISE 2024 & EWI Analyse
+
 TECHNOLOGY_COSTS = {
+    # --- THERMISCHE KRAFTWERKE ---
     "Erdgas": {
-        "capex_eur_per_mw": [450000, 700000],
-        "opex_fix_eur_per_mw": 23000,
-        "opex_var_eur_per_mwh": 4.0,
-        "lifetime_years": 30,
+        # Fraunhofer ISE: GT (450-700 EUR/kW) -> MW
+        "capex": [450000, 700000],
+        "opex_fix": 23000,
+        "opex_var": 4.0,       # EUR/MWh (zzgl. Brennstoff!)
+        "lifetime": 30,
         "efficiency": 0.40,
         "fuel_type": "Erdgas"
     },
     "Biomasse": {
-        "capex_eur_per_mw": [3470000, 5790000],
-        "opex_fix_eur_per_mw": 185000,
-        "opex_var_eur_per_mwh": 4.0,
-        "lifetime_years": 25,
+        # Fraunhofer ISE: Feste Biomasse (3473-5788 EUR/kW)
+        "capex": [3470000, 5790000], 
+        "opex_fix": 185000,    # Hohe Betriebskosten
+        "opex_var": 4.0,
+        "lifetime": 25,
         "efficiency": 0.45,
         "fuel_type": "Biomasse"
     },
-    "Wasserkraft": {
-        "capex_eur_per_mw": [0, 0],
-        "opex_fix_eur_per_mw": 15000,
-        "opex_var_eur_per_mwh": 0.0,
-        "lifetime_years": 60,
-        "efficiency": 0.90
-    },
-    "Wind Offshore": {
-        "capex_eur_per_mw": [2200000, 3400000],
-        "opex_fix_eur_per_mw": 39000,
-        "opex_var_eur_per_mwh": 8.0,
-        "lifetime_years": 25,
-        "efficiency": 1.00
-    },
-    "Wind Onshore": {
-        "capex_eur_per_mw": [1300000, 1900000],
-        "opex_fix_eur_per_mw": 32000,
-        "opex_var_eur_per_mwh": 7.0,
-        "lifetime_years": 25,
-        "efficiency": 1.00
-    },
-    "Photovoltaik": {
-        "capex_eur_per_mw": [700000, 900000],
-        "opex_fix_eur_per_mw": 13300,
-        "opex_var_eur_per_mwh": 0.0,
-        "lifetime_years": 30,
-        "efficiency": 1.00
-    },
-    "Elektrolyseur": {
-        "capex_eur_per_mw": [1800000, 2400000], # Update: IEA 2024 DE
-        "opex_fix_eur_per_mw": 20000,
-        "opex_var_eur_per_mwh": 0.0,
-        "lifetime_years": 20,
-        "efficiency": 0.68
-    },
     "H2_Elektrifizierung": {
-        "capex_eur_per_mw": [550000, 1200000],
-        "opex_fix_eur_per_mw": 23000,
-        "opex_var_eur_per_mwh": 5.0,
-        "lifetime_years": 30,
+        # Annahme: H2-Ready Gasturbine
+        "capex": [550000, 1200000],
+        "opex_fix": 23000,
+        "opex_var": 5.0,
+        "lifetime": 30,
         "efficiency": 0.40,
         "fuel_type": "Wasserstoff"
     },
-    "Batteriespeicher": {
-        "capex_eur_per_mw": [400000, 600000],
-        "opex_fix_eur_per_mw": 10000,
-        "opex_var_eur_per_mwh": 0.0,
-        "lifetime_years": 15,
-        "efficiency": 0.92
+
+    # --- ERNEUERBARE ---
+    "Wind Onshore": {
+        # Fraunhofer ISE (1300-1900 EUR/kW)
+        "capex": [1300000, 1900000],
+        "opex_fix": 32000,
+        "opex_var": 7.0,
+        "lifetime": 25,
+        "efficiency": 1.0,
+        "fuel_type": None
     },
-    "Pumpspeicher": {
-        "capex_eur_per_mw": [1200000, 3000000], # Update: Wuppertal Paper
-        "opex_fix_eur_per_mw": 75000,           # Update: Mittelwert (50k-100k)
-        "opex_var_eur_per_mwh": 0.0,
-        "lifetime_years": 60,
-        "efficiency": 0.85
+    "Wind Offshore": {
+        # Fraunhofer ISE (2200-3400 EUR/kW)
+        "capex": [2200000, 3400000],
+        "opex_fix": 39000,
+        "opex_var": 8.0,
+        "lifetime": 25,
+        "efficiency": 1.0,
+        "fuel_type": None
+    },
+    "Photovoltaik": {
+        # Fraunhofer ISE (700-900 EUR/kW)
+        "capex": [700000, 900000],
+        "opex_fix": 13300,
+        "opex_var": 0.0,
+        "lifetime": 30,
+        "efficiency": 1.0,
+        "fuel_type": None
+    },
+    "Wasserkraft": {
+        # Bestandsschutz (Invest abgeschrieben = 0)
+        "capex": [0, 0],
+        "opex_fix": 15000,
+        "opex_var": 0.0,
+        "lifetime": 60,
+        "efficiency": 0.90,
+        "fuel_type": None
+    },
+
+    # --- SPEICHER & P2G ---
+    "Elektrolyseur": {
+        # IEA 2024 Anpassung
+        "capex": [1800000, 2400000],
+        "opex_fix": 36000,
+        "opex_var": 0.0,
+        "lifetime": 20,
+        "efficiency": 0.68,
+        "fuel_type": None
+    },
+    "Batteriespeicher": {
+        # Fraunhofer ISE (400-600 EUR/kWh Kapazität)
+        "capex": [400000, 600000],
+        "opex_fix": 10000,
+        "opex_var": 0.0,
+        "lifetime": 15,
+        "efficiency": 0.92,
+        "fuel_type": None
     },
     "Wasserstoffspeicher": {
-        "capex_eur_per_mw": [400000, 600000],
-        "opex_fix_eur_per_mw": 5000,
-        "opex_var_eur_per_mwh": 0.0,
-        "lifetime_years": 30,
-        "efficiency": 1.00
+        # EWI Rückrechnung (siehe Doku)
+        "capex": [400000, 600000],
+        "opex_fix": 5000,
+        "opex_var": 0.0,
+        "lifetime": 30,
+        "efficiency": 1.0, 
+        "fuel_type": None
+    },
+    "Pumpspeicher": {
+        # Wuppertal Inst. (Teuer bei Neubau)
+        "capex": [1200000, 3000000],
+        "opex_fix": 75000,
+        "opex_var": 0.0,
+        "lifetime": 60,
+        "efficiency": 0.85,
+        "fuel_type": None
     }
 }
 
+# --- ROHSTOFFPREISE (Variable Kosten) ---
 COMMODITIES = {
-    "fuel_prices": {
-        "Erdgas": 35.0,
-        "Wasserstoff": 142.5, # Update: Mittelwert aus WD-5-029-20
-        "Biomasse": 24.0      # Update: Fraunhofer ISE 2024
+    "Erdgas": 35.0,        # EUR/MWh_th
+    "Biomasse": 24.0,      # EUR/MWh_th
+    "Wasserstoff": 142.50, # EUR/MWh_th (Import/Mix)
+    "co2_price": 120.0     # EUR/t (Prognose 2030+)
+}
+
+ECONOMICS_CONSTANTS = {
+    "global_parameter": {
+        "wacc": 0.05
     },
-    "co2_price": 55.0,        # Update: Preis 2025
-    "co2_emission_factors": {
-        "Erdgas": 0.198,
-        "Biomasse": 0.0,
-        "Wasserstoff": 0.0
-    }
+    "source_specific": TECHNOLOGY_COSTS,
+    "commodities": COMMODITIES
 }

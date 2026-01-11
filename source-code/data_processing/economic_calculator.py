@@ -112,16 +112,20 @@ class EconomicCalculator:
             if eff <= 0.0:
                 return 0.0
 
-            # Brennstoffpreis
-            fuel_prices = commodities.get("fuel_prices", {}) or {}
-            fuel_price = float(fuel_prices.get(fuel_type, 0.0) or 0.0)
+            # Brennstoffpreis (neue flache Struktur: COMMODITIES[fuel_type])
+            fuel_price = float(commodities.get(fuel_type, 0.0) or 0.0)
 
             # CO2-Preis
             co2_price = float(commodities.get("co2_price", 0.0) or 0.0)
 
-            # CO2-Emissionsfaktor
-            co2_factors = commodities.get("co2_emission_factors", {}) or {}
-            co2_factor = float(co2_factors.get(fuel_type, 0.0) or 0.0)
+            # CO2-Emissionsfaktor (fest kodiert, da nicht mehr in COMMODITIES)
+            # Quelle: UBA - Erdgas: 0.2 t/MWh, Biomasse/H2: 0.0 t/MWh
+            co2_emission_factors = {
+                "Erdgas": 0.2,
+                "Biomasse": 0.0,
+                "Wasserstoff": 0.0
+            }
+            co2_factor = float(co2_emission_factors.get(fuel_type, 0.0))
 
             # Brennstoffkosten in EUR/MWh
             fuel_cost_eur_per_mwh = (fuel_price + (co2_price * co2_factor)) / eff
@@ -337,12 +341,17 @@ class EconomicCalculator:
                 flat_inputs[key] = val
 
         # ===== SPEICHER (aus target_storage_capacities) =====
-        storage_techs = {
-            "Batteriespeicher": self.target_storage_capacities.get("battery_storage", {}),
-            "Wasserstoffspeicher": self.target_storage_capacities.get("h2_storage", {}),
-            "Pumpspeicher": self.target_storage_capacities.get("pumped_hydro_storage", {}),
+        # Mapping: interne Keys -> TECHNOLOGY_COSTS Keys
+        storage_key_mapping = {
+            "battery_storage": "Batteriespeicher",
+            "h2_storage": "Wasserstoffspeicher",
+            "pumped_hydro_storage": "Pumpspeicher"
         }
-        flat_inputs.update(storage_techs)
+        
+        for internal_key, tech_id in storage_key_mapping.items():
+            storage_data = self.target_storage_capacities.get(internal_key, {})
+            if storage_data:
+                flat_inputs[tech_id] = storage_data
 
         for tech_id, tech_inputs in flat_inputs.items():
             # Skip if empty
@@ -355,37 +364,65 @@ class EconomicCalculator:
                 continue
 
             # ===== CAPEX =====
-            capex_data = params.get("capex_eur_per_mw", [0, 0])
+            capex_data = params.get("capex", [0, 0])
             capex_eur_per_mw = self._get_capex_value(capex_data, mode="average")
             
-            lifetime = float(params.get("lifetime_years", 20.0) or 20.0)
+            lifetime = float(params.get("lifetime", 20.0) or 20.0)
             efficiency = float(params.get("efficiency", 1.0) or 1.0)
 
             # ===== OPEX FIX =====
-            opex_fix_eur_per_mw = float(params.get("opex_fix_eur_per_mw", 0.0) or 0.0)
+            opex_fix_eur_per_mw = float(params.get("opex_fix", 0.0) or 0.0)
             
             # ===== OPEX VAR =====
-            opex_var_eur_per_mwh = float(params.get("opex_var_eur_per_mwh", 0.0) or 0.0)
+            opex_var_eur_per_mwh = float(params.get("opex_var", 0.0) or 0.0)
 
             # ===== KAPAZITÄTEN =====
             p_base_mw = self._get_capacity(tech_inputs, self.base_year)
             p_target_mw = self._get_capacity(tech_inputs, target_year)
+            
+            # WICHTIG: Speicher-Spezialbehandlung für CAPEX-Basis
+            # Batteriespeicher und H2-Speicher: CAPEX ist EUR/MWh (Kapazität)
+            # Pumpspeicher und Erzeugungstechnologien: CAPEX ist EUR/MW (Leistung)
+            is_capacity_based_storage = tech_id in ["Batteriespeicher", "Wasserstoffspeicher"]
+            
+            if is_capacity_based_storage:
+                # Annahme: Speicherkapazität = Leistung * Standarddauer
+                # Batteriespeicher: 4h Standard (typisch für Netzstabilisierung)
+                # H2-Speicher: 168h = 1 Woche (typisch für saisonale Speicherung)
+                storage_duration_hours = {
+                    "Batteriespeicher": 4.0,
+                    "Wasserstoffspeicher": 168.0
+                }
+                duration_h = storage_duration_hours.get(tech_id, 4.0)
+                
+                # Kapazität in MWh
+                capacity_base_mwh = p_base_mw * duration_h
+                capacity_target_mwh = p_target_mw * duration_h
+                
+                # Für CAPEX-Berechnung nutzen wir Kapazität statt Leistung
+                p_base_for_capex = capacity_base_mwh
+                p_target_for_capex = capacity_target_mwh
+            else:
+                # Normale Technologien: Leistung (MW) ist Basis
+                p_base_for_capex = p_base_mw
+                p_target_for_capex = p_target_mw
 
             # ===== CAPEX BERECHNUNG =====
             # 1. Investitionsbedarf (Delta)
-            delta_p_mw = max(0.0, p_target_mw - p_base_mw)
-            investment = delta_p_mw * capex_eur_per_mw
+            delta_p = max(0.0, p_target_for_capex - p_base_for_capex)
+            investment = delta_p * capex_eur_per_mw
             total_investment += investment
             investment_by_tech[tech_id] = investment
 
             # 2. Kapitalkosten (Annual Capital Cost)
             if lifetime > 0 and capex_eur_per_mw > 0:
                 annuity_factor = self._calculate_annuity_factor(wacc, lifetime)
-                annual_capital_cost = p_target_mw * capex_eur_per_mw * annuity_factor
+                annual_capital_cost = p_target_for_capex * capex_eur_per_mw * annuity_factor
             else:
                 annual_capital_cost = 0.0
 
             # ===== OPEX FIX BERECHNUNG =====
+            # OPEX_FIX ist immer auf Leistung (MW) bezogen
             annual_opex_fix = p_target_mw * opex_fix_eur_per_mw
 
             # ===== OPEX VAR BERECHNUNG =====
