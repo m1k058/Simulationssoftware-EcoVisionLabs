@@ -165,8 +165,8 @@ def standard_simulation_page() -> None:
             
             st.write(f"**Simulationsjahr: {selected_year}**")
 
-            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher)
-            tab1, tab2, tab3 = st.tabs(["Erzeugung", "Verbrauch", "Speicher"])
+            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher / E-Mobilität)
+            tab1, tab2, tab3, tab4 = st.tabs(["Erzeugung", "Verbrauch", "Speicher", "E-Mobilität"])
 
             with tab1:
                 st.subheader("Installierte Erzeugungskapazitäten")
@@ -476,5 +476,75 @@ def standard_simulation_page() -> None:
                             st.plotly_chart(fig_donut, use_container_width=True)
                         else:
                             st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
+            with tab4:
+                st.subheader("E-Mobilität (V2G) Konfiguration")
+                emob_conf = scenario.get("consumption_strategies", {}).get("emobility_v2g", {})
+                
+                if emob_conf and emob_conf.get("active", False):
+                    c1, c2, c3 = st.columns(3)
+                    
+                    # Suche n_cars für gewähltes Jahr
+                    ncars_info = 0
+                    if selected_year in emob_conf:
+                         ncars_info = emob_conf[selected_year].get("n_cars", 0)
+                    elif str(selected_year) in emob_conf:
+                         ncars_info = emob_conf[str(selected_year)].get("n_cars", 0)
+                    else:
+                         ncars_info = emob_conf.get("n_cars", 0) # Global fallback
+                         
+                    c1.metric("Anzahl Fahrzeuge", f"{ncars_info:,}")
+                    c2.metric("Batteriekapazität", f"{emob_conf.get('battery_capacity_kwh', 0)} kWh")
+                    c3.metric("Ladeleistung", f"{emob_conf.get('charging_power_kw', 0)} kW")
+                    
+                    st.info(f"Simulationsmodus: V2G (Bidirektional). Autos dienen als Speicher mit 'Morning-Full' Garantie.")
+                else:
+                    st.warning("E-Mobilität (V2G) ist in diesem Szenario deaktiviert oder nicht konfiguriert.")
+            
+            st.markdown("---")
+            st.markdown("#### Details Speichertechnologien")
+            
+            # Prüfen ob E-Mobility Results da sind in storage_details (muss von simulation.py kobi() geliefert werden)
+            st_details = results[sel_year].get("storage_details", {})
+            
+            # Optionen zusammenstellen
+            available_stores = []
+            if "battery" in st_details and st_details["battery"] is not None: available_stores.append("Batterie")
+            if "pumped" in st_details and st_details["pumped"] is not None: available_stores.append("Pumpspeicher")
+            if "hydrogen" in st_details and st_details["hydrogen"] is not None: available_stores.append("Wasserstoff")
+            if "emobility" in st_details and st_details["emobility"] is not None: available_stores.append("E-Mobilität (V2G)")
+            
+            if not available_stores:
+                 # Fallback auf Legacy "storage" df (enthält meist H2 steps)
+                 st.info("Keine detaillierten Speicherdaten verfügbar.")
+            else:
+                tabs_store = st.tabs(available_stores)
+                
+                for i, store_name in enumerate(available_stores):
+                    with tabs_store[i]:
+                        df_s = None
+                        if store_name == "Batterie": df_s = st_details["battery"]
+                        elif store_name == "Pumpspeicher": df_s = st_details["pumped"]
+                        elif store_name == "Wasserstoff": df_s = st_details["hydrogen"]
+                        elif store_name == "E-Mobilität (V2G)": 
+                            df_s = st_details["emobility"]
+                            st.plotly_chart(ply.create_emobility_plot(
+                                df_s, 
+                                title=f"Details: {store_name}",
+                                date_from=date_from_stor, 
+                                date_to=date_to_stor
+                            ), use_container_width=True)
+                            continue # Spezialplot fertig
+
+                        # Standard Plot für Battery/Pumped/H2
+                        if df_s is not None:
+                            # Zeitfilter anwenden (der oben schon erstellt wurde)
+                            fig_s = ply.create_storage_plot(
+                                df_s,
+                                col_soc="SOC [MWh]" if "SOC [MWh]" in df_s.columns else [c for c in df_s.columns if "SOC" in c][0],
+                                title=f"Füllstand: {store_name}",
+                                date_from=date_from_stor,
+                                date_to=date_to_stor
+                            )
+                            st.plotly_chart(fig_s, use_container_width=True)
 
 

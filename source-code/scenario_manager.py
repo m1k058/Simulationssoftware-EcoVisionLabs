@@ -94,6 +94,15 @@ class ScenarioManager:
                     },
                 },
             },
+            "consumption_strategies": {
+                "emobility_v2g": {
+                    "active": True,
+                    "battery_capacity_kwh": 50,
+                    "charging_power_kw": 11,
+                    2030: {"n_cars": 5000000}, 
+                    2045: {"n_cars": 15000000}
+                }
+            },
         }
 
     def default_template(self) -> Dict[str, Any]:

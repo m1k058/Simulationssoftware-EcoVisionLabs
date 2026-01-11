@@ -1002,3 +1002,115 @@ def create_soc_stacked_plot(
     
     return fig
 
+
+def create_emobility_plot(
+    df: pd.DataFrame,
+    title: str = "E-Mobilität: Laden und Entladen (V2G)",
+    date_from: pd.Timestamp | None = None,
+    date_to: pd.Timestamp | None = None,
+) -> go.Figure:
+    """
+    Erstellt einen Plot für E-Mobilitäts-Flotten (SOC, Ladeleistung, Entladeleistung).
+    
+    Args:
+        df: DataFrame mit Spalten 'Zeitpunkt', 'EMobility SOC [MWh]', 
+            'EMobility Charge [MWh]', 'EMobility Discharge [MWh]', 'EMobility Drive [MWh]'.
+        title: Titel des Plots.
+        date_from: Startzeitpunkt für Filter.
+        date_to: Endzeitpunkt für Filter.
+    
+    Returns:
+        go.Figure: Plotly Figur mit zwei Y-Achsen (Volumen vs. Leistung/Energiefluss).
+    """
+    
+    if "Zeitpunkt" not in df.columns:
+        raise KeyError("Spalte 'Zeitpunkt' fehlt im DataFrame")
+    
+    # Prüfe ob notwendige E-Mobility Spalten da sind
+    required_cols = ['EMobility SOC [MWh]', 'EMobility Charge [MWh]', 'EMobility Discharge [MWh]']
+    if not all(col in df.columns for col in required_cols):
+        # Fallback leeren Plot, wenn Daten fehlen
+        fig = go.Figure()
+        fig.add_annotation(text="Keine E-Mobilitätsdaten verfügbar", showarrow=False)
+        return fig
+
+    # Zeitfilter
+    df_plot = df.copy()
+    if date_from:
+        df_plot = df_plot[df_plot["Zeitpunkt"] >= date_from]
+    if date_to:
+        df_plot = df_plot[df_plot["Zeitpunkt"] <= date_to]
+
+    if df_plot.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="Keine Daten im gewählten Zeitraum", showarrow=False)
+        return fig
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    
+    # 1. SOC Verlauf (Fläche oder Linie)
+    fig.add_trace(
+        go.Scatter(
+            x=df_plot["Zeitpunkt"],
+            y=df_plot["EMobility SOC [MWh]"],
+            name="SOC (Gesamtenergie)",
+            fill='tozeroy',
+            line=dict(color="#2ca02c", width=2), # Grün
+            mode='lines',
+        ),
+        secondary_y=False
+    )
+    
+    # 2. Laden (Positiv)
+    fig.add_trace(
+        go.Bar(
+            x=df_plot["Zeitpunkt"],
+            y=df_plot["EMobility Charge [MWh]"] * 4, # Umrechnung MWh (15min) -> MW Leistung? 
+            # Hier: Plotten wir Energie oder Leistung?
+            # Üblich: Energie pro Step (MWh) oder mittlere Leistung (MW).
+            # MWh * 4 = MW (bei 15min)
+            name="Laden (Netzbezug [MW])",
+            marker_color="#1f77b4", # Blau
+            opacity=0.7
+        ),
+        secondary_y=True
+    )
+    
+    # 3. Entladen (Negativ darstellen)
+    fig.add_trace(
+        go.Bar(
+            x=df_plot["Zeitpunkt"],
+            y=-df_plot["EMobility Discharge [MWh]"] * 4, # Negativ für Entladung
+            name="Entladen (Rückspeisung [MW])",
+            marker_color="#d62728", # Rot
+            opacity=0.7
+        ),
+        secondary_y=True
+    )
+    
+    # 4. Fahrverbrauch (optional, auch negativ oder als Linie)
+    if 'EMobility Drive [MWh]' in df_plot.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df_plot["Zeitpunkt"],
+                y=-df_plot["EMobility Drive [MWh]"] * 4,
+                name="Fahrverbrauch [MW]",
+                line=dict(color="#ff7f0e", width=1, dash='dot'), # Orange
+                mode='lines'
+            ),
+            secondary_y=True
+        )
+
+    fig.update_layout(
+        title=title,
+        template="plotly_white",
+        legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
+        hovermode="x unified",
+        barmode='overlay' 
+    )
+    
+    fig.update_yaxes(title_text="SOC [MWh]", secondary_y=False, color="#2ca02c")
+    fig.update_yaxes(title_text="Leistung [MW]", secondary_y=True, color="#1f77b4")
+    
+    return fig
+

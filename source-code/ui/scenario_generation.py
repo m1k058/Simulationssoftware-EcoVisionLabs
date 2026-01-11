@@ -315,6 +315,112 @@ def scenario_generation_page() -> None:
             if year in valid_years
         }
 
+    # === NEU: KONSUM-STRATEGIEN (E-MOBILITÄT V2G) ===
+    st.subheader("Konsum-Strategien / E-Mobilität (V2G)")
+    emob = data.get("consumption_strategies", {}).get("emobility_v2g", {})
+    
+    col_v2g_main, col_v2g_params = st.columns([1, 2])
+    with col_v2g_main:
+        emob_active = st.checkbox("V2G Aktivieren", value=emob.get("active", True), key="emob_active")
+        n_cars_base = int(emob.get(2030, {}).get("n_cars", 5000000)) # Fallback
+    
+    with col_v2g_params:
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            bat_kwh = st.number_input("Batterie [kWh]", value=float(emob.get("battery_capacity_kwh", 50.0)), step=1.0)
+            chg_kw = st.number_input("Ladeleistung [kW]", value=float(emob.get("charging_power_kw", 11.0)), step=1.0)
+        with col_p2:
+            eff = st.number_input("Effizienz (0-1)", value=float(emob.get("efficiency", 0.95)), step=0.01, max_value=1.0)
+            
+        st.markdown("**Flottengröße (Anzahl E-Autos)**")
+        fleet_dict_ui = {}
+        fl_cols = st.columns(len(years_to_show))
+        for idx, year in enumerate(years_to_show):
+            with fl_cols[idx]:
+                # Hole Wert aus YAML (direkter Key oder nested in Year dict)
+                val_y = emob.get(year, {}).get("n_cars", 0)
+                if val_y == 0 and year == 2030: val_y = 5000000
+                if val_y == 0 and year == 2045: val_y = 10000000 # Default Logik
+                
+                fleet_val = st.number_input(f"Anzahl {year}", value=int(val_y), step=100000, key=f"emob_cars_{year}")
+                fleet_dict_ui[year] = {"n_cars": fleet_val}
+    
+    # Erweiterte Einstellungen (SOC Limits & Grid Thresholds)
+    with st.expander("Erweiterte V2G-Parameter (SOC & Netzgrenzen)"):
+        c_soc, c_grid = st.columns(2)
+        
+        # 1. SOC Limits
+        limits = emob.get("soc_limits", {})
+        with c_soc:
+            st.markdown("**SOC Grenzen (Anteil 0-1)**")
+            
+            soc_min_day = st.number_input("Min SOC Tag (06-22h)", 
+                                        value=float(limits.get("min_day", 0.4)), 
+                                        step=0.05, min_value=0.0, max_value=1.0)
+                                        
+            soc_min_night = st.number_input("Min SOC Nacht (22-06h)", 
+                                          value=float(limits.get("min_night", 0.2)), 
+                                          step=0.05, min_value=0.0, max_value=1.0)
+                                          
+            soc_target_morn = st.number_input("Ziel SOC Morgen (07:30)", 
+                                            value=float(limits.get("target_morning", 0.6)), 
+                                            step=0.05, min_value=0.0, max_value=1.0)
+
+        # 2. Grid Thresholds
+        thresholds = emob.get("grid_thresholds_mw", {})
+        with c_grid:
+            st.markdown("**Netzschwellwerte [MW]**")
+            st.caption("Ab wann soll reagiert werden?")
+            
+            # Surplus ist negativ in der Bilanz (z.B. -200 MW heißt 200 MW zu viel im Netz die wir rausholen)
+            # Oder ist Surplus positiv? In simulation.py: 
+            # GRID_UPPER_THRESHOLD = 200.0 (Überschuss -> Laden) 
+            # GRID_LOWER_THRESHOLD = -200.0 (Defizit -> Entladen)
+            # Moment. Üblicherweise ist positive Load ein Verbrauch.
+            # In simulation.py steht: 
+            # "df_balance['Rest Bilanz [MWh]'] (positiv = Überschuss, negativ = Defizit)" in simulate_emobility_fleet docstring.
+            # Aber weiter unten: 
+            #     if grid_val > GRID_UPPER_THRESHOLD: # Überschuss -> Laden
+            # Heißt: Positiv = Überschuss.
+            
+            # In der Excel extract logic: surplus = -200.0. 
+            # Das war evtl. verwirrend.
+            # Wenn Positiv = Überschuss, dann sollte Threshold Positiv sein.
+            
+            # User Input: Ab welchem Überschuss [MW] laden?
+            thr_surplus_val = thresholds.get("surplus", 200.0) 
+            # Falls im Config negativ gespeichert war (wegen alter Logik), nehmen wir abs() für UI
+            
+            thr_load = st.number_input("Lade-Start bei Überschuss > [MW]", 
+                                     value=float(abs(thr_surplus_val)), 
+                                     step=50.0)
+            
+            # User Input: Ab welchem Defizit [MW] entladen?
+            thr_deficit_val = thresholds.get("deficit", -200.0)
+            
+            thr_unload = st.number_input("Entlade-Start bei Defizit > [MW]", 
+                                       value=float(abs(thr_deficit_val)), 
+                                       step=50.0)
+            st.caption("Wert wird als negative Schwelle für Defizit genutzt.")
+
+    
+    emob_v2g_config = {
+        "active": emob_active,
+        "battery_capacity_kwh": bat_kwh,
+        "charging_power_kw": chg_kw,
+        "efficiency": eff,
+        "soc_limits": {
+            "min_day": soc_min_day,
+            "min_night": soc_min_night,
+            "target_morning": soc_target_morn
+        },
+        "grid_thresholds_mw": {
+            "surplus": thr_load,      # Positiv für Überschuss-Trigger (> 200)
+            "deficit": -thr_unload    # Negativ für Defizit-Trigger (< -200)
+        },
+        **fleet_dict_ui 
+    }
+
     # === LIVE ZUSAMMENFASSUNG IN SESSION STATE ===
     tech_list = [c for c in edited_cap.columns if c != "Jahr"]
     target_generation_capacities_mw = {tech: {} for tech in tech_list}
@@ -350,6 +456,9 @@ def scenario_generation_page() -> None:
         "target_generation_capacities_mw": target_generation_capacities_mw,
         "weather_generation_profiles": weather_generation_profiles_dict,
         "target_storage_capacities": target_storage_capacities,
+        "consumption_strategies": {
+            "emobility_v2g": emob_v2g_config
+        }
     }
 
     st.success("Daten aktualisiert - YAML immer aktuell.")

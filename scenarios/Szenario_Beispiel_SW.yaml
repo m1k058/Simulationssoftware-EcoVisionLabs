@@ -98,3 +98,20 @@ target_storage_capacities:
       max_charge_power_mw: 60000.0
       max_discharge_power_mw: 40000.0
       initial_soc: 0.45
+consumption_strategies:
+  emobility_v2g:
+    active: true
+    battery_capacity_kwh: 50.0
+    charging_power_kw: 11.0
+    efficiency: 0.95
+    soc_limits:
+      min_day: 0.4
+      min_night: 0.2
+      target_morning: 0.6
+    grid_thresholds_mw:
+      surplus: -200.0
+      deficit: 200.0
+    2030:
+      n_cars: 6000000
+    2045:
+      n_cars: 8500000
