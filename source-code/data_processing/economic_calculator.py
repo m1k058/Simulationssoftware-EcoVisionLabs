@@ -376,34 +376,37 @@ class EconomicCalculator:
             # ===== OPEX VAR =====
             opex_var_eur_per_mwh = float(params.get("opex_var", 0.0) or 0.0)
 
+            # ===== HELPER FUNCTION: Robust value extraction =====
+            def extract_val(data, key: str, fallback: float = 0.0) -> float:
+                """Extrahiert Wert aus Input-Daten (dict oder direkt float)."""
+                if isinstance(data, dict):
+                    return float(data.get(key, fallback) or fallback)
+                return float(data or fallback)
+
             # ===== KAPAZITÄTEN =====
-            p_base_mw = self._get_capacity(tech_inputs, self.base_year)
-            p_target_mw = self._get_capacity(tech_inputs, target_year)
+            # Unterscheidung: Speicher vs. Erzeuger
+            is_storage = tech_id in ["Batteriespeicher", "Wasserstoffspeicher"]
             
-            # WICHTIG: Speicher-Spezialbehandlung für CAPEX-Basis
-            # Batteriespeicher und H2-Speicher: CAPEX ist EUR/MWh (Kapazität)
-            # Pumpspeicher und Erzeugungstechnologien: CAPEX ist EUR/MW (Leistung)
-            is_capacity_based_storage = tech_id in ["Batteriespeicher", "Wasserstoffspeicher"]
-            
-            if is_capacity_based_storage:
-                # Annahme: Speicherkapazität = Leistung * Standarddauer
-                # Batteriespeicher: 4h Standard (typisch für Netzstabilisierung)
-                # H2-Speicher: 168h = 1 Woche (typisch für saisonale Speicherung)
-                storage_duration_hours = {
-                    "Batteriespeicher": 4.0,
-                    "Wasserstoffspeicher": 168.0
-                }
-                duration_h = storage_duration_hours.get(tech_id, 4.0)
+            if is_storage:
+                # SPEICHER: Inputs enthalten bereits installed_capacity_mwh
+                # -> Direkt für CAPEX verwenden, KEINE Multiplikation mit duration!
+                capacity_base_mwh = extract_val(tech_inputs.get(self.base_year, 0), "installed_capacity_mwh", 0.0)
+                capacity_target_mwh = extract_val(tech_inputs.get(target_year, 0), "installed_capacity_mwh", 0.0)
                 
-                # Kapazität in MWh
-                capacity_base_mwh = p_base_mw * duration_h
-                capacity_target_mwh = p_target_mw * duration_h
-                
-                # Für CAPEX-Berechnung nutzen wir Kapazität statt Leistung
+                # Für CAPEX-Berechnung: Kapazität in MWh
                 p_base_for_capex = capacity_base_mwh
                 p_target_for_capex = capacity_target_mwh
+                
+                # Für OPEX_FIX: Leistung in MW (max_discharge_power_mw)
+                # Falls nicht vorhanden, Fallback auf Kapazität als Näherung
+                p_base_mw = extract_val(tech_inputs.get(self.base_year, 0), "max_discharge_power_mw", capacity_base_mwh)
+                p_target_mw = extract_val(tech_inputs.get(target_year, 0), "max_discharge_power_mw", capacity_target_mwh)
             else:
-                # Normale Technologien: Leistung (MW) ist Basis
+                # ERZEUGER: Input ist direkt die Leistung in MW
+                p_base_mw = self._get_capacity(tech_inputs, self.base_year)
+                p_target_mw = self._get_capacity(tech_inputs, target_year)
+                
+                # Für CAPEX und OPEX: gleicher Wert (Leistung)
                 p_base_for_capex = p_base_mw
                 p_target_for_capex = p_target_mw
 

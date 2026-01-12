@@ -1588,12 +1588,13 @@ def economical_calculation(
                 # Direkter Wert
                 capacities_target[tech_id] = val
 
-        # Storage Targets: nutze Leistungsangaben (max_charge_power_mw) als Invest-Basis
+        # Storage Targets: Speichere das komplette Dict mit allen Parametern (inkl. installed_capacity_mwh)
+        # Diese werden später direkt an den EconomicCalculator übergeben
         storage_flat = {}
         for s_id, s_val in storage_targets.items():
-            if isinstance(s_val, dict):
-                cap_mw = s_val.get("max_charge_power_mw") or s_val.get("max_discharge_power_mw") or 0.0
-                storage_flat[s_id] = cap_mw
+            if isinstance(s_val, dict) and s_val:
+                # Speichere das gesamte Dict, nicht nur einen einzelnen Wert
+                storage_flat[s_id] = s_val
         
         # Hole die Baseline-Kapazitäten aus SMARD 2025
         capacities_base = {}
@@ -1622,13 +1623,20 @@ def economical_calculation(
                     year: capacities_target[tech_id]
                 }
 
-        # Speicher (Basis 0, Ziel aus storage_flat)
+        # Speicher (Basis: leeres Dict mit 0 MWh, Ziel: komplettes Dict aus storage_flat)
         storage_inputs = {}
-        for s_id, cap_mw in storage_flat.items():
-            if isinstance(cap_mw, (int, float)) and cap_mw > 0:
+        for s_id, storage_dict in storage_flat.items():
+            if isinstance(storage_dict, dict) and storage_dict:
+                # Erstelle Baseline-Dict mit 0 MWh Kapazität
+                baseline_dict = {
+                    "installed_capacity_mwh": 0.0,
+                    "max_charge_power_mw": 0.0,
+                    "max_discharge_power_mw": 0.0,
+                    "initial_soc": storage_dict.get("initial_soc", 0.0)
+                }
                 storage_inputs[s_id] = {
-                    2025: 0.0,
-                    year: cap_mw
+                    2025: baseline_dict,
+                    year: storage_dict
                 }
 
         if storage_inputs:
