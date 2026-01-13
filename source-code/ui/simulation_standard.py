@@ -4,8 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # Eigene Imports
-import data_processing.generation_profile as genPro
-import data_processing.simulation as simu
+from data_processing.simulation_engine import SimulationEngine
 import plotting.plotting_plotly_st as ply
 import plotting.economic_plots as econ_ply
 
@@ -289,11 +288,13 @@ def standard_simulation_page() -> None:
 
         if st.button("Simulation starten", type="primary"):
             try:
-                st.session_state.fullSimResults = simu.kobi(
+                engine = SimulationEngine(
                     st.session_state.cfg,
                     st.session_state.dm,
-                    st.session_state.sm
+                    st.session_state.sm,
+                    verbose=True  # Debug-Modus aktiviert
                 )
+                st.session_state.fullSimResults = engine.run_scenario()
                 st.success("Simulation abgeschlossen.")
             except Exception as e:
                 st.error(f"❌ Fehler in der Simulation: {e}")

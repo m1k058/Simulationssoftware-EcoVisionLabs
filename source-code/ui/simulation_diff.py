@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 
 # Eigene Imports
-import data_processing.simulation as simu
+from data_processing.simulation_engine import SimulationEngine
 import plotting.plotting_plotly_st as ply
 
 # Manager Imports
@@ -99,11 +99,12 @@ def diff_simulation_page() -> None:
                     # Temporär Szenario in sm setzen
                     st.session_state.sm.current_scenario = scenario
 
-                    results = simu.kobi(
+                    engine = SimulationEngine(
                         st.session_state.cfg,
                         st.session_state.dm,
                         st.session_state.sm
                     )
+                    results = engine.run_scenario()
                     st.session_state.diff_sim_results[inc_label] = results
 
                     progress = (idx + 1) / len(interpolated_scenarios)
