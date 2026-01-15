@@ -15,12 +15,19 @@ target_load_demand_twh:
   Landwirtschaft_Basis:
     load_profile: Verbrauchsprofil Landwirtschaft BDEW
     2030: 30.0
-  EMobility:
-    load_profile: ''
-    2030: 74.0
-  Heat_Pumps:
-    load_profile: ''
-    2030: 50.0
+
+target_heat_pump_parameters:
+  2030:
+    installed_units: 3000000  # Anzahl Wärmepumpen installiert
+    annual_heat_demand_kwh: 51000  # Jährlicher Wärmebedarf pro WP [kWh]
+    cop_avg: 3.4  # Durchschnittlicher COP (Coefficient of Performance)
+    weather_data: Lufttemperatur-2019  # Dropdown: Wähle aus verfügbaren Temperature-Datensätzen
+
+target_emobility_parameters:
+  2030:
+    installed_units: 7400000  # Anzahl E-Autos
+    annual_consumption_kwh: 20000  # Jährlicher Verbrauch pro E-Auto [kWh]
+    load_profile: ''  # TODO: E-Mobilität Lastprofil
 target_generation_capacities_mw:
   Photovoltaik:
     2030: 149900.0

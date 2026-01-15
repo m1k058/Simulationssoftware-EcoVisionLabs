@@ -4,9 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # Eigene Imports
-import data_processing.generation_profile as genPro
-import data_processing.simulation as simu
-import data_processing.col as col
+from data_processing.simulation_engine import SimulationEngine
 import plotting.plotting_plotly_st as ply
 import plotting.economic_plots as econ_ply
 
@@ -165,8 +163,8 @@ def standard_simulation_page() -> None:
             
             st.write(f"**Simulationsjahr: {selected_year}**")
 
-            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher)
-            tab1, tab2, tab3 = st.tabs(["Erzeugung", "Verbrauch", "Speicher"])
+            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher / Wärmepumpen / E-Mobilität)
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["Erzeugung", "Verbrauch", "Speicher", "Wärmepumpen", "E-Mobilität"])
 
             with tab1:
                 st.subheader("Installierte Erzeugungskapazitäten")
@@ -247,6 +245,38 @@ def standard_simulation_page() -> None:
                 else:
                     st.info("Keine Speicherdaten im Szenario definiert.")
 
+            with tab4:
+                st.subheader("Wärmepumpen - Parameter")
+                hp_params = st.session_state.sm.get_heat_pump_parameters(selected_year) if hasattr(st.session_state.sm, "get_heat_pump_parameters") else {}
+                if hp_params:
+                    col_hp = st.columns(2)
+                    with col_hp[0]:
+                        st.metric("Installierte Einheiten", f"{hp_params.get('installed_units', 0):,}")
+                        st.metric("Jahreswärmebedarf/Einheit", f"{hp_params.get('annual_heat_demand_kwh', 0):,.0f} kWh")
+                    with col_hp[1]:
+                        st.metric("COP (Durchschnitt)", f"{hp_params.get('cop_avg', 0):.2f}")
+                        st.metric("Zeitintervall dt", "0.25 h")
+                    st.caption("Datenquellen")
+                    st.write({
+                        "Wetterdaten": hp_params.get("weather_data", "—"),
+                        "Lastprofil-Matrix": hp_params.get("load_profile", "—"),
+                    })
+                else:
+                    st.info("Keine Wärmepumpen-Parameter für das ausgewählte Jahr definiert.")
+
+            with tab5:
+                st.subheader("E-Mobilität - Parameter")
+                em_params = st.session_state.sm.get_emobility_parameters(selected_year) if hasattr(st.session_state.sm, "get_emobility_parameters") else {}
+                if em_params:
+                    col_em = st.columns(2)
+                    with col_em[0]:
+                        st.metric("Installierte Einheiten", f"{em_params.get('installed_units', 0):,}")
+                        st.metric("Jahresverbrauch/Einheit", f"{em_params.get('annual_consumption_kwh', 0):,.0f} kWh")
+                    with col_em[1]:
+                        st.metric("Lastprofil", em_params.get("load_profile", "—"))
+                else:
+                    st.info("Keine E-Mobilitäts-Parameter für das ausgewählte Jahr definiert.")
+
 
         # ==============================================================
         # Ein-Knopf-Simulation: führt alle Schritte aus und zeigt DFs an
@@ -258,11 +288,13 @@ def standard_simulation_page() -> None:
 
         if st.button("Simulation starten", type="primary"):
             try:
-                st.session_state.fullSimResults = simu.kobi(
+                engine = SimulationEngine(
                     st.session_state.cfg,
                     st.session_state.dm,
-                    st.session_state.sm
+                    st.session_state.sm,
+                    verbose=True  # Debug-Modus aktiviert
                 )
+                st.session_state.fullSimResults = engine.run_scenario()
                 st.success("Simulation abgeschlossen.")
             except Exception as e:
                 st.error(f"❌ Fehler in der Simulation: {e}")

@@ -75,6 +75,27 @@
             "path": "..\\raw-data\\BDEW-Standardlastprofile-L25.csv",
             "datatype": "BDEW-Last",
             "description": "Verbrauchsprofil Landwirtschaft BDEW"
+        },
+        {
+            "id": 10,
+            "name": "Wärmepumpen Lastprofile",
+            "path": "..\\raw-data\\Waermepumpen-Standartlastprofile.csv",
+            "datatype": "WP-Last",
+            "description": "Standartlastprofile für Wärmepumpen"
+        },
+        {
+            "id": 11,
+            "name": "Lufttemperatur-2019",
+            "path": "..\\raw-data\\Lufttemperatur-2019.csv",
+            "datatype": "Temperature",
+            "description": "Lufttemperaturdaten für das Jahr 2019"
+        },
+        {
+            "id": 12,
+            "name": "Lufttemperatur-2021",
+            "path": "..\\raw-data\\Lufttemperatur-2021.csv",
+            "datatype": "Temperature",
+            "description": "Lufttemperaturdaten für das Jahr 2021"
         }
     ],
     "PLOTS": [

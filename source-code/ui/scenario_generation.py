@@ -2,6 +2,7 @@ import streamlit as st
 from pathlib import Path
 import pandas as pd
 from scenario_manager import ScenarioManager
+from config_manager import ConfigManager
 
 
 LOAD_PROFILE_OPTIONS = [
@@ -110,13 +111,11 @@ def scenario_generation_page() -> None:
     st.subheader("Last (Verbrauch) - pro Sektor")
     load_params = data.get("target_load_demand_twh", {})
     
-    # Sektoren definieren
+    # Sektoren definieren (BDEW nur)
     sectors = {
         "Haushalt_Basis": "Haushalte (Standardlastprofil)",
         "Gewerbe_Basis": "Gewerbe",
         "Landwirtschaft_Basis": "Landwirtschaft",
-        "EMobility": "Elektromobilität",
-        "Heat_Pumps": "Wärmepumpen (Gebäudewärme)",
     }
     
     target_load_demand_twh = {}
@@ -142,6 +141,71 @@ def scenario_generation_page() -> None:
                 )
 
         target_load_demand_twh[sector_key] = {"load_profile": load_profile, **sector_demands}
+
+    st.markdown("---")
+
+
+    # === WÄRMEPUMPEN-PARAMETER (NEU) ===
+    st.subheader("Wärmepumpen - Parameter")
+    hp_params = data.get("target_heat_pump_parameters", {})
+    edited_hp = {}
+    
+    # Verfügbare Temperature-Datasets laden
+    if "cfg" not in st.session_state:
+        st.session_state.cfg = ConfigManager()
+    available_temps = ScenarioManager.get_available_temperature_datasets(st.session_state.cfg)
+    
+    for year in valid_years if valid_years else [2030, 2045]:
+        st.markdown(f"**Jahr {year}**")
+        year_hp = hp_params.get(year, {})
+        
+        hp_cols1 = st.columns(2)
+        with hp_cols1[0]:
+            edited_hp[year] = {
+                "installed_units": st.number_input(
+                    "Installierte WP (Stück)",
+                    value=int(year_hp.get("installed_units", 3000000)),
+                    step=100000,
+                    key=f"hp_units_{year}",
+                )
+            }
+        with hp_cols1[1]:
+            edited_hp[year]["annual_heat_demand_kwh"] = st.number_input(
+                "Wärmebedarf/WP [kWh/Jahr]",
+                value=float(year_hp.get("annual_heat_demand_kwh", 51000)),
+                step=1000.0,
+                key=f"hp_heat_{year}",
+            )
+        hp_cols2 = st.columns(2)
+        with hp_cols2[0]:
+            edited_hp[year]["cop_avg"] = st.number_input(
+                "COP (durchschn.)",
+                value=float(year_hp.get("cop_avg", 3.4)),
+                min_value=2.5,
+                max_value=4.5,
+                step=0.1,
+                key=f"hp_cop_{year}",
+            )
+        with hp_cols2[1]:
+            # Weather_data als Dropdown mit verfügbaren Temperature-Datasets
+            current_weather = year_hp.get("weather_data", "Lufttemperatur-2019")
+            default_idx = available_temps.index(current_weather) if current_weather in available_temps else 0
+            edited_hp[year]["weather_data"] = st.selectbox(
+                "Wetterdaten",
+                options=available_temps,
+                index=default_idx,
+                key=f"hp_weather_{year}",
+                help="Temperature-Dataset aus config.json"
+            )
+        
+        # load_profile wird nicht mehr in YAML gespeichert (fix in constants.py)
+    
+    st.markdown("---")
+
+    # === E-MOBILITÄT-PARAMETER (NEU) ===
+    st.subheader("E-Mobilität - Parameter")
+    em_params = data.get("target_emobility_parameters", {})
+    edited_em = {}
 
     st.markdown("---")
 
@@ -199,7 +263,9 @@ def scenario_generation_page() -> None:
     
     st.markdown("---")
 
-    # === WETTERPROFILE ===
+    
+    
+    st.markdown("---")
     st.subheader("Wetterprofile für erneuerbare Energien")
     weather_gen_profiles = data.get("weather_generation_profiles", {})
     weather_options = ["good", "average", "bad"]
@@ -347,6 +413,8 @@ def scenario_generation_page() -> None:
             "author": author,
         },
         "target_load_demand_twh": target_load_demand_twh,
+        "target_heat_pump_parameters": edited_hp,
+        "target_emobility_parameters": edited_em,
         "target_generation_capacities_mw": target_generation_capacities_mw,
         "weather_generation_profiles": weather_generation_profiles_dict,
         "target_storage_capacities": target_storage_capacities,

@@ -112,16 +112,20 @@ class EconomicCalculator:
             if eff <= 0.0:
                 return 0.0
 
-            # Brennstoffpreis
-            fuel_prices = commodities.get("fuel_prices", {}) or {}
-            fuel_price = float(fuel_prices.get(fuel_type, 0.0) or 0.0)
+            # Brennstoffpreis (neue flache Struktur: COMMODITIES[fuel_type])
+            fuel_price = float(commodities.get(fuel_type, 0.0) or 0.0)
 
             # CO2-Preis
             co2_price = float(commodities.get("co2_price", 0.0) or 0.0)
 
-            # CO2-Emissionsfaktor
-            co2_factors = commodities.get("co2_emission_factors", {}) or {}
-            co2_factor = float(co2_factors.get(fuel_type, 0.0) or 0.0)
+            # CO2-Emissionsfaktor (fest kodiert, da nicht mehr in COMMODITIES)
+            # Quelle: UBA - Erdgas: 0.2 t/MWh, Biomasse/H2: 0.0 t/MWh
+            co2_emission_factors = {
+                "Erdgas": 0.2,
+                "Biomasse": 0.0,
+                "Wasserstoff": 0.0
+            }
+            co2_factor = float(co2_emission_factors.get(fuel_type, 0.0))
 
             # Brennstoffkosten in EUR/MWh
             fuel_cost_eur_per_mwh = (fuel_price + (co2_price * co2_factor)) / eff
@@ -327,8 +331,6 @@ class EconomicCalculator:
 
         wacc = wacc_default
 
-        print(f"[CALC DEBUG] Berechnung für Zieljahr: {target_year}")
-
         # ===== ERZEUGUNG (aus inputs) =====
         flat_inputs = {}
         reserved_keys = {"storage", "storage_capacities", "storages"}
@@ -339,70 +341,92 @@ class EconomicCalculator:
                 flat_inputs[key] = val
 
         # ===== SPEICHER (aus target_storage_capacities) =====
-        storage_techs = {
-            "Batteriespeicher": self.target_storage_capacities.get("battery_storage", {}),
-            "Wasserstoffspeicher": self.target_storage_capacities.get("h2_storage", {}),
-            "Pumpspeicher": self.target_storage_capacities.get("pumped_hydro_storage", {}),
+        # Mapping: interne Keys -> TECHNOLOGY_COSTS Keys
+        storage_key_mapping = {
+            "battery_storage": "Batteriespeicher",
+            "h2_storage": "Wasserstoffspeicher",
+            "pumped_hydro_storage": "Pumpspeicher"
         }
-        flat_inputs.update(storage_techs)
+        
+        for internal_key, tech_id in storage_key_mapping.items():
+            storage_data = self.target_storage_capacities.get(internal_key, {})
+            if storage_data:
+                flat_inputs[tech_id] = storage_data
 
         for tech_id, tech_inputs in flat_inputs.items():
             # Skip if empty
             if not isinstance(tech_inputs, dict) or not tech_inputs:
                 continue
-                
-            print(f"\n[CALC DEBUG] Verarbeite: {tech_id}")
             
             # Get parameters aus TECHNOLOGY_COSTS
             params = tech_costs.get(tech_id, {}) or {}
             if not params:
-                print(f"[CALC DEBUG]   WARNUNG: Keine Parameter für {tech_id}")
                 continue
 
             # ===== CAPEX =====
-            capex_data = params.get("capex_eur_per_mw", [0, 0])
+            capex_data = params.get("capex", [0, 0])
             capex_eur_per_mw = self._get_capex_value(capex_data, mode="average")
             
-            lifetime = float(params.get("lifetime_years", 20.0) or 20.0)
+            lifetime = float(params.get("lifetime", 20.0) or 20.0)
             efficiency = float(params.get("efficiency", 1.0) or 1.0)
 
             # ===== OPEX FIX =====
-            opex_fix_eur_per_mw = float(params.get("opex_fix_eur_per_mw", 0.0) or 0.0)
+            opex_fix_eur_per_mw = float(params.get("opex_fix", 0.0) or 0.0)
             
             # ===== OPEX VAR =====
-            opex_var_eur_per_mwh = float(params.get("opex_var_eur_per_mwh", 0.0) or 0.0)
+            opex_var_eur_per_mwh = float(params.get("opex_var", 0.0) or 0.0)
 
-            print(f"[CALC DEBUG]   CAPEX={capex_eur_per_mw:.0f} EUR/MW, "
-                  f"OPEX_FIX={opex_fix_eur_per_mw:.0f} EUR/MW, "
-                  f"OPEX_VAR={opex_var_eur_per_mwh:.2f} EUR/MWh")
+            # ===== HELPER FUNCTION: Robust value extraction =====
+            def extract_val(data, key: str, fallback: float = 0.0) -> float:
+                """Extrahiert Wert aus Input-Daten (dict oder direkt float)."""
+                if isinstance(data, dict):
+                    return float(data.get(key, fallback) or fallback)
+                return float(data or fallback)
 
             # ===== KAPAZITÄTEN =====
-            p_base_mw = self._get_capacity(tech_inputs, self.base_year)
-            p_target_mw = self._get_capacity(tech_inputs, target_year)
-
-            print(f"[CALC DEBUG]   P_base={p_base_mw:.2f} MW, P_target={p_target_mw:.2f} MW")
+            # Unterscheidung: Speicher vs. Erzeuger
+            is_storage = tech_id in ["Batteriespeicher", "Wasserstoffspeicher"]
+            
+            if is_storage:
+                # SPEICHER: Inputs enthalten bereits installed_capacity_mwh
+                # -> Direkt für CAPEX verwenden, KEINE Multiplikation mit duration!
+                capacity_base_mwh = extract_val(tech_inputs.get(self.base_year, 0), "installed_capacity_mwh", 0.0)
+                capacity_target_mwh = extract_val(tech_inputs.get(target_year, 0), "installed_capacity_mwh", 0.0)
+                
+                # Für CAPEX-Berechnung: Kapazität in MWh
+                p_base_for_capex = capacity_base_mwh
+                p_target_for_capex = capacity_target_mwh
+                
+                # Für OPEX_FIX: Leistung in MW (max_discharge_power_mw)
+                # Falls nicht vorhanden, Fallback auf Kapazität als Näherung
+                p_base_mw = extract_val(tech_inputs.get(self.base_year, 0), "max_discharge_power_mw", capacity_base_mwh)
+                p_target_mw = extract_val(tech_inputs.get(target_year, 0), "max_discharge_power_mw", capacity_target_mwh)
+            else:
+                # ERZEUGER: Input ist direkt die Leistung in MW
+                p_base_mw = self._get_capacity(tech_inputs, self.base_year)
+                p_target_mw = self._get_capacity(tech_inputs, target_year)
+                
+                # Für CAPEX und OPEX: gleicher Wert (Leistung)
+                p_base_for_capex = p_base_mw
+                p_target_for_capex = p_target_mw
 
             # ===== CAPEX BERECHNUNG =====
             # 1. Investitionsbedarf (Delta)
-            delta_p_mw = max(0.0, p_target_mw - p_base_mw)
-            investment = delta_p_mw * capex_eur_per_mw
+            delta_p = max(0.0, p_target_for_capex - p_base_for_capex)
+            investment = delta_p * capex_eur_per_mw
             total_investment += investment
             investment_by_tech[tech_id] = investment
 
             # 2. Kapitalkosten (Annual Capital Cost)
             if lifetime > 0 and capex_eur_per_mw > 0:
                 annuity_factor = self._calculate_annuity_factor(wacc, lifetime)
-                annual_capital_cost = p_target_mw * capex_eur_per_mw * annuity_factor
+                annual_capital_cost = p_target_for_capex * capex_eur_per_mw * annuity_factor
             else:
                 annual_capital_cost = 0.0
 
-            print(f"[CALC DEBUG]   Investment={investment/1e9:.3f} Mrd. €, "
-                  f"Annual_Capital={annual_capital_cost/1e9:.3f} Mrd. €/Jahr")
-
             # ===== OPEX FIX BERECHNUNG =====
+            # OPEX_FIX ist immer auf Leistung (MW) bezogen
             annual_opex_fix = p_target_mw * opex_fix_eur_per_mw
-
-            print(f"[CALC DEBUG]   Annual_OPEX_FIX={annual_opex_fix/1e9:.3f} Mrd. €/Jahr")
 
             # ===== OPEX VAR BERECHNUNG =====
             generation_mwh = self._get_generation(tech_id, target_year)
@@ -425,39 +449,27 @@ class EconomicCalculator:
             annual_opex_var = generation_mwh * total_var_cost_eur_per_mwh
 
             is_thermal = "fuel_type" in params and params.get("fuel_type") is not None
-            print(f"[CALC DEBUG]   Generation={generation_mwh/1e6:.2f} TWh, "
-                  f"Var_Cost={total_var_cost_eur_per_mwh:.2f} EUR/MWh "
-                  f"(Base={base_var_cost_eur_per_mwh:.2f}, Fuel={additional_var_cost:.2f}, Thermal={is_thermal}), "
-                  f"Annual_OPEX_VAR={annual_opex_var/1e9:.3f} Mrd. €/Jahr")
 
             # ===== SUMMEN =====
             annual_cost = annual_capital_cost + annual_opex_fix + annual_opex_var
             total_annual_cost += annual_cost
 
-            # Detail speichern
+            # ===== DETAILS SPEICHERN =====
             capex_annual_by_tech[tech_id] = annual_capital_cost
             opex_fix_by_tech[tech_id] = annual_opex_fix
             opex_var_by_tech[tech_id] = annual_opex_var
 
-        # ===== SYSTEM LCOE =====
         total_consumption_mwh = self._get_total_consumption(target_year)
         system_lcoe_eur_per_mwh = (
             (total_annual_cost / total_consumption_mwh) if total_consumption_mwh > 0 else 0.0
         )
         system_lcoe_ct_per_kwh = system_lcoe_eur_per_mwh * 0.1
 
-        print(f"\n[CALC DEBUG] SUMMARY für {target_year}:")
-        print(f"  Total Investment: {total_investment/1e9:.3f} Mrd. €")
-        print(f"  Total Annual Cost: {total_annual_cost/1e9:.3f} Mrd. €")
-        print(f"  Total Consumption: {total_consumption_mwh/1e6:.3f} TWh")
-        print(f"  System LCOE: {system_lcoe_ct_per_kwh:.2f} ct/kWh ({system_lcoe_eur_per_mwh:.2f} EUR/MWh)")
-
         result = {
             "year": float(target_year),
             "total_investment_bn": total_investment / 1e9,
             "total_annual_cost_bn": total_annual_cost / 1e9,
             "system_lco_e": system_lcoe_ct_per_kwh,
-            # Detail-Ausgaben
             "investment_by_tech": {k: v / 1e9 for k, v in investment_by_tech.items()},
             "capex_annual_bn": sum(capex_annual_by_tech.values()) / 1e9,
             "opex_fix_bn": sum(opex_fix_by_tech.values()) / 1e9,
@@ -467,3 +479,160 @@ class EconomicCalculator:
             "opex_var_by_tech": {k: v / 1e9 for k, v in opex_var_by_tech.items()},
         }
         return result
+
+
+# ============================================================================
+# High-Level API: Direkte Berechnung aus Simulationsergebnissen
+# ============================================================================
+
+def calculate_economics_from_simulation(
+    scenario_manager,
+    simulation_results: Dict[str, Any],
+    target_year: int,
+    baseline_capacities: Optional[Dict[str, float]] = None
+) -> Dict[str, Any]:
+    """
+    Berechnet Wirtschaftlichkeitskennzahlen direkt aus Simulationsergebnissen.
+    
+    Diese High-Level Funktion übernimmt das komplette Daten-Mapping zwischen
+    ScenarioManager/Simulation und EconomicCalculator.
+    
+    Args:
+        scenario_manager: ScenarioManager mit Szenario-Konfiguration
+        simulation_results: Dictionary mit Simulations-DataFrames:
+            - "production": DataFrame mit Erzeugung [MWh] pro Technologie
+            - "consumption": DataFrame mit Verbrauch [MWh]
+            - "balance": Optional, wird nicht genutzt
+            - "storage": Optional, wird nicht genutzt
+        target_year: Zieljahr der Simulation (z.B. 2030, 2045)
+        baseline_capacities: Optional, Dict mit Baseline-Kapazitäten [MW] pro Technologie
+                            Falls None, wird aus SMARD 2025 oder 70% der Zielkapazität geschätzt
+    
+    Returns:
+        Dictionary mit wirtschaftlichen KPIs:
+        - year: Simulationsjahr
+        - total_investment_bn: Gesamt-Investitionsbedarf [Mrd. €]
+        - total_annual_cost_bn: Jährliche Gesamtkosten [Mrd. €/Jahr]
+        - system_lco_e: System-LCOE [ct/kWh]
+        - investment_by_tech: Investitionen pro Technologie [Mrd. €]
+        - capex_annual_bn: Annualisierte CAPEX [Mrd. €/Jahr]
+        - opex_fix_bn: Fixe OPEX [Mrd. €/Jahr]
+        - opex_var_bn: Variable OPEX [Mrd. €/Jahr]
+    """
+    import pandas as pd
+    
+    try:
+        # Technologie-Mappings: Szenario-IDs <-> DataFrame-Spalten
+        tech_mapping = {
+            'Photovoltaik': 'Photovoltaik [MWh]',
+            'Wind_Onshore': 'Wind Onshore [MWh]',
+            'Wind_Offshore': 'Wind Offshore [MWh]',
+            'Biomasse': 'Biomasse [MWh]',
+            'Wasserkraft': 'Wasserkraft [MWh]',
+            'Erdgas': 'Erdgas [MWh]',
+            'Steinkohle': 'Steinkohle [MWh]',
+            'Braunkohle': 'Braunkohle [MWh]',
+            'Kernenergie': 'Kernenergie [MWh]'
+        }
+        
+        # 1. Hole Ziel-Kapazitäten aus ScenarioManager
+        capacities_target_raw = scenario_manager.get_generation_capacities(year=target_year)
+        
+        # Flatten nested dicts (falls Format {tech: {year: value}})
+        capacities_target = {}
+        for tech_id, val in capacities_target_raw.items():
+            if isinstance(val, dict):
+                capacities_target[tech_id] = val.get(target_year, 0)
+            else:
+                capacities_target[tech_id] = val
+        
+        # 2. Hole Speicher-Kapazitäten
+        storage_targets = {
+            "battery_storage": scenario_manager.get_storage_capacities("battery_storage", target_year) or {},
+            "pumped_hydro_storage": scenario_manager.get_storage_capacities("pumped_hydro_storage", target_year) or {},
+            "h2_storage": scenario_manager.get_storage_capacities("h2_storage", target_year) or {},
+        }
+        
+        # 3. Bestimme Baseline-Kapazitäten (2025)
+        if baseline_capacities is None:
+            baseline_capacities = {}
+            # Fallback: 70% der Zielkapazität als Baseline
+            for tech_id, target_cap in capacities_target.items():
+                if isinstance(target_cap, (int, float)) and target_cap > 0:
+                    baseline_capacities[tech_id] = target_cap * 0.7
+        
+        # 4. Strukturiere Inputs für EconomicCalculator
+        inputs = {}
+        
+        # Erzeugungstechnologien
+        for tech_id, target_cap in capacities_target.items():
+            if isinstance(target_cap, (int, float)) and target_cap > 0:
+                inputs[tech_id] = {
+                    2025: baseline_capacities.get(tech_id, target_cap * 0.7),
+                    target_year: target_cap
+                }
+        
+        # Speicher
+        storage_inputs = {}
+        for storage_id, storage_config in storage_targets.items():
+            if isinstance(storage_config, dict) and storage_config:
+                # Baseline: 0 MWh Kapazität
+                baseline_storage = {
+                    "installed_capacity_mwh": 0.0,
+                    "max_charge_power_mw": 0.0,
+                    "max_discharge_power_mw": 0.0,
+                    "initial_soc": storage_config.get("initial_soc", 0.0)
+                }
+                storage_inputs[storage_id] = {
+                    2025: baseline_storage,
+                    target_year: storage_config
+                }
+        
+        if storage_inputs:
+            inputs["storage"] = storage_inputs
+        
+        # 5. Extrahiere Erzeugungsdaten aus Simulations-DataFrames
+        df_production = simulation_results.get("production", pd.DataFrame())
+        df_consumption = simulation_results.get("consumption", pd.DataFrame())
+        
+        generation_by_tech = {}
+        for tech_id, df_col in tech_mapping.items():
+            if df_col in df_production.columns:
+                try:
+                    gen_mwh = pd.to_numeric(df_production[df_col], errors='coerce').sum()
+                    if pd.notna(gen_mwh) and gen_mwh > 0:
+                        generation_by_tech[tech_id] = float(gen_mwh)
+                except Exception:
+                    pass
+        
+        # Gesamtverbrauch
+        total_consumption_mwh = 0.0
+        if "Gesamt [MWh]" in df_consumption.columns:
+            total_consumption_mwh = float(pd.to_numeric(df_consumption["Gesamt [MWh]"], errors='coerce').sum())
+        
+        # 6. Strukturiere Simulationsergebnisse
+        sim_results_formatted = {
+            "generation": {target_year: generation_by_tech},
+            "total_consumption": {target_year: total_consumption_mwh}
+        }
+        
+        # 7. Führe Berechnung durch
+        calculator = EconomicCalculator(
+            inputs=inputs,
+            simulation_results=sim_results_formatted,
+            target_storage_capacities=storage_inputs
+        )
+        
+        result = calculator.perform_calculation(target_year)
+        return result
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "year": float(target_year),
+            "total_investment_bn": 0.0,
+            "total_annual_cost_bn": 0.0,
+            "system_lco_e": 0.0,
+            "error": str(e)
+        }

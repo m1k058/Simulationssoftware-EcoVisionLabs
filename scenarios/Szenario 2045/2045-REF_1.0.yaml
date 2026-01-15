@@ -15,12 +15,19 @@ target_load_demand_twh:
   Landwirtschaft_Basis:
     load_profile: Verbrauchsprofil Landwirtschaft BDEW
     2045: 30.0
-  EMobility:
+
+target_heat_pump_parameters:
+  2045:
+    installed_units: 7200000
+    annual_heat_demand_kwh: 51000
+    cop_avg: 3.5
+    weather_data: Lufttemperatur-2019
+
+target_emobility_parameters:
+  2045:
+    installed_units: 17000000
+    annual_consumption_kwh: 10000
     load_profile: ''
-    2045: 170.0
-  Heat_Pumps:
-    load_profile: ''
-    2045: 120.0
 target_generation_capacities_mw:
   Photovoltaik:
     2045: 400000.0

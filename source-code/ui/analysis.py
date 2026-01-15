@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import plotting.plotting_formated_st as pltf
 import plotting.plotting_plotly_st as pltp
 from constants import ENERGY_SOURCES
 
@@ -144,13 +142,8 @@ def analysis_page() -> None:
 
     date_diff = pd.to_datetime(selected_date_to) - pd.to_datetime(selected_date_from)
 
-    # Plot-Engine global auswählen (einheitliche Steuerung)
-    plot_engine = sidebar.selectbox(
-        "Plot Engine",
-        options=["Altair", "Plotly", "Matplotlib"],
-        index=1,
-        key="plot_engine_analysis",
-    )
+    # Plot-Engine: Nur noch Plotly (Matplotlib/Altair deprecated)
+    plot_engine = "Plotly"  # Fest auf Plotly gesetzt
 
     # Hilfsfunktionen
     def _energy_options_for_df(local_df: pd.DataFrame):
@@ -160,84 +153,40 @@ def analysis_page() -> None:
 
     def _plot_generation(local_df: pd.DataFrame, energy_selection: list[str]):
         colname_to_code = {v["colname"]: k for k, v in ENERGY_SOURCES.items()}
-        if plot_engine == "Altair":
-            st.warning("⚠️ Altair kann nur einzelne Linien (keine Stacks) darstellen.")
-            if date_diff > pd.Timedelta(days=14):
-                st.warning("⚠️ Altair ist auf ≤ 14 Tage begrenzt. Bitte kürzeren Zeitraum oder Plotly nutzen.")
-            else:
-                if not energy_selection:
-                    st.info("Bitte mindestens eine Energiequelle auswählen.")
-                else:
-                    colors = [ENERGY_SOURCES[colname_to_code[c]]["color"] for c in energy_selection if c in colname_to_code]
-                    st.line_chart(
-                        local_df,
-                        x="Zeitpunkt",
-                        y=energy_selection,
-                        color=colors if colors else None,
-                        x_label="Datum",
-                        y_label="MWh",
-                    )
-        elif plot_engine == "Plotly":
-            energy_keys = [colname_to_code[c] for c in energy_selection] if energy_selection else ["BIO", "WON"]
-            fig = pltp.create_generation_plot(
-                local_df,
-                energy_keys=energy_keys,
-                title="Energieerzeugung",
-                date_from=pd.to_datetime(selected_date_from),
-                date_to=pd.to_datetime(selected_date_to)
-            )
-            st.plotly_chart(fig, width='stretch')
-        elif plot_engine == "Matplotlib":
-            energy_keys = [colname_to_code[c] for c in energy_selection] if energy_selection else ["BIO", "WON"]
-            fig = pltf.create_stacked_bar_plot(
-                local_df,
-                energy_keys=energy_keys,
-                title="Energieerzeugung",
-                description="Stacked Bar Plot der Energieerzeugung",
-                darkmode=False
-            )
-            st.pyplot(fig, width='stretch')
-        else:
-            st.error("Unbekannte Plot Engine ausgewählt.")
+        energy_keys = [colname_to_code[c] for c in energy_selection] if energy_selection else ["BIO", "WON"]
+        fig = pltp.create_generation_plot(
+            local_df,
+            energy_keys=energy_keys,
+            title="Energieerzeugung",
+            date_from=pd.to_datetime(selected_date_from),
+            date_to=pd.to_datetime(selected_date_to)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     def _plot_consumption(local_df: pd.DataFrame):
         y_col = "Netzlast [MWh]"
         if y_col not in local_df.columns:
             st.warning("Es wurden keine Verbrauchsspalten gefunden (erwartet: 'Netzlast [MWh]').")
             return
-        if plot_engine == "Matplotlib":
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.plot(pd.to_datetime(local_df["Zeitpunkt"]), local_df[y_col], color="blue", label="Netzlast (MWh)")
-            ax.set_title("Netzlast über die Zeit")
-            ax.set_xlabel("Datum")
-            ax.set_ylabel("Netzlast (MWh)")
-            ax.legend()
-            ax.fill_between(pd.to_datetime(local_df["Zeitpunkt"]), local_df[y_col], color="blue", alpha=0.3)
-            ax.set_ylim(bottom=0)
-            st.pyplot(fig)
-        elif plot_engine == "Plotly":
-            import plotly.graph_objects as go
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=pd.to_datetime(local_df["Zeitpunkt"]),
-                y=local_df[y_col],
-                mode='lines',
-                name='Netzlast',
-                fill='tozeroy',
-                line=dict(color='blue')
-            ))
-            fig.update_layout(
-                title="Netzlast über die Zeit",
-                xaxis_title="Datum",
-                yaxis_title="Netzlast (MWh)",
-                template="plotly_white",
-                hovermode='x unified'
-            )
-            st.plotly_chart(fig, width='stretch')
-        elif plot_engine == "Altair":
-            st.line_chart(local_df, x="Zeitpunkt", y=y_col, x_label="Datum", y_label="MWh")
-        else:
-            st.error("Unbekannte Plot Engine ausgewählt.")
+        
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=pd.to_datetime(local_df["Zeitpunkt"]),
+            y=local_df[y_col],
+            mode='lines',
+            name='Netzlast',
+            fill='tozeroy',
+            line=dict(color='blue')
+        ))
+        fig.update_layout(
+            title="Netzlast über die Zeit",
+            xaxis_title="Datum",
+            yaxis_title="Netzlast (MWh)",
+            template="plotly_white",
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     # Hauptbereich: Tabs pro ausgewähltem DataFrame
     tabs = st.tabs([d["name"] for d in datasets])

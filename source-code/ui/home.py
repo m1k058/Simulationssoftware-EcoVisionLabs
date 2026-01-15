@@ -62,21 +62,22 @@ def home_page() -> None:
     st.subheader("Status:")
     
     if is_loaded:
-        st.success(":material/check: DataManager, ConfigManager, ScenarioManager sind geladen.")
+        st.success(":material/check: DataManager, ConfigManager, ScenarioManager sind geladen und bereit.")
     else:
-        st.info(":material/info: DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
+        st.warning(":material/sync: Daten werden beim Start automatisch geladen...")
+        st.info("Falls das Laden fehlgeschlagen ist, verwende den Button unten zum manuellen Neuladen.")
 
     st.checkbox(":material/bug_report: Debug Modus", value=False, key="debug_mode")
 
-    if not is_loaded:
-        if st.button(":material/drive_folder_upload: Daten laden", width='stretch', type="primary"):
-            with st.spinner("Datenmanager/ConfigManager/ScenarioManager laden..."):
-                success = load_data_manager()
-            if success:
-                st.success("✅ DataManager, ConfigManager, ScenarioManager erfolgreich geladen!")
-                st.rerun()
-            else:
-                st.error("❌ Laden fehlgeschlagen. Siehe Log/Console für Details.")
+    # Button für manuelles (Neu-)Laden
+    if st.button(":material/refresh: Daten neu laden", width='stretch', type="secondary" if is_loaded else "primary"):
+        with st.spinner("Datenmanager/ConfigManager/ScenarioManager laden..."):
+            success = load_data_manager()
+        if success:
+            st.success("✅ DataManager, ConfigManager, ScenarioManager erfolgreich geladen!")
+            st.rerun()
+        else:
+            st.error("❌ Laden fehlgeschlagen. Siehe Log/Console für Details.")
     elif is_loaded and st.session_state.debug_mode:
         # Wenn geladen: Datasets anzeigen
         with st.expander(":material/list: Geladene Datasets", expanded=False):

@@ -289,6 +289,64 @@ class ScenarioManager:
             return storage_data.get(storage_type, {})
         return storage_data.get(storage_type, {}).get(year)
 
+    def get_heat_pump_parameters(self, year: Optional[int] = None) -> Any:
+        """
+        Holt Wärmepumpen-Parameter aus dem Szenario (neue Struktur).
+        
+        Args:
+            year: Spezifisches Jahr (z.B. 2030, 2045). Wenn None, alle Jahre.
+            
+        Returns:
+            Dict mit Parametern:
+            - installed_units: Anzahl Wärmepumpen
+            - annual_heat_demand_kwh: Wärmebedarf pro WP [kWh/Jahr]
+            - cop_avg: Durchschnittlicher COP
+            - weather_data: Wetterdatensatz (aus DataManager)
+            - load_profile: HP-Lastprofilmatrix
+        """
+        hp_data = self.current_scenario.get("target_heat_pump_parameters", {})
+        
+        if year is None:
+            return hp_data
+        return hp_data.get(year, {})
+
+    def get_emobility_parameters(self, year: Optional[int] = None) -> Any:
+        """
+        Holt E-Mobilität-Parameter aus dem Szenario (neue Struktur).
+        
+        Args:
+            year: Spezifisches Jahr (z.B. 2030, 2045). Wenn None, alle Jahre.
+            
+        Returns:
+            Dict mit Parametern:
+            - installed_units: Anzahl E-Autos
+            - annual_consumption_kwh: Verbrauch pro Auto [kWh/Jahr]
+            - load_profile: Lastprofilmatrix für Ladevorgänge
+        """
+        em_data = self.current_scenario.get("target_emobility_parameters", {})
+        
+        if year is None:
+            return em_data
+        return em_data.get(year, {})
+    
+    @staticmethod
+    def get_available_temperature_datasets(config_manager) -> list:
+        """
+        Holt alle verfügbaren Temperature-Datensätze aus der config.json.
+        
+        Args:
+            config_manager: ConfigManager-Instanz zum Zugriff auf die Konfiguration
+            
+        Returns:
+            Liste von Namen der verfügbaren Temperature-Datensätze
+        """
+        available = []
+        dataframes = config_manager.config.get("DATAFRAMES", [])
+        for df_config in dataframes:
+            if df_config.get("datatype") == "Temperature":
+                available.append(df_config.get("name"))
+        return available
+
     def get_generation_profile_df(self, year: int, include_conv: bool = False) -> pd.DataFrame:
         """
         Konvertiert die target_generation_capacities_mw in ein DataFrame kompatibel mit 

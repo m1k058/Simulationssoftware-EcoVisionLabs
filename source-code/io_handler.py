@@ -63,7 +63,8 @@ def load_data(path: Path, datatype: str = "SMARD"):
 
     # --- Read and clean header line
     try:
-        with path.open("r", encoding="utf-8-sig") as f:
+        encoding = cfg["encoding"]
+        with path.open("r", encoding=encoding) as f:
             reader = csv.reader(f, delimiter=cfg["sep"])
             raw_header = next(reader)
             if not raw_header:
@@ -73,6 +74,8 @@ def load_data(path: Path, datatype: str = "SMARD"):
         raise OSError(f"Failed to read file header: {e}")
 
     clean_header = header[:]
+    # Remove BOM character if present at the start of first column
+    clean_header = [c.replace('\ufeff', '').strip() for c in clean_header]
     for pattern in HEADER_CLEAN_PATTERNS:
         clean_header = [re.sub(rf"\s*{pattern}\s*", "", c).strip() for c in clean_header]
 
