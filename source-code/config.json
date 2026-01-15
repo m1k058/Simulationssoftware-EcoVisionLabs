@@ -5,6 +5,15 @@
         "output_dir_csv": "output\\csv",
         "output_dir_plots_tests": "output\\test_plots"
     },
+    "EV_PARAMETERS": {
+        "SOC0": 0.6,
+        "eta_ch": 0.95,
+        "eta_dis": 0.95,
+        "P_ch_car_max": 11.0,
+        "P_dis_car_max": 11.0,
+        "dt_h": 0.25,
+        "_comment": "Config-Parameter für E-Mobilität (konstant über alle Szenarien)"
+    },
     "DATAFRAMES": [
         {
             "id": 0,

@@ -34,7 +34,11 @@ def load_data_manager() -> bool:
 def home_page() -> None:
     """Home-Page - Willkommen und Datenverwaltung."""
     st.title("Simulationssoftware EcoVision Labs")
-    st.logo("assets/logo.png", size="large")
+    
+    # Logo-Pfad relativ zum Projekt-Root
+    logo_path = Path(__file__).parent.parent.parent / "assets" / "logo.png"
+    if logo_path.exists():
+        st.logo(str(logo_path), size="large")
 
     # DataManager-Status anzeigen
     is_loaded = st.session_state.dm is not None and st.session_state.cfg is not None
