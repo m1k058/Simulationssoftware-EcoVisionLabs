@@ -268,12 +268,26 @@ def standard_simulation_page() -> None:
                 st.subheader("E-Mobilität - Parameter")
                 em_params = st.session_state.sm.get_emobility_parameters(selected_year) if hasattr(st.session_state.sm, "get_emobility_parameters") else {}
                 if em_params:
-                    col_em = st.columns(2)
-                    with col_em[0]:
-                        st.metric("Installierte Einheiten", f"{em_params.get('installed_units', 0):,}")
-                        st.metric("Jahresverbrauch/Einheit", f"{em_params.get('annual_consumption_kwh', 0):,.0f} kWh")
-                    with col_em[1]:
-                        st.metric("Lastprofil", em_params.get("load_profile", "—"))
+                    # Neue Parameter-Struktur
+                    col_em1, col_em2 = st.columns(2)
+                    with col_em1:
+                        st.metric("Anteil E-Fahrzeuge", f"{em_params.get('s_EV', 0):.0%}")
+                        st.metric("Gesamtanzahl PKW", f"{em_params.get('N_cars', 0):,}")
+                        st.metric("Jahresfahrverbrauch/Fzg", f"{em_params.get('E_drive_car_year', 0):,.0f} kWh")
+                        st.metric("Batteriekapazität/Fzg", f"{em_params.get('E_batt_car', 0):.0f} kWh")
+                    with col_em2:
+                        st.metric("Max. Anschlussquote", f"{em_params.get('plug_share_max', 0):.0%}")
+                        st.metric("SOC min Tag/Nacht", f"{em_params.get('SOC_min_day', 0):.0%} / {em_params.get('SOC_min_night', 0):.0%}")
+                        st.metric("SOC-Ziel Abfahrt", f"{em_params.get('SOC_target_depart', 0):.0%}")
+                        st.metric("Abfahrt/Ankunft", f"{em_params.get('t_depart', '07:30')} / {em_params.get('t_arrive', '18:00')}")
+                    
+                    # Erweiterte Parameter in Expander
+                    with st.expander("Dispatch-Schwellwerte"):
+                        col_thr1, col_thr2 = st.columns(2)
+                        with col_thr1:
+                            st.metric("Schwellwert Überschuss", f"{em_params.get('thr_surplus', 0)/1000:.0f} MW")
+                        with col_thr2:
+                            st.metric("Schwellwert Defizit", f"{em_params.get('thr_deficit', 0)/1000:.0f} MW")
                 else:
                     st.info("Keine E-Mobilitäts-Parameter für das ausgewählte Jahr definiert.")
 
@@ -315,8 +329,8 @@ def standard_simulation_page() -> None:
                 sel_year = years_available[0]
 
             # Tabs pro Ergebnis-DF
-            tab_con, tab_prod, tab_bal, tab_stor, tab_econ = st.tabs([
-                "Verbrauch", "Erzeugung", "Bilanz", "Speicher", "Wirtschaftlichkeit"
+            tab_con, tab_prod, tab_bal, tab_emob, tab_stor, tab_econ = st.tabs([
+                "Verbrauch", "Erzeugung", "Bilanz", "E-Mobilität", "Speicher", "Wirtschaftlichkeit"
             ])
 
             with tab_con:
@@ -351,6 +365,92 @@ def standard_simulation_page() -> None:
                     file_name=f"bilanz_{sel_year}.csv",
                     mime="text/csv"
                 )
+
+            with tab_emob:
+                df_bal = results[sel_year]["balance"]
+                # Prüfe ob E-Mobility-Daten vorhanden sind
+                if 'EMobility SOC [MWh]' in df_bal.columns:
+                    st.subheader(":material/directions_car: E-Mobility Ergebnisse")
+                    
+                    # Kennzahlen in Spalten
+                    em_col1, em_col2, em_col3, em_col4 = st.columns(4)
+                    
+                    with em_col1:
+                        avg_soc = df_bal['EMobility SOC [MWh]'].mean()
+                        st.metric(
+                            "Ø SOC",
+                            f"{avg_soc:,.0f} MWh"
+                        )
+                    
+                    with em_col2:
+                        total_charged = df_bal['EMobility Charge [MWh]'].sum()
+                        st.metric(
+                            "Gesamt geladen",
+                            f"{total_charged:,.0f} MWh"
+                        )
+                    
+                    with em_col3:
+                        total_discharged = df_bal['EMobility Discharge [MWh]'].sum()
+                        st.metric(
+                            "Gesamt entladen",
+                            f"{total_discharged:,.0f} MWh"
+                        )
+                    
+                    with em_col4:
+                        total_drive = df_bal['EMobility Drive [MWh]'].sum()
+                        st.metric(
+                            "Fahrverbrauch",
+                            f"{total_drive:,.0f} MWh"
+                        )
+                    
+                    # Zweite Zeile Kennzahlen
+                    em_col5, em_col6, em_col7, em_col8 = st.columns(4)
+                    
+                    with em_col5:
+                        if 'EMobility Power [MW]' in df_bal.columns:
+                            max_charge = df_bal['EMobility Power [MW]'].min()
+                            st.metric(
+                                "Max. Ladeleistung",
+                                f"{abs(max_charge):,.0f} MW"
+                            )
+                    
+                    with em_col6:
+                        if 'EMobility Power [MW]' in df_bal.columns:
+                            max_discharge = df_bal['EMobility Power [MW]'].max()
+                            st.metric(
+                                "Max. Entladeleistung",
+                                f"{max_discharge:,.0f} MW"
+                            )
+                    
+                    with em_col7:
+                        min_soc = df_bal['EMobility SOC [MWh]'].min()
+                        st.metric(
+                            "Min. SOC",
+                            f"{min_soc:,.0f} MWh"
+                        )
+                    
+                    with em_col8:
+                        max_soc = df_bal['EMobility SOC [MWh]'].max()
+                        st.metric(
+                            "Max. SOC",
+                            f"{max_soc:,.0f} MWh"
+                        )
+                    
+                    # E-Mobility-Spalten als DataFrame anzeigen
+                    em_columns = [col for col in df_bal.columns if 'EMobility' in col]
+                    df_em_display = df_bal[em_columns].copy()
+                    df_em_display.insert(0, 'Zeitpunkt', df_bal.index if 'Zeitpunkt' not in df_bal.columns else df_bal['Zeitpunkt'])
+                    st.dataframe(df_em_display, width='stretch')
+                    
+                    csv_em = df_em_display.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
+                    st.download_button(
+                        "Download E-Mobility CSV",
+                        data=csv_em,
+                        file_name=f"emobility_{sel_year}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("Keine E-Mobility-Daten verfügbar. Stellen Sie sicher, dass E-Mobility-Parameter im Szenario definiert sind.")
 
             with tab_stor:
                 df = results[sel_year]["storage"]
@@ -404,17 +504,25 @@ def standard_simulation_page() -> None:
 
             st.markdown("### Erzeugungssimulation")
             st.caption("Stundliche Erzeugungswerte nach Technologie (Wind, Solar, Biomasse, etc.)")
-            date_from_gen, date_to_gen = create_date_range_selector(
-                results[sel_year]["production"],
-                key_suffix=f"gen_{sel_year}"
-            )
-            fig_gen = ply.create_generation_plot(
-                results[sel_year]["production"],
-                title="",
-                date_from=date_from_gen,
-                date_to=date_to_gen
-            )
-            st.plotly_chart(fig_gen)
+            
+            # Prüfe ob Erzeugungsdaten vorhanden sind
+            df_prod = results[sel_year]["production"]
+            prod_cols = [c for c in df_prod.columns if "[MWh]" in c and "Gesamt" not in c and "Zeitpunkt" not in c]
+            
+            if prod_cols and df_prod[prod_cols].sum().sum() > 0:
+                date_from_gen, date_to_gen = create_date_range_selector(
+                    df_prod,
+                    key_suffix=f"gen_{sel_year}"
+                )
+                fig_gen = ply.create_generation_plot(
+                    df_prod,
+                    title="",
+                    date_from=date_from_gen,
+                    date_to=date_to_gen
+                )
+                st.plotly_chart(fig_gen)
+            else:
+                st.warning("⚠️ Keine Erzeugungsdaten vorhanden. Bitte prüfen Sie, ob Ziel-Kapazitäten im Szenario definiert sind.")
 
             st.markdown("### Bilanzberechnung")
             st.caption("Bilanz zwischen Erzeugung und Verbrauch (positiv = Überschuss, negativ = Defizit)")
@@ -434,17 +542,23 @@ def standard_simulation_page() -> None:
             st.caption("Direkter Vergleich: Erzeugung und Verbrauch im gleichen Zeitfenster")
             combo_df = results[sel_year]["production"].copy()
             combo_df["Skalierte Netzlast [MWh]"] = results[sel_year]["consumption"]["Gesamt [MWh]"]
-            date_from_combo, date_to_combo = create_date_range_selector(
-                combo_df,
-                key_suffix=f"combo_{sel_year}"
-            )
-            fig_combo = ply.create_generation_with_load_plot(
-                df=combo_df,
-                title=" ",
-                date_from=date_from_combo,
-                date_to=date_to_combo
-            )
-            st.plotly_chart(fig_combo)
+            
+            # Prüfe ob Erzeugungsdaten vorhanden sind
+            combo_prod_cols = [c for c in combo_df.columns if "[MWh]" in c and "Gesamt" not in c and "Zeitpunkt" not in c and "Netzlast" not in c]
+            if combo_prod_cols and combo_df[combo_prod_cols].sum().sum() > 0:
+                date_from_combo, date_to_combo = create_date_range_selector(
+                    combo_df,
+                    key_suffix=f"combo_{sel_year}"
+                )
+                fig_combo = ply.create_generation_with_load_plot(
+                    df=combo_df,
+                    title=" ",
+                    date_from=date_from_combo,
+                    date_to=date_to_combo
+                )
+                st.plotly_chart(fig_combo)
+            else:
+                st.info("Erzeugung vs. Verbrauch nicht verfügbar - keine Erzeugungsdaten.")
 
             if not results[sel_year]["storage"].empty:
                 stor_plot_df = results[sel_year]["storage"].copy()
@@ -472,6 +586,85 @@ def standard_simulation_page() -> None:
                     date_to=date_to_stor
                 )
                 st.plotly_chart(fig_soc)
+
+            # E-Mobility Visualisierung
+            df_bal = results[sel_year]["balance"]
+            if 'EMobility SOC [MWh]' in df_bal.columns:
+                st.markdown("### E-Mobility (V2G) Simulation")
+                
+                # SOC-Verlauf der EV-Flotte
+                st.markdown("#### State of Charge (SOC) der EV-Flotte")
+                st.caption("Aggregierter Ladestand aller Elektrofahrzeuge über die Zeit")
+                date_from_ev, date_to_ev = create_date_range_selector(
+                    df_bal,
+                    key_suffix=f"emob_{sel_year}"
+                )
+                
+                # SOC Plot
+                import plotly.graph_objects as go
+                df_filtered = df_bal.copy()
+                if date_from_ev and date_to_ev:
+                    df_filtered = df_filtered[(df_filtered.index >= date_from_ev) & (df_filtered.index <= date_to_ev)]
+                
+                fig_ev_soc = go.Figure()
+                fig_ev_soc.add_trace(go.Scatter(
+                    x=df_filtered.index,
+                    y=df_filtered['EMobility SOC [MWh]'],
+                    mode='lines',
+                    name='EV-Flotte SOC',
+                    fill='tozeroy',
+                    line=dict(color='#2ecc71', width=1),
+                    fillcolor='rgba(46, 204, 113, 0.3)'
+                ))
+                fig_ev_soc.update_layout(
+                    xaxis_title="Zeit",
+                    yaxis_title="SOC [MWh]",
+                    template="plotly_white",
+                    height=400,
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                )
+                st.plotly_chart(fig_ev_soc, use_container_width=True)
+                
+                # Lade-/Entladeleistung Plot
+                if 'EMobility Power [MW]' in df_bal.columns:
+                    st.markdown("#### Lade-/Entladeleistung der EV-Flotte")
+                    st.caption("Negative Werte = Laden aus Netz, Positive Werte = Rückspeisung ins Netz (V2G)")
+                    
+                    fig_ev_power = go.Figure()
+                    power_col = df_filtered['EMobility Power [MW]']
+                    
+                    # Positive Werte (Entladen/V2G) in Grün
+                    fig_ev_power.add_trace(go.Scatter(
+                        x=df_filtered.index,
+                        y=power_col.clip(lower=0),
+                        mode='lines',
+                        name='V2G Rückspeisung',
+                        fill='tozeroy',
+                        line=dict(color='#27ae60', width=0.5),
+                        fillcolor='rgba(39, 174, 96, 0.5)'
+                    ))
+                    
+                    # Negative Werte (Laden) in Rot
+                    fig_ev_power.add_trace(go.Scatter(
+                        x=df_filtered.index,
+                        y=power_col.clip(upper=0),
+                        mode='lines',
+                        name='Laden',
+                        fill='tozeroy',
+                        line=dict(color='#e74c3c', width=0.5),
+                        fillcolor='rgba(231, 76, 60, 0.5)'
+                    ))
+                    
+                    fig_ev_power.update_layout(
+                        xaxis_title="Zeit",
+                        yaxis_title="Leistung [MW]",
+                        template="plotly_white",
+                        height=400,
+                        showlegend=True,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                    )
+                    st.plotly_chart(fig_ev_power, use_container_width=True)
 
                 # Wirtschaftlichkeit über alle Jahre (Trend) unterhalb der SOC-Grafiken
                 econ_series = [

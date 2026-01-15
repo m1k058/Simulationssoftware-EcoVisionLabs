@@ -25,9 +25,23 @@ target_heat_pump_parameters:
 
 target_emobility_parameters:
   2045:
+    # Legacy-Parameter (für Rückwärtskompatibilität)
     installed_units: 17000000
     annual_consumption_kwh: 10000
     load_profile: ''
+    # NEU: Vollständige Excel-konforme Parameter
+    s_EV: 0.95                       # Anteil E-Fahrzeuge an Gesamtflotte
+    N_cars: 45000000                 # Gesamtanzahl PKW in Deutschland
+    E_drive_car_year: 2000.0         # Jahresfahrverbrauch pro E-Auto [kWh/a]
+    E_batt_car: 70.0                 # Batteriekapazität pro Fahrzeug [kWh]
+    plug_share_max: 0.7              # Maximale Anschlussquote
+    SOC_min_day: 0.3                 # Min. SOC tagsüber
+    SOC_min_night: 0.15              # Min. SOC nachts
+    SOC_target_depart: 0.7           # Ziel-SOC bei Abfahrt
+    t_depart: "07:30"                # Abfahrtszeit
+    t_arrive: "18:00"                # Ankunftszeit
+    thr_surplus: 300000.0            # Schwellwert Überschuss [kW]
+    thr_deficit: 300000.0            # Schwellwert Defizit [kW]
 target_generation_capacities_mw:
   Photovoltaik:
     2045: 400000.0

@@ -149,6 +149,14 @@ class ScenarioManager:
         if "target_storage_capacities" in scenario_data:
             scenario["target_storage_capacities"] = scenario_data["target_storage_capacities"]
 
+        # Wärmepumpen-Parameter
+        if "target_heat_pump_parameters" in scenario_data:
+            scenario["target_heat_pump_parameters"] = scenario_data["target_heat_pump_parameters"]
+
+        # E-Mobility-Parameter
+        if "target_emobility_parameters" in scenario_data:
+            scenario["target_emobility_parameters"] = scenario_data["target_emobility_parameters"]
+
         return yaml.dump(
             scenario,
             allow_unicode=True,
@@ -312,13 +320,27 @@ class ScenarioManager:
 
     def get_emobility_parameters(self, year: Optional[int] = None) -> Any:
         """
-        Holt E-Mobilität-Parameter aus dem Szenario (neue Struktur).
+        Holt E-Mobilität-Parameter aus dem Szenario (vollständige Excel-konforme Struktur).
         
         Args:
             year: Spezifisches Jahr (z.B. 2030, 2045). Wenn None, alle Jahre.
             
         Returns:
-            Dict mit Parametern:
+            Dict mit Parametern (gemäß Excel-Logik):
+            - s_EV: Anteil E-Fahrzeuge an Gesamtflotte
+            - N_cars: Gesamtanzahl PKW
+            - E_drive_car_year: Jahresfahrverbrauch pro E-Auto [kWh/a]
+            - E_batt_car: Batteriekapazität pro Fahrzeug [kWh]
+            - plug_share_max: Maximale Anschlussquote
+            - SOC_min_day: Min. SOC tagsüber
+            - SOC_min_night: Min. SOC nachts
+            - SOC_target_depart: Ziel-SOC bei Abfahrt
+            - t_depart: Abfahrtszeit (z.B. "07:30")
+            - t_arrive: Ankunftszeit (z.B. "18:00")
+            - thr_surplus: Schwellwert Überschuss [kW]
+            - thr_deficit: Schwellwert Defizit [kW]
+            
+            Legacy-Parameter (für Rückwärtskompatibilität):
             - installed_units: Anzahl E-Autos
             - annual_consumption_kwh: Verbrauch pro Auto [kWh/Jahr]
             - load_profile: Lastprofilmatrix für Ladevorgänge
@@ -328,6 +350,40 @@ class ScenarioManager:
         if year is None:
             return em_data
         return em_data.get(year, {})
+    
+    def get_emobility_scenario_params(self, year: int):
+        """
+        Erstellt EVScenarioParams-Objekt aus den Szenario-Daten.
+        
+        Args:
+            year: Simulationsjahr
+            
+        Returns:
+            EVScenarioParams Dataclass-Instanz oder None wenn keine Daten
+        """
+        from data_processing.e_mobility_simulation import EVScenarioParams
+        
+        em_data = self.get_emobility_parameters(year)
+        if not em_data:
+            return None
+        
+        # Neue Parameter haben Vorrang, Legacy als Fallback
+        params = EVScenarioParams(
+            s_EV=em_data.get('s_EV', 0.9),
+            N_cars=em_data.get('N_cars', em_data.get('installed_units', 5_000_000)),
+            E_drive_car_year=em_data.get('E_drive_car_year', 
+                                         em_data.get('annual_consumption_kwh', 2250.0) / 4.5),
+            E_batt_car=em_data.get('E_batt_car', 50.0),
+            plug_share_max=em_data.get('plug_share_max', 0.6),
+            SOC_min_day=em_data.get('SOC_min_day', 0.4),
+            SOC_min_night=em_data.get('SOC_min_night', 0.2),
+            SOC_target_depart=em_data.get('SOC_target_depart', 0.6),
+            t_depart=em_data.get('t_depart', "07:30"),
+            t_arrive=em_data.get('t_arrive', "18:00"),
+            thr_surplus=em_data.get('thr_surplus', 200_000.0),
+            thr_deficit=em_data.get('thr_deficit', 200_000.0)
+        )
+        return params
     
     @staticmethod
     def get_available_temperature_datasets(config_manager) -> list:

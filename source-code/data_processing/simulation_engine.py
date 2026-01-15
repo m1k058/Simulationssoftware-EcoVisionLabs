@@ -19,6 +19,13 @@ from data_processing.balance_calculator import BalanceCalculator
 from data_processing.generation_simulation import simulate_production
 from data_processing.consumption_simulation import simulate_consumption_all
 from data_processing.economic_calculator import calculate_economics_from_simulation
+from data_processing.e_mobility_simulation import (
+    simulate_emobility_fleet, 
+    generate_ev_profile,
+    EVConfigParams, 
+    EVScenarioParams,
+    validate_ev_results
+)
 from constants import HEATPUMP_LOAD_PROFILE_NAME
 
 
@@ -177,17 +184,16 @@ class SimulationEngine:
         # 2) Erzeugungssimulation
         df_prod = self._simulate_production(year, year_num, total_years)
         
-        # 3) E-Mobilitätssimulation
-
-
-        # 4) Bilanzberechnung
+        # 3) Bilanzberechnung (vor E-Mobilität)
         df_bal = self._calculate_balance(df_prod, df_cons, year, year_num, total_years)
 
-        # 5) Speichersimulation
+        # 4) E-Mobilitätssimulation (modifiziert Residuallast)
+        df_bal = self._simulate_emobility(df_bal, year, year_num, total_years)
+
+        # 5) Speichersimulation (auf aktualisierter Residuallast)
         df_storage = self._simulate_storage(df_bal, year, year_num, total_years)
 
-        # 6) Bilanzberechnung nach Speicher
-        
+        # 6) Bilanzberechnung nach Speicher (bereits in df_storage enthalten)
         
         # 7) Wirtschaftlichkeitsanalyse
         econ_result = self._calculate_economics(df_prod, df_cons, df_bal, df_storage, year, year_num, total_years)
@@ -260,6 +266,101 @@ class SimulationEngine:
             self.logger.finish_step(False, str(e))
             raise RuntimeError(f"Erzeugungssimulation {year} fehlgeschlagen: {e}")
     
+    def _simulate_emobility(
+        self,
+        df_bal: pd.DataFrame,
+        year: int,
+        year_num: int,
+        total_years: int
+    ) -> pd.DataFrame:
+        """
+        Führt die E-Mobilitätssimulation aus.
+        
+        Simuliert eine E-Auto-Flotte mit V2G-Funktionalität und aktualisiert
+        die Residuallast basierend auf Laden/Entladen.
+        
+        Args:
+            df_bal: DataFrame mit Bilanz und 'Rest Bilanz [MWh]' Spalte
+            year: Simulationsjahr
+            year_num: Fortschrittszähler
+            total_years: Gesamtzahl der Jahre
+            
+        Returns:
+            DataFrame mit aktualisierten E-Mobility-Spalten und Residuallast
+        """
+        self.logger.start_step(f"[{year_num}/{total_years}] E-Mobilitätssimulation {year}")
+        
+        try:
+            # Hole E-Mobility Parameter aus Szenario
+            em_data = self.sm.get_emobility_parameters(year)
+            
+            if not em_data:
+                self.logger.warning(f"Keine E-Mobility-Parameter für {year} definiert - überspringe")
+                return df_bal
+            
+            # Prüfe ob neue Parameter vorhanden sind
+            if 's_EV' not in em_data and 'N_cars' not in em_data:
+                self.logger.warning(f"E-Mobility-Parameter unvollständig für {year} - überspringe")
+                return df_bal
+            
+            # Config-Parameter aus config.json laden
+            ev_config_data = self.cfg.config.get("EV_PARAMETERS", {})
+            config_params = EVConfigParams(
+                SOC0=ev_config_data.get("SOC0", 0.6),
+                eta_ch=ev_config_data.get("eta_ch", 0.95),
+                eta_dis=ev_config_data.get("eta_dis", 0.95),
+                P_ch_car_max=ev_config_data.get("P_ch_car_max", 11.0),
+                P_dis_car_max=ev_config_data.get("P_dis_car_max", 11.0),
+                dt_h=ev_config_data.get("dt_h", 0.25)
+            )
+            
+            # Szenario-Parameter aus YAML
+            scenario_params = EVScenarioParams(
+                s_EV=em_data.get('s_EV', 0.9),
+                N_cars=int(em_data.get('N_cars', em_data.get('installed_units', 5_000_000))),
+                E_drive_car_year=em_data.get('E_drive_car_year', 2250.0),
+                E_batt_car=em_data.get('E_batt_car', 50.0),
+                plug_share_max=em_data.get('plug_share_max', 0.6),
+                SOC_min_day=em_data.get('SOC_min_day', 0.4),
+                SOC_min_night=em_data.get('SOC_min_night', 0.2),
+                SOC_target_depart=em_data.get('SOC_target_depart', 0.6),
+                t_depart=str(em_data.get('t_depart', "07:30")),
+                t_arrive=str(em_data.get('t_arrive', "18:00")),
+                thr_surplus=float(em_data.get('thr_surplus', 200_000.0)),
+                thr_deficit=float(em_data.get('thr_deficit', 200_000.0))
+            )
+            
+            # E-Mobility Simulation ausführen
+            df_result = simulate_emobility_fleet(
+                df_balance=df_bal,
+                scenario_params=scenario_params,
+                config_params=config_params,
+                df_ev_profile=None  # Wird intern generiert
+            )
+            
+            # Berechne Statistiken für Logging
+            n_ev = scenario_params.s_EV * scenario_params.N_cars
+            total_charged_twh = df_result['EMobility Charge [MWh]'].sum() / 1e6
+            total_discharged_twh = df_result['EMobility Discharge [MWh]'].sum() / 1e6
+            
+            self.logger.finish_step(
+                True, 
+                f"{n_ev/1e6:.1f} Mio EVs, geladen: {total_charged_twh:.2f} TWh, entladen: {total_discharged_twh:.2f} TWh"
+            )
+            
+            # Optional: Validierung
+            if self.logger.verbose:
+                capacity_mwh = n_ev * scenario_params.E_batt_car / 1000.0
+                validate_ev_results(df_result, capacity_mwh)
+            
+            return df_result
+            
+        except Exception as e:
+            self.logger.finish_step(False, str(e))
+            self.logger.warning(f"E-Mobilitätssimulation übersprungen: {e}")
+            # Bei Fehler: Original-DataFrame zurückgeben (graceful degradation)
+            return df_bal
+
     def _calculate_balance(
         self, 
         df_prod: pd.DataFrame, 

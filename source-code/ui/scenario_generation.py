@@ -203,9 +203,207 @@ def scenario_generation_page() -> None:
     st.markdown("---")
 
     # === E-MOBILITÄT-PARAMETER (NEU) ===
-    st.subheader("E-Mobilität - Parameter")
+    st.subheader(":material/directions_car: E-Mobilität - Parameter")
     em_params = data.get("target_emobility_parameters", {})
     edited_em = {}
+    
+    # Initialisiere E-Mobility Werte in session_state falls nicht vorhanden
+    if "emobility_values" not in st.session_state:
+        st.session_state["emobility_values"] = {}
+        for y in valid_years if valid_years else [2030, 2045]:
+            default_vals = em_params.get(y, {})
+            st.session_state["emobility_values"][y] = {
+                "s_EV": default_vals.get("s_EV", 0.7 if y == 2030 else 0.95),
+                "N_cars": default_vals.get("N_cars", 48000000),
+                "E_drive_car_year": default_vals.get("E_drive_car_year", 2250.0),
+                "E_batt_car": default_vals.get("E_batt_car", 50.0),
+                "plug_share_max": default_vals.get("plug_share_max", 0.6),
+                "SOC_min_day": default_vals.get("SOC_min_day", 0.4),
+                "SOC_min_night": default_vals.get("SOC_min_night", 0.2),
+                "SOC_target_depart": default_vals.get("SOC_target_depart", 0.6),
+                "t_depart": default_vals.get("t_depart", "07:30"),
+                "t_arrive": default_vals.get("t_arrive", "18:00"),
+                "thr_surplus": default_vals.get("thr_surplus", 200000.0),
+                "thr_deficit": default_vals.get("thr_deficit", 200000.0),
+            }
+    
+    # Stelle sicher, dass neue Jahre auch Einträge haben
+    for y in valid_years if valid_years else [2030, 2045]:
+        if y not in st.session_state["emobility_values"]:
+            st.session_state["emobility_values"][y] = {
+                "s_EV": 0.7 if y <= 2030 else 0.95,
+                "N_cars": 48000000,
+                "E_drive_car_year": 2250.0,
+                "E_batt_car": 50.0,
+                "plug_share_max": 0.6,
+                "SOC_min_day": 0.4,
+                "SOC_min_night": 0.2,
+                "SOC_target_depart": 0.6,
+                "t_depart": "07:30",
+                "t_arrive": "18:00",
+                "thr_surplus": 200000.0,
+                "thr_deficit": 200000.0,
+            }
+    
+    # Tabs für jedes Jahr
+    em_tabs = st.tabs([f"Jahr {year}" for year in (valid_years if valid_years else [2030, 2045])])
+    
+    for tab_idx, (tab, year) in enumerate(zip(em_tabs, valid_years if valid_years else [2030, 2045])):
+        with tab:
+            year_em = st.session_state["emobility_values"].get(year, {})
+            
+            # Hauptparameter
+            st.markdown("**Flotten-Parameter**")
+            em_col1, em_col2 = st.columns(2)
+            with em_col1:
+                s_ev_val = st.slider(
+                    "Anteil E-Fahrzeuge",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(year_em.get("s_EV", 0.7)),
+                    step=0.05,
+                    key=f"em_s_ev_{year}",
+                    help="Anteil der Fahrzeugflotte, die elektrisch ist (0.0 - 1.0)"
+                )
+                n_cars_val = st.number_input(
+                    "Gesamtanzahl PKW",
+                    min_value=0,
+                    max_value=100000000,
+                    value=int(year_em.get("N_cars", 48000000)),
+                    step=1000000,
+                    key=f"em_n_cars_{year}",
+                    help="Gesamtzahl aller PKW in Deutschland"
+                )
+            with em_col2:
+                e_drive_val = st.number_input(
+                    "Jahresfahrverbrauch [kWh/Fzg]",
+                    min_value=0.0,
+                    max_value=10000.0,
+                    value=float(year_em.get("E_drive_car_year", 2250.0)),
+                    step=50.0,
+                    key=f"em_e_drive_{year}",
+                    help="Stromverbrauch pro E-Auto pro Jahr"
+                )
+                e_batt_val = st.number_input(
+                    "Batteriekapazität [kWh/Fzg]",
+                    min_value=10.0,
+                    max_value=200.0,
+                    value=float(year_em.get("E_batt_car", 50.0)),
+                    step=5.0,
+                    key=f"em_e_batt_{year}",
+                    help="Durchschnittliche Batteriekapazität pro Fahrzeug"
+                )
+            
+            # SOC Parameter
+            st.markdown("**SOC-Grenzen**")
+            soc_col1, soc_col2, soc_col3 = st.columns(3)
+            with soc_col1:
+                soc_min_day_val = st.slider(
+                    "Min. SOC Tag",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(year_em.get("SOC_min_day", 0.4)),
+                    step=0.05,
+                    key=f"em_soc_min_day_{year}",
+                    help="Minimaler SOC während Tageszeit"
+                )
+            with soc_col2:
+                soc_min_night_val = st.slider(
+                    "Min. SOC Nacht",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(year_em.get("SOC_min_night", 0.2)),
+                    step=0.05,
+                    key=f"em_soc_min_night_{year}",
+                    help="Minimaler SOC während Nachtzeit"
+                )
+            with soc_col3:
+                soc_target_val = st.slider(
+                    "Ziel-SOC Abfahrt",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(year_em.get("SOC_target_depart", 0.6)),
+                    step=0.05,
+                    key=f"em_soc_target_{year}",
+                    help="Ziel-SOC bei Abfahrt morgens"
+                )
+            
+            # Erweiterte Einstellungen - Defaults initialisieren
+            plug_share_val = float(year_em.get("plug_share_max", 0.6))
+            t_depart_val = str(year_em.get("t_depart", "07:30"))
+            t_arrive_val = str(year_em.get("t_arrive", "18:00"))
+            thr_surplus_mw = float(year_em.get("thr_surplus", 200000.0)) / 1000.0
+            thr_deficit_mw = float(year_em.get("thr_deficit", 200000.0)) / 1000.0
+            
+            with st.expander("Erweiterte Einstellungen"):
+                adv_col1, adv_col2 = st.columns(2)
+                with adv_col1:
+                    plug_share_val = st.slider(
+                        "Max. Anschlussquote",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(year_em.get("plug_share_max", 0.6)),
+                        step=0.05,
+                        key=f"em_plug_share_{year}",
+                        help="Anteil der Fahrzeuge, die nachts am Netz angeschlossen sind"
+                    )
+                    t_depart_val = st.text_input(
+                        "Abfahrtszeit",
+                        value=str(year_em.get("t_depart", "07:30")),
+                        key=f"em_t_depart_{year}",
+                        help="Format: HH:MM"
+                    )
+                with adv_col2:
+                    t_arrive_val = st.text_input(
+                        "Ankunftszeit",
+                        value=str(year_em.get("t_arrive", "18:00")),
+                        key=f"em_t_arrive_{year}",
+                        help="Format: HH:MM"
+                    )
+                
+                # Netz-Schwellwerte
+                st.markdown("**Netz-Dispatch Schwellwerte**")
+                thr_col1, thr_col2 = st.columns(2)
+                with thr_col1:
+                    thr_surplus_mw = st.number_input(
+                        "Schwellwert Überschuss [MW]",
+                        min_value=0.0,
+                        max_value=1000.0,
+                        value=float(year_em.get("thr_surplus", 200000.0)) / 1000.0,
+                        step=10.0,
+                        key=f"em_thr_surplus_{year}",
+                        help="Ab diesem Überschuss wird geladen"
+                    )
+                with thr_col2:
+                    thr_deficit_mw = st.number_input(
+                        "Schwellwert Defizit [MW]",
+                        min_value=0.0,
+                        max_value=1000.0,
+                        value=float(year_em.get("thr_deficit", 200000.0)) / 1000.0,
+                        step=10.0,
+                        key=f"em_thr_deficit_{year}",
+                        help="Ab diesem Defizit wird entladen"
+                    )
+            
+            # Werte in Session State speichern
+            st.session_state["emobility_values"][year] = {
+                "s_EV": s_ev_val,
+                "N_cars": n_cars_val,
+                "E_drive_car_year": e_drive_val,
+                "E_batt_car": e_batt_val,
+                "plug_share_max": plug_share_val,
+                "SOC_min_day": soc_min_day_val,
+                "SOC_min_night": soc_min_night_val,
+                "SOC_target_depart": soc_target_val,
+                "t_depart": t_depart_val,
+                "t_arrive": t_arrive_val,
+                "thr_surplus": thr_surplus_mw * 1000.0,  # Konvertiere MW zu kW
+                "thr_deficit": thr_deficit_mw * 1000.0,  # Konvertiere MW zu kW
+            }
+    
+    # E-Mobility Werte für Export zusammenstellen
+    for year in valid_years if valid_years else [2030, 2045]:
+        edited_em[year] = st.session_state["emobility_values"].get(year, {})
 
     st.markdown("---")
 
@@ -463,6 +661,7 @@ def scenario_generation_page() -> None:
             "cap_values",
             "cap_df_session",
             "storage_values",
+            "emobility_values",
             "scenario_editor",
             "show_yaml_preview",
         ]
