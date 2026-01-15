@@ -651,7 +651,7 @@ st.error("❌ Fehler")
 
 # ✅ GUT - Daten
 st.metric("Verbrauch", "450 TWh", delta="15%")
-st.dataframe(df, use_container_width=True)
+st.dataframe(df, width='stretch')
 
 # ❌ VERMEIDEN - Unstrukturiert
 st.write("Info: ...")  # Nutze st.info()

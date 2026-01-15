@@ -629,7 +629,7 @@ def standard_simulation_page() -> None:
                     showlegend=True,
                     legend=dict(orientation="h", yanchor="bottom", y=1.02)
                 )
-                st.plotly_chart(fig_ev_soc, use_container_width=True)
+                st.plotly_chart(fig_ev_soc, width='stretch')
                 
                 # Lade-/Entladeleistung Plot
                 if 'EMobility Power [MW]' in df_bal.columns:
@@ -669,7 +669,7 @@ def standard_simulation_page() -> None:
                         showlegend=True,
                         legend=dict(orientation="h", yanchor="bottom", y=1.02)
                     )
-                    st.plotly_chart(fig_ev_power, use_container_width=True)
+                    st.plotly_chart(fig_ev_power, width='stretch')
 
                 # Wirtschaftlichkeit über alle Jahre (Trend) unterhalb der SOC-Grafiken
                 econ_series = [

@@ -161,7 +161,7 @@ def analysis_page() -> None:
             date_from=pd.to_datetime(selected_date_from),
             date_to=pd.to_datetime(selected_date_to)
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     def _plot_consumption(local_df: pd.DataFrame):
         y_col = "Netzlast [MWh]"
@@ -186,7 +186,7 @@ def analysis_page() -> None:
             template="plotly_white",
             hovermode='x unified'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # Hauptbereich: Tabs pro ausgewähltem DataFrame
     tabs = st.tabs([d["name"] for d in datasets])
