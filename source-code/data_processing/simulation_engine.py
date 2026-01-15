@@ -177,13 +177,19 @@ class SimulationEngine:
         # 2) Erzeugungssimulation
         df_prod = self._simulate_production(year, year_num, total_years)
         
-        # 3) Bilanzberechnung
+        # 3) E-Mobilitätssimulation
+
+
+        # 4) Bilanzberechnung
         df_bal = self._calculate_balance(df_prod, df_cons, year, year_num, total_years)
-        
-        # 4) Speichersimulation
+
+        # 5) Speichersimulation
         df_storage = self._simulate_storage(df_bal, year, year_num, total_years)
+
+        # 6) Bilanzberechnung nach Speicher
         
-        # 5) Wirtschaftlichkeitsanalyse
+        
+        # 7) Wirtschaftlichkeitsanalyse
         econ_result = self._calculate_economics(df_prod, df_cons, df_bal, df_storage, year, year_num, total_years)
         
         return {
