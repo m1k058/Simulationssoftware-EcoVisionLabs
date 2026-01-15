@@ -603,12 +603,17 @@ def standard_simulation_page() -> None:
                 # SOC Plot
                 import plotly.graph_objects as go
                 df_filtered = df_bal.copy()
-                if date_from_ev and date_to_ev:
-                    df_filtered = df_filtered[(df_filtered.index >= date_from_ev) & (df_filtered.index <= date_to_ev)]
+                # Zeitfilter über Zeitpunkt-Spalte, nicht Index
+                if "Zeitpunkt" in df_filtered.columns:
+                    df_filtered['Zeitpunkt'] = pd.to_datetime(df_filtered['Zeitpunkt'])
+                    if date_from_ev is not None:
+                        df_filtered = df_filtered[df_filtered['Zeitpunkt'] >= date_from_ev]
+                    if date_to_ev is not None:
+                        df_filtered = df_filtered[df_filtered['Zeitpunkt'] <= date_to_ev]
                 
                 fig_ev_soc = go.Figure()
                 fig_ev_soc.add_trace(go.Scatter(
-                    x=df_filtered.index,
+                    x=df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index,
                     y=df_filtered['EMobility SOC [MWh]'],
                     mode='lines',
                     name='EV-Flotte SOC',
@@ -636,7 +641,7 @@ def standard_simulation_page() -> None:
                     
                     # Positive Werte (Entladen/V2G) in Grün
                     fig_ev_power.add_trace(go.Scatter(
-                        x=df_filtered.index,
+                        x=df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index,
                         y=power_col.clip(lower=0),
                         mode='lines',
                         name='V2G Rückspeisung',
@@ -647,7 +652,7 @@ def standard_simulation_page() -> None:
                     
                     # Negative Werte (Laden) in Rot
                     fig_ev_power.add_trace(go.Scatter(
-                        x=df_filtered.index,
+                        x=df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index,
                         y=power_col.clip(upper=0),
                         mode='lines',
                         name='Laden',
