@@ -328,14 +328,43 @@ def standard_simulation_page() -> None:
             except Exception:
                 sel_year = years_available[0]
 
-            # Tabs pro Ergebnis-DF
-            tab_con, tab_prod, tab_bal, tab_emob, tab_stor, tab_econ = st.tabs([
-                "Verbrauch", "Erzeugung", "Bilanz", "E-Mobilität", "Speicher", "Wirtschaftlichkeit"
+            # Tabs pro Ergebnis-DF - 7 TABS MIT E-MOBILITY
+            tab_con, tab_prod, tab_emob, tab_bal_pre, tab_stor, tab_bal_post, tab_econ = st.tabs([
+                "Verbrauch (+ E-Mob)",      # results[year]["consumption"]
+                "Erzeugung",                # results[year]["production"]
+                "E-Mobilität",              # results[year]["emobility"]  <- NEU!
+                "Bilanz (vor Flex)",        # results[year]["balance_pre_flex"]
+                "Speicher",                 # results[year]["balance_post_flex"] (nur Speicher-Spalten)
+                "Bilanz (nach Flex)",       # results[year]["balance_post_flex"] (kompakt)
+                "Wirtschaftlichkeit"        # results[year]["economics"]
             ])
 
             with tab_con:
+                st.caption("Gesamt-Verbrauch: BDEW + Wärmepumpen + E-Mobilität")
                 df = results[sel_year]["consumption"]
                 st.dataframe(df, width='stretch')
+                
+                # Kennzahlen in 4 Spalten
+                col1, col2, col3, col4 = st.columns(4)
+                
+                # BDEW-Summe
+                bdew_sum = 0
+                if 'Haushalte [MWh]' in df.columns:
+                    bdew_sum += df['Haushalte [MWh]'].sum()
+                if 'Gewerbe [MWh]' in df.columns:
+                    bdew_sum += df['Gewerbe [MWh]'].sum()
+                if 'Landwirtschaft [MWh]' in df.columns:
+                    bdew_sum += df['Landwirtschaft [MWh]'].sum()
+                
+                wp_sum = df.get('Wärmepumpen [MWh]', pd.Series([0])).sum()
+                emob_sum = df.get('E-Mobility [MWh]', pd.Series([0])).sum()
+                total = df['Gesamt [MWh]'].sum() if 'Gesamt [MWh]' in df.columns else 0
+                
+                col1.metric("BDEW", f"{bdew_sum / 1e6:.2f} TWh")
+                col2.metric("Wärmepumpen", f"{wp_sum / 1e6:.2f} TWh")
+                col3.metric("E-Mobility", f"{emob_sum / 1e6:.2f} TWh")
+                col4.metric("GESAMT", f"{total / 1e6:.2f} TWh")
+                
                 csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
                 st.download_button(
                     "Download Verbrauch CSV",
@@ -355,111 +384,155 @@ def standard_simulation_page() -> None:
                     mime="text/csv"
                 )
 
-            with tab_bal:
-                df = results[sel_year]["balance"]
-                st.dataframe(df, width='stretch')
-                csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
-                st.download_button(
-                    "Download Bilanz CSV",
-                    data=csv,
-                    file_name=f"bilanz_{sel_year}.csv",
-                    mime="text/csv"
-                )
-
             with tab_emob:
-                df_bal = results[sel_year]["balance"]
-                # Prüfe ob E-Mobility-Daten vorhanden sind
-                if 'EMobility SOC [MWh]' in df_bal.columns:
-                    st.subheader(":material/directions_car: E-Mobility Ergebnisse")
+                st.caption("E-Mobilitäts-Flotte: Fahrverbrauch, Ladeverluste und Gesamtverbrauch")
+                df_em = results[sel_year].get("emobility")
+                
+                if df_em is not None and not df_em.empty:
+                    st.dataframe(df_em, width='stretch')
                     
-                    # Kennzahlen in Spalten
-                    em_col1, em_col2, em_col3, em_col4 = st.columns(4)
+                    # Kennzahlen in 4 Spalten
+                    col1, col2, col3, col4 = st.columns(4)
                     
-                    with em_col1:
-                        avg_soc = df_bal['EMobility SOC [MWh]'].mean()
-                        st.metric(
-                            "Ø SOC",
-                            f"{avg_soc:,.0f} MWh"
-                        )
+                    total_drive = df_em['Fahrverbrauch [MWh]'].sum() if 'Fahrverbrauch [MWh]' in df_em.columns else 0
+                    total_loss = df_em['Ladeverluste [MWh]'].sum() if 'Ladeverluste [MWh]' in df_em.columns else 0
+                    total_em = df_em['Gesamt Verbrauch [MWh]'].sum() if 'Gesamt Verbrauch [MWh]' in df_em.columns else 0
+                    n_ev = df_em['Anzahl Fahrzeuge'].iloc[0] if 'Anzahl Fahrzeuge' in df_em.columns and len(df_em) > 0 else 0
                     
-                    with em_col2:
-                        total_charged = df_bal['EMobility Charge [MWh]'].sum()
-                        st.metric(
-                            "Gesamt geladen",
-                            f"{total_charged:,.0f} MWh"
-                        )
+                    col1.metric("Anzahl E-Fahrzeuge", f"{n_ev / 1e6:.2f} Mio")
+                    col2.metric("Fahrverbrauch", f"{total_drive / 1e6:.2f} TWh")
+                    col3.metric("Ladeverluste", f"{total_loss / 1e6:.2f} TWh")
+                    col4.metric("GESAMT", f"{total_em / 1e6:.2f} TWh")
                     
-                    with em_col3:
-                        total_discharged = df_bal['EMobility Discharge [MWh]'].sum()
-                        st.metric(
-                            "Gesamt entladen",
-                            f"{total_discharged:,.0f} MWh"
-                        )
-                    
-                    with em_col4:
-                        total_drive = df_bal['EMobility Drive [MWh]'].sum()
-                        st.metric(
-                            "Fahrverbrauch",
-                            f"{total_drive:,.0f} MWh"
-                        )
-                    
-                    # Zweite Zeile Kennzahlen
-                    em_col5, em_col6, em_col7, em_col8 = st.columns(4)
-                    
-                    with em_col5:
-                        if 'EMobility Power [MW]' in df_bal.columns:
-                            max_charge = df_bal['EMobility Power [MW]'].min()
-                            st.metric(
-                                "Max. Ladeleistung",
-                                f"{abs(max_charge):,.0f} MW"
-                            )
-                    
-                    with em_col6:
-                        if 'EMobility Power [MW]' in df_bal.columns:
-                            max_discharge = df_bal['EMobility Power [MW]'].max()
-                            st.metric(
-                                "Max. Entladeleistung",
-                                f"{max_discharge:,.0f} MW"
-                            )
-                    
-                    with em_col7:
-                        min_soc = df_bal['EMobility SOC [MWh]'].min()
-                        st.metric(
-                            "Min. SOC",
-                            f"{min_soc:,.0f} MWh"
-                        )
-                    
-                    with em_col8:
-                        max_soc = df_bal['EMobility SOC [MWh]'].max()
-                        st.metric(
-                            "Max. SOC",
-                            f"{max_soc:,.0f} MWh"
-                        )
-                    
-                    # E-Mobility-Spalten als DataFrame anzeigen
-                    em_columns = [col for col in df_bal.columns if 'EMobility' in col]
-                    df_em_display = df_bal[em_columns].copy()
-                    df_em_display.insert(0, 'Zeitpunkt', df_bal.index if 'Zeitpunkt' not in df_bal.columns else df_bal['Zeitpunkt'])
-                    st.dataframe(df_em_display, width='stretch')
-                    
-                    csv_em = df_em_display.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
+                    csv = df_em.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
                     st.download_button(
-                        "Download E-Mobility CSV",
-                        data=csv_em,
+                        "Download E-Mobilität CSV",
+                        data=csv,
                         file_name=f"emobility_{sel_year}.csv",
                         mime="text/csv"
                     )
                 else:
-                    st.info("Keine E-Mobility-Daten verfügbar. Stellen Sie sicher, dass E-Mobility-Parameter im Szenario definiert sind.")
+                    st.info("⚠️ Keine E-Mobilitäts-Daten verfügbar. Stellen Sie sicher, dass E-Mobility-Parameter im Szenario definiert sind.")
 
-            with tab_stor:
-                df = results[sel_year]["storage"]
-                st.dataframe(df, width='stretch')
+            with tab_bal_pre:
+                st.caption("Residuallast VOR Flexibilitäten (ohne Speicher/V2G)")
+                df = results[sel_year]["balance_pre_flex"]
+                
+                # Kompakte Ansicht: nur relevante Spalten
+                display_cols = ['Zeitpunkt', 'Produktion [MWh]', 'Verbrauch [MWh]', 'Bilanz [MWh]']
+                display_cols = [c for c in display_cols if c in df.columns]
+                st.dataframe(df[display_cols], width='stretch')
+                
+                # Analyse
+                surplus_hours = (df['Bilanz [MWh]'] > 0).sum() * 0.25 if 'Bilanz [MWh]' in df.columns else 0
+                deficit_hours = (df['Bilanz [MWh]'] < 0).sum() * 0.25 if 'Bilanz [MWh]' in df.columns else 0
+                autarkie = (surplus_hours / (surplus_hours + deficit_hours) * 100) if (surplus_hours + deficit_hours) > 0 else 0
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Überschuss-Stunden", f"{surplus_hours:.0f} h")
+                col2.metric("Defizit-Stunden", f"{deficit_hours:.0f} h")
+                col3.metric("Autarkie (ohne Flex)", f"{autarkie:.1f}%")
+                
                 csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
                 st.download_button(
-                    "Download Speicher CSV",
+                    "Download Bilanz (vor Flex) CSV",
                     data=csv,
-                    file_name=f"speicher_{sel_year}.csv",
+                    file_name=f"bilanz_pre_flex_{sel_year}.csv",
+                    mime="text/csv"
+                )
+
+            with tab_stor:
+                st.caption("Speicher-Operationen (Batterie, Pumpspeicher, H2)")
+                df = results[sel_year]["balance_post_flex"]
+                
+                # Zeige NUR Speicher-relevante Spalten
+                stor_cols = [c for c in df.columns if 'speicher' in c.lower() or 'SOC' in c or 'Geladene' in c or 'Entladene' in c]
+                if 'Zeitpunkt' in df.columns and 'Zeitpunkt' not in stor_cols:
+                    stor_cols.insert(0, 'Zeitpunkt')
+                
+                if stor_cols:
+                    st.dataframe(df[stor_cols], width='stretch')
+                    
+                    # Speicher-Kennzahlen
+                    st.markdown("**Speicher-Statistiken:**")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    # Batteriespeicher
+                    if 'Batteriespeicher SOC MWh' in df.columns:
+                        col1.metric("Batterie Max SOC", f"{df['Batteriespeicher SOC MWh'].max():,.0f} MWh")
+                    
+                    # Pumpspeicher
+                    if 'Pumpspeicher SOC MWh' in df.columns:
+                        col2.metric("Pumpe Max SOC", f"{df['Pumpspeicher SOC MWh'].max():,.0f} MWh")
+                    
+                    # H2-Speicher
+                    if 'H2-Speicher SOC MWh' in df.columns:
+                        col3.metric("H2 Max SOC", f"{df['H2-Speicher SOC MWh'].max():,.0f} MWh")
+                    
+                    # Gesamt geladen
+                    total_charged = 0
+                    if 'Batteriespeicher Geladene MWh' in df.columns:
+                        total_charged += df['Batteriespeicher Geladene MWh'].sum()
+                    if 'Pumpspeicher Geladene MWh' in df.columns:
+                        total_charged += df['Pumpspeicher Geladene MWh'].sum()
+                    if 'H2-Speicher Geladene MWh' in df.columns:
+                        total_charged += df['H2-Speicher Geladene MWh'].sum()
+                    col4.metric("Gesamt geladen", f"{total_charged / 1e6:.2f} TWh")
+                    
+                    csv = df[stor_cols].to_csv(index=False, sep=';', decimal=',').encode('utf-8')
+                    st.download_button(
+                        "Download Speicher CSV",
+                        data=csv,
+                        file_name=f"speicher_{sel_year}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("Keine Speicher-Daten verfügbar.")
+
+            with tab_bal_post:
+                st.caption("Final-Residuallast NACH allen Flexibilitäten")
+                df = results[sel_year]["balance_post_flex"]
+                df_pre = results[sel_year]["balance_pre_flex"]
+                
+                # Kompakte Ansicht: Original-Bilanz vs. Rest-Bilanz
+                df_compact = pd.DataFrame()
+                if 'Zeitpunkt' in df.columns:
+                    df_compact['Zeitpunkt'] = df['Zeitpunkt']
+                
+                if 'Bilanz [MWh]' in df_pre.columns:
+                    df_compact['Bilanz (vor Flex) [MWh]'] = df_pre['Bilanz [MWh]'].values
+                
+                if 'Rest Bilanz [MWh]' in df.columns:
+                    df_compact['Rest Bilanz (nach Flex) [MWh]'] = df['Rest Bilanz [MWh]']
+                    
+                    if 'Bilanz [MWh]' in df_pre.columns:
+                        df_compact['Flexibilität genutzt [MWh]'] = df_pre['Bilanz [MWh]'].values - df['Rest Bilanz [MWh]'].values
+                
+                st.dataframe(df_compact, width='stretch')
+                
+                # Flexibilitäts-Effekt
+                if 'Flexibilität genutzt [MWh]' in df_compact.columns:
+                    flex_total = df_compact['Flexibilität genutzt [MWh]'].abs().sum()
+                else:
+                    flex_total = 0
+                    
+                if 'Rest Bilanz [MWh]' in df.columns:
+                    rest_deficit_hours = (df['Rest Bilanz [MWh]'] < 0).sum() * 0.25
+                else:
+                    rest_deficit_hours = 0
+                
+                flex_coverage = (1 - rest_deficit_hours / 8760) * 100 if rest_deficit_hours < 8760 else 0
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Flexibilität genutzt", f"{flex_total / 1e6:.2f} TWh")
+                col2.metric("Verbleibende Defizit-Stunden", f"{rest_deficit_hours:.0f} h")
+                col3.metric("Flexibilitäts-Abdeckung", f"{flex_coverage:.1f}%")
+                
+                csv = df_compact.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
+                st.download_button(
+                    "Download Bilanz (nach Flex) CSV",
+                    data=csv,
+                    file_name=f"bilanz_post_flex_{sel_year}.csv",
                     mime="text/csv"
                 )
 
@@ -483,22 +556,108 @@ def standard_simulation_page() -> None:
                 else:
                     st.info("Keine Wirtschaftlichkeitsdaten verfügbar.")
 
+            # Download-Buttons mit Caching
+            st.markdown("---")
+            st.subheader("Download")
+            
+            # Hole Szenario-Namen aus session_state
+            scenario_name = st.session_state.sm.scenario_data.get("metadata", {}).get("name", "Szenario")
+            
+            # Excel für einzelnes Jahr (nur generieren wenn Button geklickt)
+            if f"excel_{sel_year}" not in st.session_state:
+                st.session_state[f"excel_{sel_year}"] = None
+            
+            if st.session_state[f"excel_{sel_year}"] is None:
+                # Generiere Excel nur einmal
+                st.session_state[f"excel_{sel_year}"] = SimulationEngine.export_results_to_excel(results, sel_year)
+            
+            st.download_button(
+                "📥 Download Jahresergebnisse (EXCEL)", 
+                data=st.session_state[f"excel_{sel_year}"],
+                file_name=f"Ergebnisse_{scenario_name}_{sel_year}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_excel_{sel_year}"
+            )
+
+            # ZIP nur bei mehreren Jahren anzeigen
+            if len(years_available) > 1:
+                if "excel_zip" not in st.session_state:
+                    st.session_state["excel_zip"] = None
+                
+                if st.session_state["excel_zip"] is None:
+                    # Generiere ZIP nur einmal
+                    st.session_state["excel_zip"] = SimulationEngine.export_results_to_zip(results)
+                
+                st.download_button(
+                    "📦 Download alle Jahre (ZIP mit EXCEL)", 
+                    data=st.session_state["excel_zip"],
+                    file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
+                    mime="application/zip",
+                    key="download_zip_all"
+                )
 
             # Visualisierungen
             st.markdown("---")
             st.subheader("Visualisierung")
+            
+            # ZENTRALER DATUMS-SELEKTOR FÜR ALLE PLOTS
+            st.markdown("#### Zeitraum-Auswahl für alle Diagramme")
+            st.caption("Wählen Sie den anzuzeigenden Zeitraum - gilt für alle folgenden Plots")
+            
+            # Verwende consumption DataFrame für Zeitbereich
+            df_time_ref = results[sel_year]["consumption"]
+            if "Zeitpunkt" not in df_time_ref.columns:
+                st.error("Zeitpunkt-Spalte fehlt im DataFrame")
+            else:
+                df_time = pd.to_datetime(df_time_ref["Zeitpunkt"])
+                min_date = df_time.min()
+                max_date = df_time.max()
+                year = min_date.year
+                default_start = pd.Timestamp(year=year, month=5, day=1)
+                default_end = pd.Timestamp(year=year, month=5, day=7)
+                
+                if default_start < min_date or default_start > max_date:
+                    default_start = min_date
+                    default_end = min_date + pd.Timedelta(days=7)
+                    if default_end > max_date:
+                        default_end = max_date
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    date_from_global = st.date_input(
+                        "Von",
+                        value=default_start.date(),
+                        min_value=min_date.date(),
+                        max_value=max_date.date(),
+                        format="DD.MM.YYYY",
+                        key=f"global_date_from_{sel_year}"
+                    )
+                with col2:
+                    date_to_global = st.date_input(
+                        "Bis",
+                        value=default_end.date(),
+                        min_value=min_date.date(),
+                        max_value=max_date.date(),
+                        format="DD.MM.YYYY",
+                        key=f"global_date_to_{sel_year}"
+                    )
+                with col3:
+                    show_full_year = st.button("📅 Ganzes Jahr anzeigen", key=f"full_year_global_{sel_year}")
+                
+                if show_full_year:
+                    date_from_ts = min_date
+                    date_to_ts = max_date
+                else:
+                    date_from_ts = pd.Timestamp(date_from_global)
+                    date_to_ts = pd.Timestamp(date_to_global, hour=23, minute=59, second=59)
 
             st.markdown("### Verbrauchssimulation")
-            st.caption("Stundliche Verbrauchswerte nach Sektor (Haushalte, Gewerbe, Landwirtschaft)")
-            date_from_con, date_to_con = create_date_range_selector(
-                results[sel_year]["consumption"],
-                key_suffix=f"cons_{sel_year}"
-            )
+            st.caption("Stundliche Verbrauchswerte nach Sektor (Haushalte, Gewerbe, Landwirtschaft, E-Mobility)")
             fig_con = ply.create_consumption_plot(
                 results[sel_year]["consumption"],
                 title="",
-                date_from=date_from_con,
-                date_to=date_to_con
+                date_from=date_from_ts,
+                date_to=date_to_ts
             )
             st.plotly_chart(fig_con)
 
@@ -510,31 +669,23 @@ def standard_simulation_page() -> None:
             prod_cols = [c for c in df_prod.columns if "[MWh]" in c and "Gesamt" not in c and "Zeitpunkt" not in c]
             
             if prod_cols and df_prod[prod_cols].sum().sum() > 0:
-                date_from_gen, date_to_gen = create_date_range_selector(
-                    df_prod,
-                    key_suffix=f"gen_{sel_year}"
-                )
                 fig_gen = ply.create_generation_plot(
                     df_prod,
                     title="",
-                    date_from=date_from_gen,
-                    date_to=date_to_gen
+                    date_from=date_from_ts,
+                    date_to=date_to_ts
                 )
                 st.plotly_chart(fig_gen)
             else:
                 st.warning("⚠️ Keine Erzeugungsdaten vorhanden. Bitte prüfen Sie, ob Ziel-Kapazitäten im Szenario definiert sind.")
 
-            st.markdown("### Bilanzberechnung")
+            st.markdown("### Bilanz vor Flexibilitäten")
             st.caption("Bilanz zwischen Erzeugung und Verbrauch (positiv = Überschuss, negativ = Defizit)")
-            date_from_bal, date_to_bal = create_date_range_selector(
-                results[sel_year]["balance"],
-                key_suffix=f"bal_{sel_year}"
-            )
             fig_bal = ply.create_balance_area_plot(
-                results[sel_year]["balance"],
+                results[sel_year]["balance_pre_flex"],
                 title=" ",
-                date_from=date_from_bal,
-                date_to=date_to_bal
+                date_from=date_from_ts,
+                date_to=date_to_ts
             )
             st.plotly_chart(fig_bal)
 
@@ -546,27 +697,31 @@ def standard_simulation_page() -> None:
             # Prüfe ob Erzeugungsdaten vorhanden sind
             combo_prod_cols = [c for c in combo_df.columns if "[MWh]" in c and "Gesamt" not in c and "Zeitpunkt" not in c and "Netzlast" not in c]
             if combo_prod_cols and combo_df[combo_prod_cols].sum().sum() > 0:
-                date_from_combo, date_to_combo = create_date_range_selector(
-                    combo_df,
-                    key_suffix=f"combo_{sel_year}"
-                )
                 fig_combo = ply.create_generation_with_load_plot(
                     df=combo_df,
                     title=" ",
-                    date_from=date_from_combo,
-                    date_to=date_to_combo
+                    date_from=date_from_ts,
+                    date_to=date_to_ts
                 )
                 st.plotly_chart(fig_combo)
             else:
                 st.info("Erzeugung vs. Verbrauch nicht verfügbar - keine Erzeugungsdaten.")
 
-            if not results[sel_year]["storage"].empty:
-                stor_plot_df = results[sel_year]["storage"].copy()
-                stor_plot_df['Bilanz [MWh]'] = results[sel_year]['balance']['Bilanz [MWh]']
-
+            # Speicher-Plots (wenn Speicher vorhanden)
+            df_post = results[sel_year]["balance_post_flex"]
+            df_pre = results[sel_year]["balance_pre_flex"]
+            stor_cols = [c for c in df_post.columns if 'speicher' in c.lower() or 'SOC' in c]
+            if stor_cols:
                 st.markdown("### Speichersimulation")
                 st.markdown("#### Geordnete Jahresdauerlinie (Residuallast)")
-                st.caption("Sortierte Bilanz über das Jahr - zeigt, wie oft und wie lange Defizite/Überschüsse auftreten")
+                st.caption("Sortierte Bilanz über das Jahr - zeigt, wie oft und wie lange Defizite/Überschüsse auftreten (nach Flexibilitäten)")
+                
+                # Kombiniere beide Bilanzen für Duration Curve
+                stor_plot_df = df_post.copy()
+                # Füge Original-Bilanz hinzu (falls nicht schon vorhanden)
+                if 'Bilanz [MWh]' not in stor_plot_df.columns and 'Bilanz [MWh]' in df_pre.columns:
+                    stor_plot_df['Bilanz [MWh]'] = df_pre['Bilanz [MWh]'].values
+                
                 fig_duration = ply.create_duration_curve_plot(
                     stor_plot_df,
                     title=" "
@@ -575,136 +730,48 @@ def standard_simulation_page() -> None:
 
                 st.markdown("#### State of Charge (SOC) der Speicher")
                 st.caption("Ladestand aller Speicher über die Zeit - Batterien, Pumpspeicher und H₂-Speicher")
-                date_from_stor, date_to_stor = create_date_range_selector(
-                    stor_plot_df,
-                    key_suffix=f"stor_{sel_year}"
-                )
                 fig_soc = ply.create_soc_stacked_plot(
                     stor_plot_df,
                     title=" ",
-                    date_from=date_from_stor,
-                    date_to=date_to_stor
+                    date_from=date_from_ts,
+                    date_to=date_to_ts
                 )
                 st.plotly_chart(fig_soc)
 
-            # E-Mobility Visualisierung
-            df_bal = results[sel_year]["balance"]
-            if 'EMobility SOC [MWh]' in df_bal.columns:
-                st.markdown("### E-Mobility (V2G) Simulation")
-                
-                # SOC-Verlauf der EV-Flotte
-                st.markdown("#### State of Charge (SOC) der EV-Flotte")
-                st.caption("Aggregierter Ladestand aller Elektrofahrzeuge über die Zeit")
-                date_from_ev, date_to_ev = create_date_range_selector(
-                    df_bal,
-                    key_suffix=f"emob_{sel_year}"
-                )
-                
-                # SOC Plot
-                import plotly.graph_objects as go
-                df_filtered = df_bal.copy()
-                # Zeitfilter über Zeitpunkt-Spalte, nicht Index
-                if "Zeitpunkt" in df_filtered.columns:
-                    df_filtered['Zeitpunkt'] = pd.to_datetime(df_filtered['Zeitpunkt'])
-                    if date_from_ev is not None:
-                        df_filtered = df_filtered[df_filtered['Zeitpunkt'] >= date_from_ev]
-                    if date_to_ev is not None:
-                        df_filtered = df_filtered[df_filtered['Zeitpunkt'] <= date_to_ev]
-                
-                fig_ev_soc = go.Figure()
-                fig_ev_soc.add_trace(go.Scatter(
-                    x=df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index,
-                    y=df_filtered['EMobility SOC [MWh]'],
-                    mode='lines',
-                    name='EV-Flotte SOC',
-                    fill='tozeroy',
-                    line=dict(color='#2ecc71', width=1),
-                    fillcolor='rgba(46, 204, 113, 0.3)'
-                ))
-                fig_ev_soc.update_layout(
-                    xaxis_title="Zeit",
-                    yaxis_title="SOC [MWh]",
-                    template="plotly_white",
-                    height=400,
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02)
-                )
-                st.plotly_chart(fig_ev_soc, width='stretch')
-                
-                # Lade-/Entladeleistung Plot
-                if 'EMobility Power [MW]' in df_bal.columns:
-                    st.markdown("#### Lade-/Entladeleistung der EV-Flotte")
-                    st.caption("Negative Werte = Laden aus Netz, Positive Werte = Rückspeisung ins Netz (V2G)")
-                    
-                    fig_ev_power = go.Figure()
-                    power_col = df_filtered['EMobility Power [MW]']
-                    
-                    # Positive Werte (Entladen/V2G) in Grün
-                    fig_ev_power.add_trace(go.Scatter(
-                        x=df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index,
-                        y=power_col.clip(lower=0),
-                        mode='lines',
-                        name='V2G Rückspeisung',
-                        fill='tozeroy',
-                        line=dict(color='#27ae60', width=0.5),
-                        fillcolor='rgba(39, 174, 96, 0.5)'
-                    ))
-                    
-                    # Negative Werte (Laden) in Rot
-                    fig_ev_power.add_trace(go.Scatter(
-                        x=df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index,
-                        y=power_col.clip(upper=0),
-                        mode='lines',
-                        name='Laden',
-                        fill='tozeroy',
-                        line=dict(color='#e74c3c', width=0.5),
-                        fillcolor='rgba(231, 76, 60, 0.5)'
-                    ))
-                    
-                    fig_ev_power.update_layout(
-                        xaxis_title="Zeit",
-                        yaxis_title="Leistung [MW]",
-                        template="plotly_white",
-                        height=400,
-                        showlegend=True,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02)
-                    )
-                    st.plotly_chart(fig_ev_power, width='stretch')
+            # Wirtschaftlichkeit über alle Jahre (Trend)
+            econ_series = [
+                results[y].get("economics")
+                for y in years_available
+                if results.get(y, {}).get("economics")
+            ]
+            if econ_series:
+                st.markdown("---")
+                st.markdown("### Wirtschaftlichkeits-Dashboard")
+                st.markdown("#### Investitions- und LCOE-Trend (Balken = Investition, Linie = LCOE)")
 
-                # Wirtschaftlichkeit über alle Jahre (Trend) unterhalb der SOC-Grafiken
-                econ_series = [
-                    results[y].get("economics")
-                    for y in years_available
-                    if results.get(y, {}).get("economics")
-                ]
-                if econ_series:
-                    st.markdown("---")
-                    st.markdown("### Wirtschaftlichkeits-Dashboard")
-                    st.markdown("#### Investitions- und LCOE-Trend (Balken = Investition, Linie = LCOE)")
-
-                    # Hauptgraph: Trend
-                    fig_econ = ply.plot_economic_trends(econ_series)
-                    st.plotly_chart(fig_econ, width='stretch')
-                    
-                    # Nebendiagramme: Kostenaufschlüsselung und Investitionsmix
-                    col_cost, col_inv = st.columns(2)
-                    
-                    with col_cost:
-                        st.markdown("#### Kostenaufschlüsselung (Mrd. €/Jahr)")
-                        fig_cost = econ_ply.plot_cost_structure(econ_series)
-                        st.plotly_chart(fig_cost, width='stretch')
-                    
-                    with col_inv:
-                        st.markdown(f"#### Investitionsmix {sel_year} (Mrd. €)")
-                        # Investitionsverteilung pro Technologie für das aktuelle Jahr
-                        econ_data = results[sel_year].get("economics", {})
-                        if "investment_by_tech" in econ_data and econ_data["investment_by_tech"]:
-                            fig_donut = econ_ply.plot_investment_donut(
-                                econ_data["investment_by_tech"],
-                                sel_year
-                            )
-                            st.plotly_chart(fig_donut, width='stretch')
-                        else:
-                            st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
+                # Hauptgraph: Trend
+                fig_econ = ply.plot_economic_trends(econ_series)
+                st.plotly_chart(fig_econ, width='stretch')
+                
+                # Nebendiagramme: Kostenaufschlüsselung und Investitionsmix
+                col_cost, col_inv = st.columns(2)
+                
+                with col_cost:
+                    st.markdown("#### Kostenaufschlüsselung (Mrd. €/Jahr)")
+                    fig_cost = econ_ply.plot_cost_structure(econ_series)
+                    st.plotly_chart(fig_cost, width='stretch')
+                
+                with col_inv:
+                    st.markdown(f"#### Investitionsmix {sel_year} (Mrd. €)")
+                    # Investitionsverteilung pro Technologie für das aktuelle Jahr
+                    econ_data = results[sel_year].get("economics", {})
+                    if "investment_by_tech" in econ_data and econ_data["investment_by_tech"]:
+                        fig_donut = econ_ply.plot_investment_donut(
+                            econ_data["investment_by_tech"],
+                            sel_year
+                        )
+                        st.plotly_chart(fig_donut, width='stretch')
+                    else:
+                        st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 
 
