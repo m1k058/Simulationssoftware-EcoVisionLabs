@@ -340,7 +340,7 @@ def scenario_generation_page() -> None:
                 adv_col1, adv_col2 = st.columns(2)
                 with adv_col1:
                     plug_share_val = st.slider(
-                        "Max. Anschlussquote",
+                        "Max. Anschlussquote ",
                         min_value=0.0,
                         max_value=1.0,
                         value=float(year_em.get("plug_share_max", 0.6)),
