@@ -330,6 +330,7 @@ def scenario_generation_page() -> None:
             
             # Erweiterte Einstellungen - Defaults initialisieren
             plug_share_val = float(year_em.get("plug_share_max", 0.6))
+            v2g_share_val = float(year_em.get("v2g_share", 0.3))
             t_depart_val = str(year_em.get("t_depart", "07:30"))
             t_arrive_val = str(year_em.get("t_arrive", "18:00"))
             thr_surplus_mw = float(year_em.get("thr_surplus", 200000.0)) / 1000.0
@@ -346,6 +347,15 @@ def scenario_generation_page() -> None:
                         step=0.05,
                         key=f"em_plug_share_{year}",
                         help="Anteil der Fahrzeuge, die nachts am Netz angeschlossen sind"
+                    )
+                    v2g_share_val = st.slider(
+                        "V2G-Teilnahmequote",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(year_em.get("v2g_share", 0.3)),
+                        step=0.05,
+                        key=f"em_v2g_share_{year}",
+                        help="Anteil der angeschlossenen Fahrzeuge, deren Besitzer bereit sind, ins Netz zurückzuspeisen (V2G). Studien zeigen ca. 20-40% Bereitschaft."
                     )
                     t_depart_val = st.text_input(
                         "Abfahrtszeit",
@@ -392,6 +402,7 @@ def scenario_generation_page() -> None:
                 "E_drive_car_year": e_drive_val,
                 "E_batt_car": e_batt_val,
                 "plug_share_max": plug_share_val,
+                "v2g_share": v2g_share_val,
                 "SOC_min_day": soc_min_day_val,
                 "SOC_min_night": soc_min_night_val,
                 "SOC_target_depart": soc_target_val,

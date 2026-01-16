@@ -277,6 +277,8 @@ def standard_simulation_page() -> None:
                         st.metric("Batteriekapazität/Fzg", f"{em_params.get('E_batt_car', 0):.0f} kWh")
                     with col_em2:
                         st.metric("Max. Anschlussquote", f"{em_params.get('plug_share_max', 0):.0%}")
+                        st.metric("V2G-Teilnahmequote", f"{em_params.get('v2g_share', 0.3):.0%}", 
+                                  help="Anteil der angeschlossenen Fahrzeuge, die ins Netz zurückspeisen")
                         st.metric("SOC min Tag/Nacht", f"{em_params.get('SOC_min_day', 0):.0%} / {em_params.get('SOC_min_night', 0):.0%}")
                         st.metric("SOC-Ziel Abfahrt", f"{em_params.get('SOC_target_depart', 0):.0%}")
                         st.metric("Abfahrt/Ankunft", f"{em_params.get('t_depart', '07:30')} / {em_params.get('t_arrive', '18:00')}")
@@ -604,11 +606,19 @@ def standard_simulation_page() -> None:
                 import plotly.graph_objects as go
                 df_filtered = df_bal.copy()
                 if date_from_ev and date_to_ev:
-                    df_filtered = df_filtered[(df_filtered.index >= date_from_ev) & (df_filtered.index <= date_to_ev)]
+                    # Filtere nach Zeitpunkt-Spalte (nicht Index!)
+                    if 'Zeitpunkt' in df_filtered.columns:
+                        df_filtered['Zeitpunkt'] = pd.to_datetime(df_filtered['Zeitpunkt'])
+                        df_filtered = df_filtered[
+                            (df_filtered['Zeitpunkt'] >= date_from_ev) & 
+                            (df_filtered['Zeitpunkt'] <= date_to_ev)
+                        ]
                 
                 fig_ev_soc = go.Figure()
+                # Verwende Zeitpunkt-Spalte für X-Achse (falls vorhanden)
+                x_values = df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index
                 fig_ev_soc.add_trace(go.Scatter(
-                    x=df_filtered.index,
+                    x=x_values,
                     y=df_filtered['EMobility SOC [MWh]'],
                     mode='lines',
                     name='EV-Flotte SOC',
@@ -636,7 +646,7 @@ def standard_simulation_page() -> None:
                     
                     # Positive Werte (Entladen/V2G) in Grün
                     fig_ev_power.add_trace(go.Scatter(
-                        x=df_filtered.index,
+                        x=x_values,
                         y=power_col.clip(lower=0),
                         mode='lines',
                         name='V2G Rückspeisung',
@@ -647,7 +657,7 @@ def standard_simulation_page() -> None:
                     
                     # Negative Werte (Laden) in Rot
                     fig_ev_power.add_trace(go.Scatter(
-                        x=df_filtered.index,
+                        x=x_values,
                         y=power_col.clip(upper=0),
                         mode='lines',
                         name='Laden',

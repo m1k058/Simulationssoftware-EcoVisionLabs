@@ -332,6 +332,7 @@ class ScenarioManager:
             - E_drive_car_year: Jahresfahrverbrauch pro E-Auto [kWh/a]
             - E_batt_car: Batteriekapazität pro Fahrzeug [kWh]
             - plug_share_max: Maximale Anschlussquote
+            - v2g_share: V2G-Teilnahmequote (Anteil der angeschlossenen Fahrzeuge, die V2G nutzen)
             - SOC_min_day: Min. SOC tagsüber
             - SOC_min_night: Min. SOC nachts
             - SOC_target_depart: Ziel-SOC bei Abfahrt
@@ -375,6 +376,7 @@ class ScenarioManager:
                                          em_data.get('annual_consumption_kwh', 2250.0) / 4.5),
             E_batt_car=em_data.get('E_batt_car', 50.0),
             plug_share_max=em_data.get('plug_share_max', 0.6),
+            v2g_share=em_data.get('v2g_share', 0.3),
             SOC_min_day=em_data.get('SOC_min_day', 0.4),
             SOC_min_night=em_data.get('SOC_min_night', 0.2),
             SOC_target_depart=em_data.get('SOC_target_depart', 0.6),

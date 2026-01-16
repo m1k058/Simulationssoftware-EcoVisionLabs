@@ -107,6 +107,7 @@ target_emobility_parameters:
     E_drive_car_year: 2250.0         # Jahresfahrverbrauch pro E-Auto [kWh/a]
     E_batt_car: 50.0                 # Batteriekapazität pro Fahrzeug [kWh]
     plug_share_max: 0.6              # Maximale Anschlussquote (abends/nachts)
+    v2g_share: 0.3                   # V2G-Teilnahmequote: 30% der angeschlossenen Fzg. speisen zurück
     SOC_min_day: 0.4                 # Min. SOC tagsüber
     SOC_min_night: 0.2               # Min. SOC nachts
     SOC_target_depart: 0.6           # Ziel-SOC bei Abfahrt morgens
@@ -120,6 +121,7 @@ target_emobility_parameters:
     E_drive_car_year: 2000.0         # Effizientere Fahrzeuge
     E_batt_car: 70.0                 # Größere Batterien
     plug_share_max: 0.7              # Bessere Ladeinfrastruktur
+    v2g_share: 0.5                   # V2G-Teilnahmequote: 50% bis 2045 (bessere Anreize, mehr Akzeptanz)
     SOC_min_day: 0.3                 # Flexiblere Nutzung
     SOC_min_night: 0.15              
     SOC_target_depart: 0.7           

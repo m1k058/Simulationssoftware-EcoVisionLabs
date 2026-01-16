@@ -42,6 +42,7 @@ class EVScenarioParams:
     E_drive_car_year: float = 2250.0       # Jahresfahrverbrauch pro Fahrzeug [kWh/a]
     E_batt_car: float = 50.0               # Batteriekapazität pro Fahrzeug [kWh]
     plug_share_max: float = 0.6            # Maximale Anschlussquote
+    v2g_share: float = 0.3                 # V2G-Teilnahmequote (Anteil der angeschlossenen Fahrzeuge, die ins Netz zurückspeisen)
     SOC_min_day: float = 0.4               # Min. SOC tagsüber
     SOC_min_night: float = 0.2             # Min. SOC nachts
     SOC_target_depart: float = 0.6         # Ziel-SOC bei Abfahrt
@@ -98,8 +99,9 @@ def generate_ev_profile(
     - plug_share: Angeschlossene Quote
     - drive_power: Fahrverbrauchsleistung [kW]
     - soc_min: Minimaler SOC
-    - preload_flag: Vorladezeit-Marker
-    - soc_target: Ziel-SOC (nur während Vorladezeit)
+    - preload_flag: Vorladezeit-Marker (letzten 2h vor Abfahrt)
+    - soc_target: Ziel-SOC bei Abfahrt
+    - time_to_depart_h: Verbleibende Zeit bis Abfahrt [Stunden]
     
     Args:
         timestamps: Pandas Series mit datetime-Objekten
@@ -115,7 +117,7 @@ def generate_ev_profile(
     t_depart_dec = _time_str_to_decimal(scenario_params.t_depart)
     t_arrive_dec = _time_str_to_decimal(scenario_params.t_arrive)
     
-    # Vorlade-Startzeit: 2 Stunden vor Abfahrt
+    # Vorlade-Startzeit: 2 Stunden vor Abfahrt (Safety-Window)
     t_preload_start_dec = t_depart_dec - (2.0 / 24.0)
     if t_preload_start_dec < 0:
         t_preload_start_dec += 1.0  # Über Mitternacht
@@ -133,6 +135,7 @@ def generate_ev_profile(
     soc_min = np.zeros(n)
     preload_flag = np.zeros(n, dtype=int)
     soc_target = np.full(n, np.nan)
+    time_to_depart = np.zeros(n)  # NEU: Zeit bis Abfahrt in Stunden
     
     for i in range(n):
         ts = timestamps.iloc[i]
@@ -144,7 +147,8 @@ def generate_ev_profile(
         
         # 1. plug_share: Fahrzeuge sind zwischen t_arrive und t_depart angeschlossen
         # Zeitraum geht über Mitternacht (18:00 - 07:30)
-        if _is_between_times_over_midnight(time_of_day, t_arrive_dec, t_depart_dec):
+        is_plugged_in = _is_between_times_over_midnight(time_of_day, t_arrive_dec, t_depart_dec)
+        if is_plugged_in:
             plug_share[i] = scenario_params.plug_share_max
         else:
             plug_share[i] = 0.1 * scenario_params.plug_share_max
@@ -167,11 +171,24 @@ def generate_ev_profile(
         else:
             soc_min[i] = scenario_params.SOC_min_night
         
-        # 4. preload_flag: Vorladezeit-Marker
+        # 4. time_to_depart: Verbleibende Zeit bis Abfahrt [Stunden]
+        # Nur relevant wenn Fahrzeug angeschlossen ist
+        if is_plugged_in:
+            # Berechne Zeit bis t_depart
+            time_diff = t_depart_dec - time_of_day
+            if time_diff < 0:
+                time_diff += 1.0  # Über Mitternacht
+            time_to_depart[i] = time_diff * 24.0  # In Stunden
+        else:
+            time_to_depart[i] = 0.0
+        
+        # 5. preload_flag: Vorladezeit-Marker (Safety-Window)
         # Vorladezeit: 2 Stunden vor t_depart bis t_depart
         if _is_between_times_over_midnight(time_of_day, t_preload_start_dec, t_depart_dec):
             preload_flag[i] = 1
-            # 5. soc_target: Nur während Vorladezeit setzen
+            
+        # 6. soc_target: Ziel-SOC - jetzt IMMER während der Nacht gesetzt
+        if is_plugged_in:
             soc_target[i] = scenario_params.SOC_target_depart
     
     # DataFrame erstellen
@@ -181,7 +198,8 @@ def generate_ev_profile(
         'drive_power_kw': drive_power,
         'soc_min_share': soc_min,
         'preload_flag': preload_flag,
-        'soc_target_share': soc_target
+        'soc_target_share': soc_target,
+        'time_to_depart_h': time_to_depart  # NEU
     })
     
     return df_profile
@@ -264,16 +282,31 @@ def simulate_emobility_fleet(
     soc_min_share = df_ev_profile['soc_min_share'].values
     preload_flag = df_ev_profile['preload_flag'].values
     soc_target_share = df_ev_profile['soc_target_share'].values
+    time_to_depart_h = df_ev_profile['time_to_depart_h'].values  # NEU
     
     # Bestimme Balance-Spalte und konvertiere zu kW
-    # WICHTIG: Residuallast kommt in MWh pro Viertelstunde
-    # Konvertierung: MWh/0.25h → kW: * 1000 / dt_h = * 4000
+    # WICHTIG: Die Bilanz verwendet die Konvention:
+    #   Bilanz = Erzeugung - Verbrauch
+    #   Positiv = Überschuss (mehr Erzeugung als Verbrauch)
+    #   Negativ = Defizit (weniger Erzeugung als Verbrauch)
+    #
+    # Für die E-Mobility-Simulation brauchen wir "Residuallast":
+    #   Residuallast = Verbrauch - Erzeugung = -Bilanz
+    #   Positiv = Defizit → V2G sollte einspeisen
+    #   Negativ = Überschuss → Fahrzeuge sollten laden
+    #
+    # Daher: Vorzeichen der Bilanz umkehren!
+    
     if 'Rest Bilanz [MWh]' in df_balance.columns:
-        residual_load_mwh = df_balance['Rest Bilanz [MWh]'].values.copy()
+        bilanz_mwh = df_balance['Rest Bilanz [MWh]'].values.copy()
     elif 'Bilanz [MWh]' in df_balance.columns:
-        residual_load_mwh = df_balance['Bilanz [MWh]'].values.copy()
+        bilanz_mwh = df_balance['Bilanz [MWh]'].values.copy()
     else:
         raise ValueError("DataFrame muss 'Rest Bilanz [MWh]' oder 'Bilanz [MWh]' enthalten")
+    
+    # Konvertiere Bilanz zu Residuallast (Vorzeichen umkehren!)
+    # Residuallast = -Bilanz
+    residual_load_mwh = -bilanz_mwh
     
     # Konvertiere MWh (Energie pro Intervall) zu kW (Leistung)
     # P [kW] = E [MWh] * 1000 / dt [h]
@@ -303,6 +336,9 @@ def simulate_emobility_fleet(
     # =====================================================================
     # HAUPTSIMULATION - Zeitschrittweise Iteration
     # =====================================================================
+    # V2G-Teilnahmequote extrahieren
+    v2g_share = scenario_params.v2g_share
+    
     for i in range(n):
         # --- Initialisierung aus vorherigem Zeitschritt ---
         if i > 0:
@@ -313,8 +349,11 @@ def simulate_emobility_fleet(
         soc = energy / capacity_kwh
         
         # --- Leistungsgrenzen [kW] ---
+        # Alle angeschlossenen Fahrzeuge können laden
         charge_limit = plug_share[i] * n_ev * P_ch_car_max
-        discharge_limit = plug_share[i] * n_ev * P_dis_car_max
+        # Nur ein Teil der angeschlossenen Fahrzeuge speist ins Netz zurück (V2G)
+        # v2g_share gibt an, welcher Anteil der Besitzer bereit ist, V2G zu nutzen
+        discharge_limit = plug_share[i] * n_ev * P_dis_car_max * v2g_share
         
         # --- Residuallast [kW] ---
         res_load = residual_load_kw[i]
@@ -338,27 +377,122 @@ def simulate_emobility_fleet(
         # Berücksichtigt Wirkungsgrad bei Entladung
         available_discharge_power = (surplus_energy * eta_dis) / dt_h
         
-        # Vorlade-Energie und -Leistung berechnen
-        preload_energy_needed = 0.0
-        preload_power_needed = 0.0
+        # =====================================================================
+        # ADAPTIVE VORLADE-LOGIK (Option 2)
+        # =====================================================================
+        # Die Logik entscheidet dynamisch, ob eine Mindest-Ladeleistung nötig ist,
+        # um den Ziel-SOC bis zur Abfahrt zu erreichen.
+        # 
+        # NORMALFALL: Netzdienliches Laden/Entladen
+        # PRIORISIERUNG: Nur wenn der Ziel-SOC gefährdet ist
+        # =====================================================================
         
-        if not np.isnan(soc_target_share[i]) and preload_flag[i] == 1:
+        min_charge_power_needed = 0.0  # Mindestens benötigte Ladeleistung [kW]
+        is_preload_priority = False    # Flag für Vorlade-Priorisierung
+        
+        if not np.isnan(soc_target_share[i]) and time_to_depart_h[i] > 0:
+            # Fahrzeug ist angeschlossen und hat einen Ziel-SOC
             target_energy = soc_target_share[i] * capacity_kwh
-            preload_energy_needed = max(0, target_energy - energy)
-            if preload_energy_needed > 0:
-                # Benötigte Ladeleistung [kW]
-                preload_power_needed = preload_energy_needed / (dt_h * eta_ch)
+            energy_deficit = max(0, target_energy - energy)
+            
+            if energy_deficit > 0:
+                # Berechne benötigte Mindest-Ladeleistung über verbleibende Zeit
+                # P_min = E_deficit / (t_remaining * eta_ch)
+                remaining_hours = time_to_depart_h[i]
+                
+                # Mindestens ein Zeitschritt verbleibt
+                remaining_hours = max(remaining_hours, dt_h)
+                
+                min_charge_power_needed = energy_deficit / (remaining_hours * eta_ch)
+                
+                # Priorisierung aktivieren, wenn:
+                # 1. Im Safety-Window (letzten 2h) UND SOC unter Ziel, ODER
+                # 2. Die benötigte Ladeleistung > 50% der verfügbaren Ladeleistung
+                #    (früher eingreifen, um Spitzen zu vermeiden!)
+                if preload_flag[i] == 1:
+                    # Im Safety-Window: IMMER priorisieren wenn unter Ziel
+                    is_preload_priority = True
+                elif min_charge_power_needed > 0.5 * charge_limit:
+                    # Außerhalb Safety-Window: Früher priorisieren um Spitzen zu vermeiden
+                    is_preload_priority = True
         
-        # --- Tatsächliche Leistung (3-Stufen-Priorisierung) ---
-        if preload_energy_needed > 0:
-            # PRIORITÄT 1: Vorladen hat Vorrang
-            actual_power = -min(charge_limit, preload_power_needed)
+        # =====================================================================
+        # TATSÄCHLICHE LEISTUNG BERECHNEN (Adaptive Logik mit Mobilitätsgarantie)
+        # =====================================================================
+        
+        # GRUNDREGEL: Die Mobilitätsgarantie (Ziel-SOC erreichen) hat IMMER Vorrang!
+        # V2G ist nur erlaubt, wenn genug "Puffer" über dem Mindest-Ladepfad liegt.
+        
+        if is_preload_priority and min_charge_power_needed > 0:
+            # PRIORITÄT 1: Vorlade-Priorisierung aktiv (Safety-Window oder kritischer SOC)
+            # Lade mit der benötigten Mindestleistung
+            actual_power = -min(charge_limit, min_charge_power_needed)
+            
+        elif min_charge_power_needed > 0:
+            # PRIORITÄT 2: SOC ist unter Ziel-Pfad - MUSS laden!
+            # Selbst wenn Netzdefizit: Mobilitätsgarantie geht vor
+            # Lade mit der berechneten Mindestleistung (gleichmäßig über Zeit verteilt)
+            actual_power = -min(charge_limit, min_charge_power_needed)
+            
         elif dispatch_target > 0:
-            # PRIORITÄT 2: Entladen bei Netzdefizit
-            actual_power = min(dispatch_target, discharge_limit, available_discharge_power)
-        else:
-            # PRIORITÄT 3: Laden oder 0
+            # PRIORITÄT 3: Entladen bei Netzdefizit (V2G)
+            # BEDINGUNG: Nur wenn SOC über Ziel (kein Ladebedarf)
+            # ABER: Strenge Begrenzung um den Ziel-SOC zu garantieren!
+            potential_discharge = min(dispatch_target, discharge_limit, available_discharge_power)
+            
+            # Prüfe: Ist V2G-Entladung überhaupt sicher möglich?
+            if not np.isnan(soc_target_share[i]) and time_to_depart_h[i] > 0:
+                target_energy = soc_target_share[i] * capacity_kwh
+                remaining_hours = max(time_to_depart_h[i], dt_h)
+                
+                # V2G nur aus dem "Überschuss-Puffer" erlauben
+                # Der Puffer ist die Energie ÜBER dem Mindest-Ladepfad.
+                #
+                # Mindest-Ladepfad: Um den Ziel-SOC gerade noch zu erreichen,
+                # muss zu jedem Zeitpunkt ein Mindest-SOC vorhanden sein.
+                # min_soc(t) = target_soc - (charge_power * remaining_time * eta)
+                
+                # Maximale Energiemenge, die noch geladen werden KÖNNTE
+                max_chargeable = charge_limit * remaining_hours * eta_ch
+                
+                # Mindest-Energie, die jetzt vorhanden sein muss, um Ziel zu erreichen
+                min_energy_required = target_energy - max_chargeable
+                
+                # Großzügige Sicherheitsmarge (70%), damit auch bei dauerhaftem
+                # Netzdefizit genug Reserve bleibt und das Laden gleichmäßiger verteilt wird
+                safety_margin = 0.70
+                min_energy_with_safety = min_energy_required + safety_margin * target_energy
+                
+                # V2G-Budget: Energie über dem Mindest-Niveau mit Sicherheitsmarge
+                v2g_budget_energy = max(0, energy - min_energy_with_safety)
+                
+                # V2G-Budget in Leistung umrechnen für diesen Zeitschritt
+                v2g_budget_power = v2g_budget_energy / dt_h * eta_dis
+                
+                # Entladung auf V2G-Budget begrenzen
+                allowed_discharge = min(potential_discharge, v2g_budget_power)
+                
+                if allowed_discharge > 0:
+                    actual_power = allowed_discharge
+                else:
+                    # Kein V2G-Budget - halte SOC (nicht entladen, nicht laden)
+                    actual_power = 0.0
+            else:
+                actual_power = potential_discharge
+                
+        elif dispatch_target < 0:
+            # PRIORITÄT 3a: Laden bei Netzüberschuss
+            # Nutze Überschuss, lade aber nicht mehr als nötig wenn schon voll genug
             actual_power = max(dispatch_target, -charge_limit)
+            
+        else:
+            # PRIORITÄT 3b: Kein Netz-Signal
+            # Wenn Mindest-Ladung nötig ist, lade mit Mindestleistung
+            # Sonst: keine Aktion
+            if min_charge_power_needed > 0:
+                actual_power = -min(charge_limit, min_charge_power_needed)
+            else:
+                actual_power = 0.0
         
         # --- Energiebilanz berechnen ---
         # Fahrverbrauch [kWh]
