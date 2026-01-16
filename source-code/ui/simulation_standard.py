@@ -740,75 +740,76 @@ def standard_simulation_page() -> None:
                 )
                 st.plotly_chart(fig_soc)
 
-            # Wirtschaftlichkeit über alle Jahre (Trend)
-            econ_series = [
-                results[y].get("economics")
-                for y in years_available
-                if results.get(y, {}).get("economics")
-            ]
-            if econ_series:
-                st.markdown("---")
-                st.markdown("### Wirtschaftlichkeits-Dashboard")
-                st.markdown("#### Investitions- und LCOE-Trend (Balken = Investition, Linie = LCOE)")
-
-                # Hauptgraph: Trend
-                fig_econ = ply.plot_economic_trends(econ_series)
-                st.plotly_chart(fig_econ, width='stretch')
+            # E-Mobilität Plots
+            st.markdown("---")
+            st.markdown("### E-Mobilität Dashboard")
+            
+            # E-Mobility Simulationsergebnisse sind im balance_post_flex DataFrame
+            # (SOC, Power, Charge, Discharge werden dort hinzugefügt)
+            df_emob_sim = results[sel_year].get("balance_post_flex")
+            
+            # E-Mobility Verbrauchsstatistik im separaten emobility DataFrame
+            df_emob_stats = results[sel_year].get("emobility")
+            
+            # Prüfe ob E-Mobility Simulationsdaten vorhanden sind
+            if df_emob_sim is not None and not df_emob_sim.empty:
+                # Prüfe ob die erwarteten Spalten vorhanden sind
+                has_soc = 'EMobility SOC [MWh]' in df_emob_sim.columns
+                has_power = 'EMobility Power [MW]' in df_emob_sim.columns
+                has_charge = 'EMobility Charge [MWh]' in df_emob_sim.columns
+                has_discharge = 'EMobility Discharge [MWh]' in df_emob_sim.columns
+                has_drive = 'EMobility Drive [MWh]' in df_emob_sim.columns
+                has_time = 'Zeitpunkt' in df_emob_sim.columns
                 
-                # SOC-Verlauf der EV-Flotte
-                st.markdown("#### State of Charge (SOC) der EV-Flotte")
-                st.caption("Aggregierter Ladestand aller Elektrofahrzeuge über die Zeit")
-                date_from_ev, date_to_ev = create_date_range_selector(
-                    df_bal,
-                    key_suffix=f"emob_{sel_year}"
-                )
-                
-                # SOC Plot
-                import plotly.graph_objects as go
-                df_filtered = df_bal.copy()
-                if date_from_ev and date_to_ev:
-                    # Filtere nach Zeitpunkt-Spalte (nicht Index!)
-                    if 'Zeitpunkt' in df_filtered.columns:
+                if has_soc and has_time:
+                    st.markdown("#### State of Charge (SOC) der EV-Flotte")
+                    st.caption("Aggregierter Ladestand aller Elektrofahrzeuge über die Zeit")
+                    
+                    # Nutze globalen Zeitraum-Filter
+                    import plotly.graph_objects as go
+                    df_filtered = df_emob_sim.copy()
+                    
+                    # Filtere nach globalem Zeitbereich
+                    if 'date_from_ts' in locals() and 'date_to_ts' in locals():
                         df_filtered['Zeitpunkt'] = pd.to_datetime(df_filtered['Zeitpunkt'])
                         df_filtered = df_filtered[
-                            (df_filtered['Zeitpunkt'] >= date_from_ev) & 
-                            (df_filtered['Zeitpunkt'] <= date_to_ev)
+                            (df_filtered['Zeitpunkt'] >= date_from_ts) & 
+                            (df_filtered['Zeitpunkt'] <= date_to_ts)
                         ]
+                    
+                    # SOC Plot
+                    fig_ev_soc = go.Figure()
+                    fig_ev_soc.add_trace(go.Scatter(
+                        x=df_filtered['Zeitpunkt'],
+                        y=df_filtered['EMobility SOC [MWh]'],
+                        mode='lines',
+                        name='EV-Flotte SOC',
+                        fill='tozeroy',
+                        line=dict(color='#2ecc71', width=1),
+                        fillcolor='rgba(46, 204, 113, 0.3)'
+                    ))
+                    fig_ev_soc.update_layout(
+                        xaxis_title="Zeit",
+                        yaxis_title="SOC [MWh]",
+                        template="plotly_white",
+                        height=400,
+                        showlegend=True,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                    )
+                    st.plotly_chart(fig_ev_soc, use_container_width=True, key=f"ev_soc_{sel_year}")
                 
-                fig_ev_soc = go.Figure()
-                # Verwende Zeitpunkt-Spalte für X-Achse (falls vorhanden)
-                x_values = df_filtered['Zeitpunkt'] if 'Zeitpunkt' in df_filtered.columns else df_filtered.index
-                fig_ev_soc.add_trace(go.Scatter(
-                    x=x_values,
-                    y=df_filtered['EMobility SOC [MWh]'],
-                    mode='lines',
-                    name='EV-Flotte SOC',
-                    fill='tozeroy',
-                    line=dict(color='#2ecc71', width=1),
-                    fillcolor='rgba(46, 204, 113, 0.3)'
-                ))
-                fig_ev_soc.update_layout(
-                    xaxis_title="Zeit",
-                    yaxis_title="SOC [MWh]",
-                    template="plotly_white",
-                    height=400,
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02)
-                )
-                st.plotly_chart(fig_ev_soc, use_container_width=True)
-                
-                # Lade-/Entladeleistung Plot
-                if 'EMobility Power [MW]' in df_bal.columns:
+                if has_power and has_time:
                     st.markdown("#### Lade-/Entladeleistung der EV-Flotte")
                     st.caption("Negative Werte = Laden aus Netz, Positive Werte = Rückspeisung ins Netz (V2G)")
                     
+                    # Power Plot
                     fig_ev_power = go.Figure()
-                    power_col = df_filtered['EMobility Power [MW]']
+                    power_data = df_filtered['EMobility Power [MW]']
                     
                     # Positive Werte (Entladen/V2G) in Grün
                     fig_ev_power.add_trace(go.Scatter(
-                        x=x_values,
-                        y=power_col.clip(lower=0),
+                        x=df_filtered['Zeitpunkt'],
+                        y=power_data.clip(lower=0),
                         mode='lines',
                         name='V2G Rückspeisung',
                         fill='tozeroy',
@@ -818,8 +819,8 @@ def standard_simulation_page() -> None:
                     
                     # Negative Werte (Laden) in Rot
                     fig_ev_power.add_trace(go.Scatter(
-                        x=x_values,
-                        y=power_col.clip(upper=0),
+                        x=df_filtered['Zeitpunkt'],
+                        y=power_data.clip(upper=0),
                         mode='lines',
                         name='Laden',
                         fill='tozeroy',
@@ -835,50 +836,52 @@ def standard_simulation_page() -> None:
                         showlegend=True,
                         legend=dict(orientation="h", yanchor="bottom", y=1.02)
                     )
-                    st.plotly_chart(fig_ev_power, use_container_width=True)
+                    st.plotly_chart(fig_ev_power, use_container_width=True, key=f"ev_power_{sel_year}")
+                
+                # Optional: Zeige zusätzliche Metriken wenn verfügbar
+                if has_charge or has_discharge or has_drive:
+                    st.markdown("#### E-Mobility Energiebilanz")
+                    col1, col2, col3 = st.columns(3)
+                    if has_charge:
+                        total_charge = df_emob_sim['EMobility Charge [MWh]'].sum()
+                        col1.metric("Gesamt Geladen", f"{total_charge:,.0f} MWh")
+                    if has_discharge:
+                        total_discharge = df_emob_sim['EMobility Discharge [MWh]'].sum()
+                        col2.metric("Gesamt Entladen (V2G)", f"{total_discharge:,.0f} MWh")
+                    if has_drive:
+                        total_drive = df_emob_sim['EMobility Drive [MWh]'].sum()
+                        col3.metric("Fahrverbrauch", f"{total_drive:,.0f} MWh")
+                
+                # Wenn wichtige Spalten fehlen, zeige Warnung
+                if not has_time:
+                    st.warning("⚠️ Zeitpunkt-Spalte fehlt im balance_post_flex DataFrame.")
+                elif not (has_soc or has_power):
+                    st.warning("⚠️ E-Mobility Simulationsergebnisse (SOC/Power) nicht im balance_post_flex DataFrame gefunden. Möglicherweise ist E-Mobility nicht konfiguriert.")
+            else:
+                st.info("ℹ️ Keine E-Mobility-Daten in diesem Szenario vorhanden.")
 
-                # Wirtschaftlichkeit über alle Jahre (Trend) unterhalb der SOC-Grafiken
-                econ_series = [
-                    results[y].get("economics")
-                    for y in years_available
-                    if results.get(y, {}).get("economics")
-                ]
-                if econ_series:
-                    st.markdown("---")
-                    st.markdown("### Wirtschaftlichkeits-Dashboard")
-                    st.markdown("#### Investitions- und LCOE-Trend (Balken = Investition, Linie = LCOE)")
+            # Wirtschaftlichkeit über alle Jahre (Trend)
+            econ_series = [
+                results[y].get("economics")
+                for y in years_available
+                if results.get(y, {}).get("economics")
+            ]
+            if econ_series:
+                st.markdown("---")
+                st.markdown("### Wirtschaftlichkeits-Dashboard")
+                st.markdown("#### Investitions- und LCOE-Trend (Balken = Investition, Linie = LCOE)")
 
-                    # Hauptgraph: Trend
-                    fig_econ = ply.plot_economic_trends(econ_series)
-                    st.plotly_chart(fig_econ, width='stretch')
-                    
-                    # Nebendiagramme: Kostenaufschlüsselung und Investitionsmix
-                    col_cost, col_inv = st.columns(2)
-                    
-                    with col_cost:
-                        st.markdown("#### Kostenaufschlüsselung (Mrd. €/Jahr)")
-                        fig_cost = econ_ply.plot_cost_structure(econ_series)
-                        st.plotly_chart(fig_cost, width='stretch')
-                    
-                    with col_inv:
-                        st.markdown(f"#### Investitionsmix {sel_year} (Mrd. €)")
-                        # Investitionsverteilung pro Technologie für das aktuelle Jahr
-                        econ_data = results[sel_year].get("economics", {})
-                        if "investment_by_tech" in econ_data and econ_data["investment_by_tech"]:
-                            fig_donut = econ_ply.plot_investment_donut(
-                                econ_data["investment_by_tech"],
-                                sel_year
-                            )
-                            st.plotly_chart(fig_donut, width='stretch')
-                        else:
-                            st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
+                # Hauptgraph: Trend
+                fig_econ = ply.plot_economic_trends(econ_series)
+                st.plotly_chart(fig_econ, width='stretch', key=f"econ_trends_{sel_year}")
+
                 # Nebendiagramme: Kostenaufschlüsselung und Investitionsmix
                 col_cost, col_inv = st.columns(2)
                 
                 with col_cost:
                     st.markdown("#### Kostenaufschlüsselung (Mrd. €/Jahr)")
                     fig_cost = econ_ply.plot_cost_structure(econ_series)
-                    st.plotly_chart(fig_cost, width='stretch')
+                    st.plotly_chart(fig_cost, width='stretch', key=f"cost_structure_{sel_year}")
                 
                 with col_inv:
                     st.markdown(f"#### Investitionsmix {sel_year} (Mrd. €)")
@@ -889,7 +892,7 @@ def standard_simulation_page() -> None:
                             econ_data["investment_by_tech"],
                             sel_year
                         )
-                        st.plotly_chart(fig_donut, width='stretch')
+                        st.plotly_chart(fig_donut, width='stretch', key=f"invest_donut_{sel_year}")
                     else:
                         st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 
