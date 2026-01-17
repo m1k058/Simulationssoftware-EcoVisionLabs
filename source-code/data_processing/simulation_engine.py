@@ -178,7 +178,15 @@ class SimulationEngine:
             total_years: Gesamtzahl der Jahre
         
         Returns:
-            Dictionary mit allen Simulationsergebnissen für dieses Jahr
+            Dictionary mit allen Simulationsergebnissen für dieses Jahr:
+            - consumption: BDEW + Wärmepumpen + E-Mobility Verbrauch
+            - production: Erzeugung
+            - emobility: E-Mobility Details (Verbrauch + V2G/SOC/Charge/Discharge)
+            - storage: Speicher Details (SOC, Geladene, Entladene für alle Speicher)
+            - balance_pre_flex: Bilanz VOR Flexibilitäten (nur Bilanz-Spalten)
+            - balance_after_emob: Bilanz NACH E-Mobility V2G, VOR Speichern
+            - balance_post_flex: Bilanz NACH allen Flexibilitäten (nur Bilanz-Spalten)
+            - economics: Wirtschaftlichkeit
         """
         # 1) Verbrauchssimulation (BDEW + Wärmepumpen)
         df_cons = self._simulate_consumption(year, year_num, total_years)
@@ -187,23 +195,30 @@ class SimulationEngine:
         df_prod = self._simulate_production(year, year_num, total_years)
         
         # 3) E-MOBILITY-VERBRAUCH (gehört zur Last!)
-        df_cons, df_emobility = self._simulate_emobility_consumption(df_cons, year, year_num, total_years)
+        df_cons, df_emobility_consumption = self._simulate_emobility_consumption(df_cons, year, year_num, total_years)
         
         # 4) BILANZ VOR FLEXIBILITÄTEN (Erzeugung - Gesamt-Verbrauch inkl. E-Mobility)
         df_balance_pre = self._calculate_balance(df_prod, df_cons, year, year_num, total_years)
 
-        # 5) SPEICHER (modifiziert Residuallast) - Flexibilitäten
-        df_balance_post = self._simulate_storage(df_balance_pre.copy(), year, year_num, total_years)
+        # 5) E-MOBILITY V2G FLEXIBILITÄT (bidirektionales Laden)
+        df_emobility_full, df_balance_after_emob = self._simulate_emobility_flexibility(
+            df_balance_pre.copy(), df_emobility_consumption, year, year_num, total_years
+        )
+
+        # 6) SPEICHER-FLEXIBILITÄT (Batterie -> Pumpspeicher -> H2)
+        df_storage, df_balance_post = self._simulate_storage(df_balance_after_emob.copy(), year, year_num, total_years)
         
-        # 6) Wirtschaftlichkeitsanalyse
+        # 7) Wirtschaftlichkeitsanalyse
         econ_result = self._calculate_economics(df_prod, df_cons, df_balance_pre, df_balance_post, year, year_num, total_years)
         
         return {
-            "consumption": df_cons,           # inkl. E-Mobility!
-            "production": df_prod,
-            "emobility": df_emobility,        # NEU: E-Mobility Ergebnisse
-            "balance_pre_flex": df_balance_pre,   # NEU: vor Flexibilitäten
-            "balance_post_flex": df_balance_post, # NEU: nach Flexibilitäten
+            "consumption": df_cons,                    # BDEW + Wärmepumpen + E-Mobility Verbrauch
+            "production": df_prod,                     # Erzeugung
+            "emobility": df_emobility_full,            # E-Mobility mit ALLEN Daten (Verbrauch + V2G)
+            "storage": df_storage,                     # Separate Speicher-Daten
+            "balance_pre_flex": df_balance_pre,        # Bilanz vor Flexibilitäten (ursprünglich)
+            "balance_after_emob": df_balance_after_emob,  # Bilanz nach E-Mobility V2G, VOR Speichern
+            "balance_post_flex": df_balance_post,      # Finale Bilanz nach allen Flexibilitäten
             "economics": econ_result,
         }
     
@@ -396,6 +411,119 @@ class SimulationEngine:
             # Bei Fehler: Original-DataFrame zurückgeben (graceful degradation)
             return df_cons, None
 
+    def _simulate_emobility_flexibility(
+        self,
+        df_balance: pd.DataFrame,
+        df_emobility_consumption: Optional[pd.DataFrame],
+        year: int,
+        year_num: int,
+        total_years: int
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Wendet E-Mobility V2G-Flexibilität auf die Bilanz an.
+        
+        Args:
+            df_balance: Bilanz vor E-Mobility Flexibilität
+            df_emobility_consumption: E-Mobility Verbrauchsdaten aus _simulate_emobility_consumption
+            year: Simulationsjahr
+            year_num: Fortschrittszähler
+            total_years: Gesamtzahl der Jahre
+            
+        Returns:
+            Tuple: (df_emobility_full mit allen Spalten, df_balance mit aktualisierter Rest Bilanz)
+        """
+        self.logger.start_step(f"[{year_num}/{total_years}] E-Mobilitäts-Flexibilität (V2G) {year}")
+        
+        try:
+            # Hole E-Mobility Parameter aus Szenario
+            em_data = self.sm.get_emobility_parameters(year)
+            
+            if not em_data or df_emobility_consumption is None:
+                self.logger.warning(f"Keine E-Mobility-Flexibilität für {year} - überspringe V2G")
+                # Erstelle leeres E-Mobility DF mit Verbrauchsdaten falls vorhanden
+                if df_emobility_consumption is not None:
+                    df_emob_full = df_emobility_consumption.copy()
+                else:
+                    df_emob_full = pd.DataFrame()
+                return df_emob_full, df_balance
+            
+            # Szenario-Parameter aus YAML
+            scenario_params = EVScenarioParams(
+                s_EV=em_data.get('s_EV', 0.9),
+                N_cars=int(em_data.get('N_cars', em_data.get('installed_units', 5_000_000))),
+                E_drive_car_year=em_data.get('E_drive_car_year', 2250.0),
+                E_batt_car=em_data.get('E_batt_car', 50.0),
+                plug_share_max=em_data.get('plug_share_max', 0.6),
+                v2g_share=em_data.get('v2g_share', 0.3),
+                SOC_min_day=em_data.get('SOC_min_day', 0.4),
+                SOC_min_night=em_data.get('SOC_min_night', 0.2),
+                SOC_target_depart=em_data.get('SOC_target_depart', 0.6),
+                t_depart=str(em_data.get('t_depart', "07:30")),
+                t_arrive=str(em_data.get('t_arrive', "18:00")),
+                thr_surplus=float(em_data.get('thr_surplus', 200_000.0)),
+                thr_deficit=float(em_data.get('thr_deficit', 200_000.0))
+            )
+            
+            # Config-Parameter aus config.json laden
+            ev_config_data = self.cfg.config.get("EV_PARAMETERS", {})
+            config_params = EVConfigParams(
+                SOC0=ev_config_data.get("SOC0", 0.6),
+                eta_ch=ev_config_data.get("eta_ch", 0.95),
+                eta_dis=ev_config_data.get("eta_dis", 0.95),
+                P_ch_car_max=ev_config_data.get("P_ch_car_max", 11.0),
+                P_dis_car_max=ev_config_data.get("P_dis_car_max", 11.0),
+                dt_h=ev_config_data.get("dt_h", 0.25)
+            )
+            
+            # Rufe simulate_emobility_fleet auf (macht V2G)
+            df_result = simulate_emobility_fleet(
+                df_balance=df_balance,
+                scenario_params=scenario_params,
+                config_params=config_params
+            )
+            
+            # Extrahiere E-Mobility Spalten
+            emob_cols = ['Zeitpunkt', 'EMobility SOC [MWh]', 'EMobility Charge [MWh]', 
+                        'EMobility Discharge [MWh]', 'EMobility Drive [MWh]', 'EMobility Power [MW]']
+            
+            # Kombiniere mit Verbrauchsdaten
+            df_emobility_full = df_result[emob_cols].copy()
+            if df_emobility_consumption is not None:
+                # Füge Verbrauchsstatistiken hinzu
+                for col in df_emobility_consumption.columns:
+                    if col not in df_emobility_full.columns:
+                        df_emobility_full[col] = df_emobility_consumption[col]
+            
+            # Erstelle sauberes Balance DataFrame (nur Bilanz-Spalten)
+            df_balance_clean = pd.DataFrame({
+                'Zeitpunkt': df_result['Zeitpunkt'],
+                'Produktion [MWh]': df_balance['Produktion [MWh]'].values if 'Produktion [MWh]' in df_balance.columns else df_result.get('Produktion [MWh]', 0),
+                'Verbrauch [MWh]': df_balance['Verbrauch [MWh]'].values if 'Verbrauch [MWh]' in df_balance.columns else df_result.get('Verbrauch [MWh]', 0),
+                'Bilanz [MWh]': df_balance['Bilanz [MWh]'].values if 'Bilanz [MWh]' in df_balance.columns else df_result.get('Bilanz [MWh]', 0),
+                'Rest Bilanz [MWh]': df_result['Rest Bilanz [MWh]']
+            })
+            
+            n_ev = scenario_params.s_EV * scenario_params.N_cars
+            v2g_energy = df_emobility_full['EMobility Discharge [MWh]'].sum()
+            charge_energy = df_emobility_full['EMobility Charge [MWh]'].sum()
+            
+            self.logger.finish_step(
+                True,
+                f"{n_ev/1e6:.1f} Mio EVs, V2G: {v2g_energy/1e6:.2f} TWh entladen, {charge_energy/1e6:.2f} TWh geladen"
+            )
+            
+            return df_emobility_full, df_balance_clean
+            
+        except Exception as e:
+            self.logger.finish_step(False, str(e))
+            self.logger.warning(f"E-Mobilitäts-Flexibilität übersprungen: {e}")
+            # Bei Fehler: Verbrauchsdaten + Original-Balance zurückgeben
+            if df_emobility_consumption is not None:
+                df_emob_full = df_emobility_consumption.copy()
+            else:
+                df_emob_full = pd.DataFrame()
+            return df_emob_full, df_balance
+
     def _calculate_balance(
         self, 
         df_prod: pd.DataFrame, 
@@ -422,8 +550,13 @@ class SimulationEngine:
         year: int,
         year_num: int, 
         total_years: int
-    ) -> pd.DataFrame:
-        """Führt die Speichersimulation aus (Batterie -> Pumpspeicher -> H2)."""
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Führt die Speichersimulation aus (Batterie -> Pumpspeicher -> H2).
+        
+        Returns:
+            Tuple: (df_storage mit Speicher-Spalten, df_balance mit nur Bilanz-Spalten)
+        """
         self.logger.start_step(f"[{year_num}/{total_years}] Speichersimulation {year}")
         
         try:
@@ -457,8 +590,15 @@ class SimulationEngine:
                 stor_h2.get("initial_soc", 0.0),
             )
             
+            # Trenne Speicher-Spalten von Bilanz-Spalten
+            storage_cols = ['Zeitpunkt'] + [c for c in res_h2.columns if 'speicher' in c.lower() or 'SOC' in c or 'Geladene' in c or 'Entladene' in c]
+            balance_cols = ['Zeitpunkt', 'Produktion [MWh]', 'Verbrauch [MWh]', 'Bilanz [MWh]', 'Rest Bilanz [MWh]']
+            
+            df_storage = res_h2[storage_cols].copy()
+            df_balance = res_h2[[c for c in balance_cols if c in res_h2.columns]].copy()
+            
             self.logger.finish_step(True)
-            return res_h2
+            return df_storage, df_balance
             
         except Exception as e:
             self.logger.finish_step(False, str(e))
@@ -487,7 +627,8 @@ class SimulationEngine:
                     "storage": df_storage
                 },
                 target_year=year,
-                baseline_capacities=None  # Wird automatisch geschätzt
+                baseline_capacities=None,  # Wird automatisch aus SMARD-Daten geladen
+                data_manager=self.dm       # DataManager für echte Baseline-Kapazitäten
             )
             
             lcoe = econ_result.get('system_lco_e', 0)
@@ -575,17 +716,15 @@ class SimulationEngine:
             # Erzeugung
             year_data['production'].to_excel(writer, sheet_name='Erzeugung', index=True)
             # E-Mobility (wenn vorhanden)
-            if year_data.get('emobility') is not None:
+            if year_data.get('emobility') is not None and not year_data['emobility'].empty:
                 year_data['emobility'].to_excel(writer, sheet_name='E-Mobility', index=True)
+            # Speicher (wenn vorhanden)
+            if year_data.get('storage') is not None and not year_data['storage'].empty:
+                year_data['storage'].to_excel(writer, sheet_name='Speicher', index=True)
             # Bilanz VOR Flexibilitäten
             year_data['balance_pre_flex'].to_excel(writer, sheet_name='Bilanz_vor_Flex', index=True)
-            # Bilanz NACH Flexibilitäten (komplett)
+            # Bilanz NACH Flexibilitäten
             year_data['balance_post_flex'].to_excel(writer, sheet_name='Bilanz_nach_Flex', index=True)
-            # Nur Batterie-Speicher Spalten
-            df_post = year_data['balance_post_flex']
-            battery_cols = ['Zeitpunkt'] + [c for c in df_post.columns if 'Batteriespeicher' in c or 'batteriespeicher' in c.lower()]
-            if len(battery_cols) > 1 and all(c in df_post.columns for c in battery_cols):
-                df_post[battery_cols].to_excel(writer, sheet_name='Batteriespeicher', index=True)
             # Wirtschaftlichkeit
             econ_df = pd.DataFrame.from_dict(year_data['economics'], orient='index', columns=['Wert'])
             econ_df.to_excel(writer, sheet_name='Wirtschaftlichkeit', index=True)

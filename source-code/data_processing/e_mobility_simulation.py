@@ -8,6 +8,25 @@ Dieses Modul implementiert eine V2G-fähige E-Auto-Flotten-Simulation mit:
 - Separaten Wirkungsgraden für Laden/Entladen
 - Vorlade-Priorität vor Netz-Dispatch
 
+=== KRITISCHE VORZEICHEN-KONVENTION ===
+
+Bilanz-Input (aus balance_calculator.py):
+    Bilanz [MWh] = Produktion - Verbrauch
+    Positiv (+) = Überschuss (mehr Erzeugung als Verbrauch)
+    Negativ (-) = Defizit (mehr Verbrauch als Erzeugung)
+
+Interne Konvertierung in diesem Modul:
+    residual_load = -bilanz  # VORZEICHENINVERSION!
+    
+    residual_load > 0 = Defizit → Netz braucht Energie → V2G Entladung
+    residual_load < 0 = Überschuss → Netz hat Überschuss → Laden möglich
+
+Dispatch-Output:
+    Dispatch > 0 = Entladung (V2G, Energie fließt INS Netz)
+    Dispatch < 0 = Laden (Energie fließt AUS dem Netz)
+
+=======================================
+
 Autor: SW-Team EcoVisionLabs
 """
 

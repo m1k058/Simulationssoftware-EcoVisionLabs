@@ -7,12 +7,27 @@ Dieses Modul kapselt die Logik für die Simulation von Energiespeichern:
 - Wasserstoffspeicher (H2 mit Elektrolyse/Rückverstromung)
 
 Alle Speicher nutzen ein generisches Bucket-Modell mit konfigurierbaren Parametern.
+
+=== SPALTENNAMEN-KONVENTION ===
+Dieses Modul verwendet die zentralen COLUMN_NAMES aus constants.py.
+Alle Speicher-Spalten folgen dem Muster: "{Speichertyp} {Metrik} MWh"
+    - Batteriespeicher SOC MWh, Batteriespeicher Geladene MWh, ...
+    - Pumpspeicher SOC MWh, Pumpspeicher Geladene MWh, ...
+    - Wasserstoffspeicher SOC MWh, Wasserstoffspeicher Geladene MWh, ...
+Hinweis: NICHT "H2-Speicher" sondern "Wasserstoffspeicher" für Konsistenz!
+===============================
 """
 
 import pandas as pd
 import numpy as np
 from typing import Optional
 from data_processing.simulation_logger import SimulationLogger
+
+# Import zentrale Spaltennamen (für Referenz, direkte Nutzung im generischen Modell nicht praktikabel)
+try:
+    from constants import COLUMN_NAMES
+except ImportError:
+    COLUMN_NAMES = {}  # Fallback falls constants nicht verfügbar
 
 
 class StorageSimulation:

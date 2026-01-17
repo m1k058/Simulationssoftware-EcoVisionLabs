@@ -3,12 +3,54 @@ Bilanz-Berechnungsmodul für Energiesysteme.
 
 Dieses Modul berechnet die Bilanz zwischen Energieerzeugung und -verbrauch
 und analysiert Überschüsse, Defizite und Netzmetriken.
+
+=== VORZEICHEN-KONVENTION ===
+
+Die Bilanz wird berechnet als:
+    Bilanz [MWh] = Produktion - Verbrauch
+
+Interpretation:
+    Bilanz > 0 (positiv) = ÜBERSCHUSS
+        → Mehr Erzeugung als Verbrauch
+        → Energie kann in Speicher geladen werden
+        → Bei E-Mobility: Ladevorgänge möglich
+    
+    Bilanz < 0 (negativ) = DEFIZIT
+        → Mehr Verbrauch als Erzeugung  
+        → Energie muss aus Speicher entladen werden
+        → Bei E-Mobility: V2G-Rückspeisung möglich
+
+ACHTUNG für nachgelagerte Module:
+    Das E-Mobility-Modul (e_mobility_simulation.py) invertiert das Vorzeichen
+    intern zu "Residuallast" = -Bilanz, damit positive Werte Netzbedarf bedeuten.
+    
+    Speichermodule (storage_simulation.py) erwarten die originale Bilanz-Konvention.
+
+=================================
 """
 
 import pandas as pd
 import numpy as np
 from typing import Optional
 from data_processing.simulation_logger import SimulationLogger
+
+# Import zentrale Spaltennamen für konsistente Namensgebung
+try:
+    from constants import COLUMN_NAMES
+    COL_ZEITPUNKT = COLUMN_NAMES.get("ZEITPUNKT", "Zeitpunkt")
+    COL_BILANZ = COLUMN_NAMES.get("BILANZ", "Bilanz [MWh]")
+    COL_REST_BILANZ = COLUMN_NAMES.get("REST_BILANZ", "Rest Bilanz [MWh]")
+    COL_PRODUKTION = COLUMN_NAMES.get("PRODUKTION", "Produktion [MWh]")
+    COL_VERBRAUCH = COLUMN_NAMES.get("VERBRAUCH", "Verbrauch [MWh]")
+    COL_GESAMT_VERBRAUCH = COLUMN_NAMES.get("GESAMT_VERBRAUCH", "Gesamt [MWh]")
+except ImportError:
+    # Fallback für Standalone-Nutzung
+    COL_ZEITPUNKT = "Zeitpunkt"
+    COL_BILANZ = "Bilanz [MWh]"
+    COL_REST_BILANZ = "Rest Bilanz [MWh]"
+    COL_PRODUKTION = "Produktion [MWh]"
+    COL_VERBRAUCH = "Verbrauch [MWh]"
+    COL_GESAMT_VERBRAUCH = "Gesamt [MWh]"
 
 
 class BalanceCalculator:

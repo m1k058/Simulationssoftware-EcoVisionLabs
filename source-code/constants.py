@@ -310,3 +310,66 @@ ECONOMICS_CONSTANTS = {
     "source_specific": TECHNOLOGY_COSTS,
     "commodities": COMMODITIES
 }
+
+# ============================================================================
+# ZENTRALE SPALTENNAMEN FÜR KONSISTENTE DATENVERARBEITUNG
+# ============================================================================
+# Diese Konstanten stellen sicher, dass alle Module dieselben Spaltennamen
+# verwenden und verhindern Inkonsistenzen zwischen Simulation und UI.
+
+COLUMN_NAMES = {
+    # --- BILANZ ---
+    "ZEITPUNKT": "Zeitpunkt",
+    "BILANZ": "Bilanz [MWh]",
+    "REST_BILANZ": "Rest Bilanz [MWh]",
+    "PRODUKTION": "Produktion [MWh]",
+    "VERBRAUCH": "Verbrauch [MWh]",
+    
+    # --- VERBRAUCH ---
+    "GESAMT_VERBRAUCH": "Gesamt [MWh]",
+    "HAUSHALTE": "Haushalte [MWh]",
+    "GEWERBE": "Gewerbe [MWh]",
+    "LANDWIRTSCHAFT": "Landwirtschaft [MWh]",
+    "WAERMEPUMPEN": "Wärmepumpen [MWh]",
+    "EMOBILITY": "E-Mobility [MWh]",
+    
+    # --- SPEICHER (konsistentes Trennzeichen: Leerzeichen) ---
+    "BATTERIE_SOC": "Batteriespeicher SOC MWh",
+    "BATTERIE_GELADEN": "Batteriespeicher Geladene MWh",
+    "BATTERIE_ENTLADEN": "Batteriespeicher Entladene MWh",
+    
+    "PUMP_SOC": "Pumpspeicher SOC MWh",
+    "PUMP_GELADEN": "Pumpspeicher Geladene MWh",
+    "PUMP_ENTLADEN": "Pumpspeicher Entladene MWh",
+    
+    # HINWEIS: Konsistent "Wasserstoffspeicher" (nicht "H2-Speicher")
+    "H2_SOC": "Wasserstoffspeicher SOC MWh",
+    "H2_GELADEN": "Wasserstoffspeicher Geladene MWh",
+    "H2_ENTLADEN": "Wasserstoffspeicher Entladene MWh",
+    
+    # --- E-MOBILITY ---
+    "EV_SOC": "Fleet SOC [MWh]",
+    "EV_DISPATCH": "Dispatch [MW]",
+    "EV_FAHRVERBRAUCH": "Fahrverbrauch [MWh]",
+    "EV_LADEVERLUSTE": "Ladeverluste [MWh]",
+    "EV_GESAMT": "Gesamt Verbrauch [MWh]",
+}
+
+# ============================================================================
+# VORZEICHEN-KONVENTION DOKUMENTATION
+# ============================================================================
+# Diese Dokumentation beschreibt die Vorzeichen-Konventionen im Energiefluss:
+#
+# BILANZ (Produktion - Verbrauch):
+#   Positiv (+) = Überschuss (Erzeugung > Verbrauch) → Speicher laden möglich
+#   Negativ (-) = Defizit (Verbrauch > Erzeugung) → Speicher entladen nötig
+#
+# E-MOBILITY DISPATCH (nach Inversion: Residuallast = -Bilanz):
+#   Residuallast > 0 = Defizit → V2G Entladung (Dispatch positiv)
+#   Residuallast < 0 = Überschuss → Laden (Dispatch negativ)
+#
+# SPEICHER-OPERATIONEN:
+#   Geladene MWh: Immer positiv (Energie fließt IN den Speicher)
+#   Entladene MWh: Immer positiv (Energie fließt AUS dem Speicher)
+#   Rest Bilanz = Bilanz - Geladen + Entladen
+# ============================================================================
