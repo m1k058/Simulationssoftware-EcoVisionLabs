@@ -60,6 +60,9 @@ class HeatPumpSimulation:
         df_local = df_local[['Zeitpunkt', location]].copy()
         df_local.columns = ['Zeitpunkt', 'Temperatur [°C]']
         
+        # Entferne Zeilen mit NaT oder NaN (wichtig!)
+        df_local = df_local.dropna(subset=['Zeitpunkt', 'Temperatur [°C]'])
+        
         # Sortiere nach Zeitpunkt
         df_local = df_local.sort_values('Zeitpunkt').reset_index(drop=True)
         

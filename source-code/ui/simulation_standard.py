@@ -300,6 +300,24 @@ def standard_simulation_page() -> None:
         # ==============================================================
         st.subheader("Simulation ausführen")
 
+        # Modus-Auswahl für Wärmepumpen-Berechnung
+        st.markdown("#### Berechnungsmodus")
+        calculation_mode_display = st.radio(
+            "Wählen Sie den Berechnungsmodus für Wärmepumpen:",
+            ["Normal", "CPU-Beschleunigt (Numba)"],
+            index=1,  # CPU-Beschleunigt als Standard
+            help="**Normal**: ~20 Minuten | **CPU-Beschleunigt**: ~10-30 Sekunden (50-200x schneller)",
+            horizontal=True
+        )
+        
+        # Mapping von UI-Namen zu internen Modus-Namen
+        mode_mapping = {
+            "Normal": "normal",
+            "CPU-Beschleunigt (Numba)": "cpu_optimized"
+        }
+        calculation_mode = mode_mapping[calculation_mode_display]
+        
+
         if "fullSimResults" not in st.session_state:
             st.session_state.fullSimResults = {}
 
@@ -309,10 +327,11 @@ def standard_simulation_page() -> None:
                     st.session_state.cfg,
                     st.session_state.dm,
                     st.session_state.sm,
-                    verbose=True  # Debug-Modus aktiviert
+                    verbose=True,  # Debug-Modus aktiviert
+                    calculation_mode=calculation_mode
                 )
                 st.session_state.fullSimResults = engine.run_scenario()
-                st.success("Simulation abgeschlossen.")
+                st.success("✅ Simulation abgeschlossen!")
             except Exception as e:
                 st.error(f"❌ Fehler in der Simulation: {e}")
 

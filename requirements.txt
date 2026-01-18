@@ -6,3 +6,9 @@ streamlit==1.51.0
 pyyaml
 holidays
 openpyxl
+
+# Performance-Optimierung
+numba>=0.58.0
+
+# Testing
+pytest>=8.0.0

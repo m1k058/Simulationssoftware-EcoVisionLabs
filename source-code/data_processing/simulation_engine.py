@@ -67,7 +67,8 @@ class SimulationEngine:
         cfg: ConfigManager,
         data_manager,
         scenario_manager,
-        verbose: bool = False
+        verbose: bool = False,
+        calculation_mode: str = "cpu_optimized"
     ):
         """
         Initialisiert die Simulation Engine mit benötigten Managern.
@@ -77,11 +78,13 @@ class SimulationEngine:
             data_manager: DataManager für Rohdaten (SMARD, BDEW, Wetter)
             scenario_manager: ScenarioManager für Szenario-Parameter
             verbose: Wenn True, detaillierte Logging-Ausgaben
+            calculation_mode: Berechnungsmodus für Wärmepumpen ("normal", "cpu_optimized")
         """
         self.cfg = cfg
         self.dm = data_manager
         self.sm = scenario_manager
         self.logger = _SimpleLogger(verbose=verbose)
+        self.calculation_mode = calculation_mode
         
         # Initialisiere spezialisierte Module
         self.storage_sim = StorageSimulation()
@@ -247,7 +250,8 @@ class SimulationEngine:
                 COP_avg=hp_config.get("COP_avg", 3.4) if hp_config else 3.4,
                 dt=0.25,
                 simu_jahr=year,
-                debug=self.logger.verbose
+                debug=self.logger.verbose,
+                calculation_mode=self.calculation_mode
             )
             
             cons_twh = df_result['Gesamt [MWh]'].sum() / 1e6 if 'Gesamt [MWh]' in df_result.columns else 0

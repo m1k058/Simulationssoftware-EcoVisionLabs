@@ -8,7 +8,7 @@ Dieses Modul simuliert den Energieverbrauch basierend auf BDEW-Standardlastprofi
 import pandas as pd
 import numpy as np
 from typing import Optional
-from data_processing.heat_pump_simulation import HeatPumpSimulation
+from data_processing.calculation_engine import CalculationEngine
 
 
 def simulate_consumption_BDEW(
@@ -216,7 +216,8 @@ def simulate_consumption_all(
     COP_avg: float,
     dt: float,
     simu_jahr: int,
-    debug: bool = False
+    debug: bool = False,
+    calculation_mode: str = "cpu_optimized"
 ) -> pd.DataFrame:
     """
     Simuliert den gesamten Energieverbrauch (BDEW + Wärmepumpen) für ein Jahr.
@@ -240,6 +241,7 @@ def simulate_consumption_all(
         dt: Zeitintervall [h] (z.B. 0.25 für Viertelstunden)
         simu_jahr: Simulationsjahr (z.B. 2030 oder 2045)
         debug: Debug-Informationen ausgeben
+        calculation_mode: Berechnungsmodus ("normal" oder "cpu_optimized")
         
     Returns:
         DataFrame mit Spalten:
@@ -259,17 +261,22 @@ def simulate_consumption_all(
     
     if wetter_df is not None and hp_profile_matrix is not None and anzahl_heatpumps > 0:
         try:
-            hp_sim = HeatPumpSimulation()
-            df_heatpump = hp_sim.simulate(
-                wetter_df,
-                hp_profile_matrix,
-                anzahl_heatpumps,
-                Q_th_a,
-                COP_avg,
-                dt,
-                simu_jahr,
+            # Nutze CalculationEngine statt HeatPumpSimulation direkt
+            engine = CalculationEngine(mode=calculation_mode)
+            df_heatpump, stats = engine.calculate_heatpump_load(
+                weather_df=wetter_df,
+                hp_profile_matrix=hp_profile_matrix,
+                n_heatpumps=anzahl_heatpumps,
+                Q_th_a=Q_th_a,
+                COP_avg=COP_avg,
+                dt=dt,
+                simu_jahr=simu_jahr,
                 debug=debug
             )
+            
+            if debug:
+                print(f"Wärmepumpen-Berechnung: {stats.mode_display}, "
+                      f"{stats.calculation_time:.2f}s, {stats.rows_per_second:.0f} Zeilen/s")
             
             # Merge mit BDEW-Daten
             df_result = df_result.merge(df_heatpump, on='Zeitpunkt', how='outer')
