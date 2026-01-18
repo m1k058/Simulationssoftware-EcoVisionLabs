@@ -15,6 +15,24 @@ from typing import Any, Dict, Optional
 import constants as const
 
 
+# Baseline-Kapazitäten 2025 (manuelle Referenzwerte in MW)
+# Quelle: SMARD-Daten 2025, gerundet
+BASELINE_2025_DEFAULTS = {
+    "Photovoltaik": 86408.0,
+    "Wind_Onshore": 63192.0,
+    "Wind_Offshore": 10289.0,
+    "Biomasse": 9131.0,
+    "Wasserkraft": 5603.0,
+    "Erdgas": 32658.0,
+    "Steinkohle": 20967.0,
+    "Braunkohle": 16513.0,
+    "Kernenergie": 0.0,
+    "Pumpspeicher": 9723.0,
+    "Sonstige_Erneuerbare": 564.0,
+    "Sonstige_Konventionelle": 2436.0
+}
+
+
 class EconomicCalculator:
     """Performs investment and LCOE analysis between a base year and target year.
 
@@ -485,99 +503,11 @@ class EconomicCalculator:
 # High-Level API: Direkte Berechnung aus Simulationsergebnissen
 # ============================================================================
 
-def load_smard_baseline_capacities(data_manager, baseline_year: int = 2025) -> Dict[str, float]:
-    """
-    Lädt echte Baseline-Kapazitäten aus SMARD-Daten statt der 70%-Schätzung.
-    
-    Args:
-        data_manager: DataManager-Instanz mit geladenen SMARD-Daten
-        baseline_year: Jahr für Baseline (Default: 2025)
-    
-    Returns:
-        Dict mit Kapazitäten pro Technologie [MW]:
-        {
-            "Photovoltaik": 86408.0,
-            "Wind_Onshore": 63192.0,
-            ...
-        }
-    """
-    import re
-    
-    # Mapping: Szenario-Tech-IDs -> SMARD-Spaltennamen
-    tech_column_mapping = {
-        "Photovoltaik": "Photovoltaik [MW]",
-        "Wind_Onshore": "Wind Onshore [MW]",
-        "Wind_Offshore": "Wind Offshore [MW]",
-        "Biomasse": "Biomasse [MW]",
-        "Wasserkraft": "Wasserkraft [MW]",
-        "Erdgas": "Erdgas [MW]",
-        "Steinkohle": "Steinkohle [MW]",
-        "Braunkohle": "Braunkohle [MW]",
-        "Kernenergie": "Kernenergie [MW]",
-        "Pumpspeicher": "Pumpspeicher [MW]",
-        "Sonstige_Erneuerbare": "Sonstige Erneuerbare [MW]",
-        "Sonstige_Konventionelle": "Sonstige Konventionelle [MW]"
-    }
-    
-    baseline_capacities = {}
-    
-    if data_manager is None:
-        return baseline_capacities
-    
-    # Suche DataFrame mit installierten Leistungen (id=5 oder nach Name)
-    df_installed = None
-    for dataset_id, meta in data_manager.metadata.items():
-        name = meta.get("name", "")
-        if "Installierte Leistung 2020-2025" in name or "installiert" in name.lower():
-            df_installed = data_manager.dataframes.get(dataset_id)
-            break
-    
-    if df_installed is None or df_installed.empty:
-        return baseline_capacities
-    
-    # Finde die Zeile für das Baseline-Jahr
-    # SMARD-Format: "Datum von" enthält "01.01.{year}"
-    target_row = None
-    if "Datum von" in df_installed.columns:
-        for idx, row in df_installed.iterrows():
-            datum_von = str(row.get("Datum von", ""))
-            # Prüfe auf Jahr im Format "01.01.2025" oder "2025"
-            if f"01.01.{baseline_year}" in datum_von or f"{baseline_year}" in datum_von:
-                target_row = row
-                break
-    
-    if target_row is None:
-        # Fallback: Letzte Zeile (neueste Daten)
-        target_row = df_installed.iloc[-1]
-    
-    # Extrahiere Kapazitäten
-    for tech_id, column_pattern in tech_column_mapping.items():
-        # Suche Spalte (kann "Originalauflösungen" Suffix haben)
-        for col in df_installed.columns:
-            # Entferne Suffixe wie " Originalauflösungen"
-            col_clean = re.sub(r"\s*(Originalauflösungen|Berechnete Auflösungen)\s*$", "", col).strip()
-            if col_clean == column_pattern:
-                try:
-                    value = target_row[col]
-                    # Konvertiere String mit Tausendertrennzeichen
-                    if isinstance(value, str):
-                        value = value.replace(".", "").replace(",", ".").strip()
-                        if value == "-" or value == "":
-                            value = 0.0
-                    baseline_capacities[tech_id] = float(value)
-                except (ValueError, TypeError):
-                    pass
-                break
-    
-    return baseline_capacities
-
-
 def calculate_economics_from_simulation(
     scenario_manager,
     simulation_results: Dict[str, Any],
     target_year: int,
-    baseline_capacities: Optional[Dict[str, float]] = None,
-    data_manager = None
+    baseline_capacities: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any]:
     """
     Berechnet Wirtschaftlichkeitskennzahlen direkt aus Simulationsergebnissen.
@@ -594,9 +524,7 @@ def calculate_economics_from_simulation(
             - "storage": Optional, wird nicht genutzt
         target_year: Zieljahr der Simulation (z.B. 2030, 2045)
         baseline_capacities: Optional, Dict mit Baseline-Kapazitäten [MW] pro Technologie
-                            Falls None und data_manager gegeben: Lade echte SMARD 2025 Kapazitäten
-                            Falls None und kein data_manager: Fallback auf 70% der Zielkapazität
-        data_manager: Optional, DataManager mit geladenen SMARD-Daten für echte Baseline-Kapazitäten
+                            Falls None: Nutze BASELINE_2025_DEFAULTS
     
     Returns:
         Dictionary mit wirtschaftlichen KPIs:
@@ -645,16 +573,8 @@ def calculate_economics_from_simulation(
         
         # 3. Bestimme Baseline-Kapazitäten (2025)
         if baseline_capacities is None:
-            # Versuche echte SMARD 2025 Kapazitäten zu laden
-            if data_manager is not None:
-                baseline_capacities = load_smard_baseline_capacities(data_manager, baseline_year=2025)
-            
-            # Falls keine SMARD-Daten verfügbar: Fallback auf 70% der Zielkapazität
-            if not baseline_capacities:
-                baseline_capacities = {}
-                for tech_id, target_cap in capacities_target.items():
-                    if isinstance(target_cap, (int, float)) and target_cap > 0:
-                        baseline_capacities[tech_id] = target_cap * 0.7
+            # Nutze manuelle Baseline-Werte aus BASELINE_2025_DEFAULTS
+            baseline_capacities = BASELINE_2025_DEFAULTS.copy()
         
         # 4. Strukturiere Inputs für EconomicCalculator
         inputs = {}

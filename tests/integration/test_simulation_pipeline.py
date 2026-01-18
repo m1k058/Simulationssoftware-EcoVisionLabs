@@ -120,20 +120,16 @@ class TestStorageSimulation:
 class TestEconomicCalculator:
     """Tests für die Wirtschaftlichkeitsberechnung."""
     
-    def test_smard_baseline_loader_exists(self):
-        """Prüfe, dass SMARD-Baseline-Lader existiert."""
-        from data_processing.economic_calculator import load_smard_baseline_capacities
+    def test_baseline_defaults_exist(self):
+        """Prüfe, dass BASELINE_2025_DEFAULTS existiert."""
+        from data_processing.economic_calculator import BASELINE_2025_DEFAULTS
         
-        # Funktion sollte existieren
-        assert callable(load_smard_baseline_capacities)
-    
-    def test_smard_baseline_returns_dict(self):
-        """Prüfe, dass SMARD-Baseline-Lader Dict zurückgibt (auch ohne DataManager)."""
-        from data_processing.economic_calculator import load_smard_baseline_capacities
-        
-        # Ohne DataManager: leeres Dict
-        result = load_smard_baseline_capacities(None)
-        assert isinstance(result, dict)
+        # Konstante sollte existieren und Dict sein
+        assert isinstance(BASELINE_2025_DEFAULTS, dict)
+        assert len(BASELINE_2025_DEFAULTS) > 0
+        # Prüfe wichtige Technologien
+        assert "Photovoltaik" in BASELINE_2025_DEFAULTS
+        assert "Wind_Onshore" in BASELINE_2025_DEFAULTS
 
 
 class TestDataFlowValidation:

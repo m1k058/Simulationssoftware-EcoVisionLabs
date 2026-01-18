@@ -608,13 +608,23 @@ class SimulationEngine:
         self,
         df_prod: pd.DataFrame,
         df_cons: pd.DataFrame,
-        df_bal: pd.DataFrame,
-        df_storage: pd.DataFrame,
+        df_balance_pre: pd.DataFrame,
+        df_balance_post: pd.DataFrame,
         year: int,
         year_num: int,
         total_years: int
     ) -> Dict[str, Any]:
-        """Führt die Wirtschaftlichkeitsanalyse aus."""
+        """Führt die Wirtschaftlichkeitsanalyse aus.
+        
+        Args:
+            df_prod: Erzegungs-DataFrame
+            df_cons: Verbrauchs-DataFrame (inkl. E-Mobility)
+            df_balance_pre: Bilanz VOR Flexibilitäten (für Referenz)
+            df_balance_post: Bilanz NACH Flexibilitäten (finale Bilanz)
+            year: Simulationsjahr
+            year_num: Fortschrittszähler
+            total_years: Gesamtzahl der Jahre
+        """
         self.logger.start_step(f"[{year_num}/{total_years}] Wirtschaftlichkeitsanalyse {year}")
         
         try:
@@ -623,12 +633,11 @@ class SimulationEngine:
                 simulation_results={
                     "production": df_prod,
                     "consumption": df_cons,
-                    "balance": df_bal,
-                    "storage": df_storage
+                    "balance": df_balance_post,  # Nutze finale Bilanz nach allen Flexibilitäten
+                    "storage": df_balance_pre    # Dummy-Eintrag, wird aktuell nicht genutzt
                 },
                 target_year=year,
-                baseline_capacities=None,  # Wird automatisch aus SMARD-Daten geladen
-                data_manager=self.dm       # DataManager für echte Baseline-Kapazitäten
+                baseline_capacities=None  # Nutzt automatisch BASELINE_2025_DEFAULTS
             )
             
             lcoe = econ_result.get('system_lco_e', 0)
