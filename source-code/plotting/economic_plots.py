@@ -141,8 +141,8 @@ def plot_investment_donut(investment_dict: Dict[str, float], year: int) -> go.Fi
     # Farben für Technologien (Konsistenz mit anderen Charts)
     tech_colors = {
         'Photovoltaik': '#FFD700',           # Gold
-        'Wind_Onshore': '#007F78',           # Dunkelgrün
-        'Wind_Offshore': '#00BFFF',          # Hellblau
+        'Wind Onshore': '#007F78',           # Dunkelgrün
+        'Wind Offshore': '#00BFFF',          # Hellblau
         'Biomasse': '#00A51B',               # Dunkelgrün
         'Wasserkraft': '#1E90FF',            # Blau
         'Erdgas': '#5D5D5D',                 # Grau

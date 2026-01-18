@@ -232,12 +232,12 @@ class CalculationEngine:
     
     def _prep_weather_data_simple(self, weather_df: pd.DataFrame, simu_jahr: int) -> pd.DataFrame:
         """
-        Vereinfachte Wetterdaten-Vorbereitung - OHNE Jahr-Interpolation.
+        Bereitet Wetterdaten vor - MIT vollständiger Jahr-Interpolation.
         
-        Arbeitet direkt mit den gegebenen Daten.
+        Für Produktionsdaten: Interpoliert stündliche Daten auf 15-Minuten für ganzes Jahr.
         
         Returns:
-            DataFrame mit Spalten ['Zeitpunkt', 'Temperatur [°C]']
+            DataFrame mit Spalten ['Zeitpunkt', 'Temperatur [°C]'] auf 15-Min Basis
         """
         df_local = weather_df.copy()
         
@@ -257,7 +257,18 @@ class CalculationEngine:
         df_local = df_local.dropna(subset=['Zeitpunkt', 'Temperatur [°C]'])
         df_local = df_local.sort_values('Zeitpunkt').reset_index(drop=True)
         
-        # Setze Jahr auf Simulationsjahr
+        # Erstelle vollständigen 15-Minuten-Zeitindex für das Wetterjahr
+        weather_year = int(df_local['Zeitpunkt'].dt.year.iloc[0])
+        start = pd.Timestamp(f'{weather_year}-01-01 00:00')
+        end = pd.Timestamp(f'{weather_year}-12-31 23:45')
+        full_index = pd.date_range(start=start, end=end, freq='15min')
+        df_full = pd.DataFrame({'Zeitpunkt': full_index})
+        
+        # Merge und interpoliere Temperaturdaten
+        df_local = df_full.merge(df_local, on='Zeitpunkt', how='left')
+        df_local['Temperatur [°C]'] = df_local['Temperatur [°C]'].ffill().bfill()
+        
+        # Verschiebe auf Simulationsjahr
         df_local['Zeitpunkt'] = df_local['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
         
         return df_local
@@ -368,12 +379,12 @@ class CalculationEngine:
     
     def _prep_weather_data(self, weather_df: pd.DataFrame, simu_jahr: int) -> pd.DataFrame:
         """
-        Bereitet Wetterdaten vor - VEREINFACHT ohne Jahr-Interpolation.
+        Bereitet Wetterdaten vor - mit vollständiger Jahr-Interpolation.
         
-        Arbeitet direkt mit den gegebenen Daten (für Tests mit kleinen Datensätzen).
+        Für Produktionsdaten: Interpoliert stündliche Daten auf 15-Minuten für ganzes Jahr.
         
         Returns:
-            DataFrame mit Spalten ['Zeitpunkt', 'Temperatur [°C]']
+            DataFrame mit Spalten ['Zeitpunkt', 'Temperatur [°C]'] auf 15-Min Basis
         """
         df_local = weather_df.copy()
         
@@ -393,7 +404,18 @@ class CalculationEngine:
         df_local = df_local.dropna(subset=['Zeitpunkt', 'Temperatur [°C]'])
         df_local = df_local.sort_values('Zeitpunkt').reset_index(drop=True)
         
-        # Setze Jahr auf Simulationsjahr
+        # Erstelle vollständigen 15-Minuten-Zeitindex für das Wetterjahr
+        weather_year = int(df_local['Zeitpunkt'].dt.year.iloc[0])
+        start = pd.Timestamp(f'{weather_year}-01-01 00:00')
+        end = pd.Timestamp(f'{weather_year}-12-31 23:45')
+        full_index = pd.date_range(start=start, end=end, freq='15min')
+        df_full = pd.DataFrame({'Zeitpunkt': full_index})
+        
+        # Merge und interpoliere Temperaturdaten
+        df_local = df_full.merge(df_local, on='Zeitpunkt', how='left')
+        df_local['Temperatur [°C]'] = df_local['Temperatur [°C]'].ffill().bfill()
+        
+        # Verschiebe auf Simulationsjahr
         df_local['Zeitpunkt'] = df_local['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
         
         return df_local

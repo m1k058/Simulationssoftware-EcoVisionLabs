@@ -277,7 +277,7 @@ TECHNOLOGY_COSTS = {
     },
     "Wasserstoffspeicher": {
         # EWI Rückrechnung (siehe Doku)
-        "capex": [400000, 600000],
+        "capex": [10000, 20000],
         "opex_fix": 5000,
         "opex_var": 0.0,
         "lifetime": 30,

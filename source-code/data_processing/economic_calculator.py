@@ -19,17 +19,17 @@ import constants as const
 # Quelle: SMARD-Daten 2025, gerundet
 BASELINE_2025_DEFAULTS = {
     "Photovoltaik": 86408.0,
-    "Wind_Onshore": 63192.0,
-    "Wind_Offshore": 10289.0,
-    "Biomasse": 9131.0,
-    "Wasserkraft": 5603.0,
-    "Erdgas": 32658.0,
-    "Steinkohle": 20967.0,
-    "Braunkohle": 16513.0,
+    "Wind Onshore": 63192.0,  # ACHTUNG: Mit Leerzeichen!
+    "Wind Offshore": 9215.0,  # ACHTUNG: Mit Leerzeichen!
+    "Biomasse": 8766.0,
+    "Wasserkraft": 5350.0,
+    "Erdgas": 36614.0,
+    "Steinkohle": 15951.0,
+    "Braunkohle": 15176.0,
     "Kernenergie": 0.0,
-    "Pumpspeicher": 9723.0,
-    "Sonstige_Erneuerbare": 564.0,
-    "Sonstige_Konventionelle": 2436.0
+    "Pumpspeicher": 9384.0,
+    "Sonstige Erneuerbare": 446.0,
+    "Sonstige Konventionelle": 12971.0
 }
 
 
@@ -577,13 +577,31 @@ def calculate_economics_from_simulation(
             baseline_capacities = BASELINE_2025_DEFAULTS.copy()
         
         # 4. Strukturiere Inputs für EconomicCalculator
+        # Mapping für Namens-Korrektur (Szenario -> Constants)
+        name_fix = {
+            "Wind_Onshore": "Wind Onshore",
+            "Wind_Offshore": "Wind Offshore",
+            "Sonstige_Erneuerbare": "Sonstige Erneuerbare",
+            "Sonstige_Konventionelle": "Sonstige Konventionelle"
+        }
+        
         inputs = {}
         
         # Erzeugungstechnologien
-        for tech_id, target_cap in capacities_target.items():
+        for tech_id_raw, target_cap in capacities_target.items():
             if isinstance(target_cap, (int, float)) and target_cap > 0:
+                # Fix Name: Wind_Onshore -> Wind Onshore
+                tech_id = name_fix.get(tech_id_raw, tech_id_raw)
+                
+                # Baseline holen (Fallback auf DEFAULT Konstante)
+                base_val = baseline_capacities.get(tech_id_raw)  # Versuch mit Raw Key
+                if base_val is None:
+                    base_val = baseline_capacities.get(tech_id)  # Versuch mit Fixed Key
+                if base_val is None:
+                    base_val = BASELINE_2025_DEFAULTS.get(tech_id, 0.0)  # Fallback Konstante
+                
                 inputs[tech_id] = {
-                    2025: baseline_capacities.get(tech_id, target_cap * 0.7),
+                    2025: base_val,
                     target_year: target_cap
                 }
         

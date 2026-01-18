@@ -306,7 +306,6 @@ def standard_simulation_page() -> None:
             "Wählen Sie den Berechnungsmodus für Wärmepumpen:",
             ["Normal", "CPU-Beschleunigt (Numba)"],
             index=1,  # CPU-Beschleunigt als Standard
-            help="**Normal**: ~20 Minuten | **CPU-Beschleunigt**: ~10-30 Sekunden (50-200x schneller)",
             horizontal=True
         )
         
@@ -320,6 +319,10 @@ def standard_simulation_page() -> None:
 
         if "fullSimResults" not in st.session_state:
             st.session_state.fullSimResults = {}
+        
+        # Initialisiere Excel-Cache
+        if "excel_exports" not in st.session_state:
+            st.session_state.excel_exports = {}
 
         if st.button("Simulation starten", type="primary"):
             try:
@@ -331,6 +334,10 @@ def standard_simulation_page() -> None:
                     calculation_mode=calculation_mode
                 )
                 st.session_state.fullSimResults = engine.run_scenario()
+                
+                # Lösche alte Excel-Exporte (neue Simulation = neue Daten)
+                st.session_state.excel_exports = {}
+                
                 st.success("✅ Simulation abgeschlossen!")
             except Exception as e:
                 st.error(f"❌ Fehler in der Simulation: {e}")
@@ -573,47 +580,7 @@ def standard_simulation_page() -> None:
                 else:
                     st.info("Keine Wirtschaftlichkeitsdaten verfügbar.")
 
-            # Download-Buttons mit Caching
-            st.markdown("---")
-            st.subheader("Download")
-            
-            # Hole Szenario-Namen aus session_state
-            scenario_name = st.session_state.sm.scenario_data.get("metadata", {}).get("name", "Szenario")
-            
-            # Excel für einzelnes Jahr (nur generieren wenn Button geklickt)
-            if f"excel_{sel_year}" not in st.session_state:
-                st.session_state[f"excel_{sel_year}"] = None
-            
-            if st.session_state[f"excel_{sel_year}"] is None:
-                # Generiere Excel nur einmal
-                st.session_state[f"excel_{sel_year}"] = SimulationEngine.export_results_to_excel(results, sel_year)
-            
-            st.download_button(
-                "📥 Download Jahresergebnisse (EXCEL)", 
-                data=st.session_state[f"excel_{sel_year}"],
-                file_name=f"Ergebnisse_{scenario_name}_{sel_year}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"download_excel_{sel_year}"
-            )
-
-            # ZIP nur bei mehreren Jahren anzeigen
-            if len(years_available) > 1:
-                if "excel_zip" not in st.session_state:
-                    st.session_state["excel_zip"] = None
-                
-                if st.session_state["excel_zip"] is None:
-                    # Generiere ZIP nur einmal
-                    st.session_state["excel_zip"] = SimulationEngine.export_results_to_zip(results)
-                
-                st.download_button(
-                    "📦 Download alle Jahre (ZIP mit EXCEL)", 
-                    data=st.session_state["excel_zip"],
-                    file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
-                    mime="application/zip",
-                    key="download_zip_all"
-                )
-
-            # Visualisierungen
+            # Visualisierungen ZUERST (bevor Downloads generiert werden)
             st.markdown("---")
             st.subheader("Visualisierung")
             
@@ -927,4 +894,40 @@ def standard_simulation_page() -> None:
                     else:
                         st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 
+            # Download-Buttons NACH den Visualisierungen (mit intelligentem Caching)
+            st.markdown("---")
+            st.subheader("Download")
+            
+            # Hole Szenario-Namen aus session_state
+            scenario_name = st.session_state.sm.scenario_data.get("metadata", {}).get("name", "Szenario")
+            
+            # Excel für einzelnes Jahr (lazy loading mit Spinner)
+            excel_key = f"excel_{sel_year}"
+            if excel_key not in st.session_state.excel_exports:
+                # Zeige Spinner während der Generierung
+                with st.spinner(f"📊 Generiere Excel für {sel_year}..."):
+                    st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, sel_year)
+            
+            st.download_button(
+                "📥 Download Jahresergebnisse (EXCEL)", 
+                data=st.session_state.excel_exports[excel_key],
+                file_name=f"Ergebnisse_{scenario_name}_{sel_year}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_excel_{sel_year}"
+            )
 
+            # ZIP nur bei mehreren Jahren anzeigen
+            if len(years_available) > 1:
+                zip_key = "excel_zip"
+                if zip_key not in st.session_state.excel_exports:
+                    # Zeige Spinner während der Generierung
+                    with st.spinner(f"📦 Generiere ZIP mit allen {len(years_available)} Jahren..."):
+                        st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
+                
+                st.download_button(
+                    "📦 Download alle Jahre (ZIP mit EXCEL)", 
+                    data=st.session_state.excel_exports[zip_key],
+                    file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
+                    mime="application/zip",
+                    key="download_zip_all"
+                )

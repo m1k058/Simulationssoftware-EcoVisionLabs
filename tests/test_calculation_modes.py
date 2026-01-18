@@ -91,11 +91,12 @@ class TestCalculationModes:
             debug=False
         )
         
-        assert len(df_result) == 100
+        # Jetzt interpoliert auf ganzes Jahr: 365 Tage * 96 Zeitpunkte/Tag = 35040
+        assert len(df_result) == 35040
         assert 'Zeitpunkt' in df_result.columns
         assert 'Wärmepumpen [MWh]' in df_result.columns
         assert stats.mode == "normal"
-        assert stats.rows_processed == 100
+        assert stats.rows_processed == 35040
         print(f"Normal-Modus: {stats.calculation_time:.3f}s ({stats.rows_per_second:.0f} Zeilen/s)")
     
     def test_cpu_optimized_mode(self, sample_weather_data, sample_hp_profile):
@@ -118,11 +119,12 @@ class TestCalculationModes:
             debug=False
         )
         
-        assert len(df_result) == 100
+        # Jetzt interpoliert auf ganzes Jahr: 365 Tage * 96 Zeitpunkte/Tag = 35040
+        assert len(df_result) == 35040
         assert 'Zeitpunkt' in df_result.columns
         assert 'Wärmepumpen [MWh]' in df_result.columns
         assert stats.mode == "cpu_optimized"
-        assert stats.rows_processed == 100
+        assert stats.rows_processed == 35040
         print(f"CPU-Modus: {stats.calculation_time:.3f}s ({stats.rows_per_second:.0f} Zeilen/s)")
     
     def test_normal_vs_cpu_correctness(self, sample_weather_data, sample_hp_profile):
@@ -249,7 +251,8 @@ class TestCalculationModes:
         assert isinstance(stats, PerformanceStats)
         assert stats.mode in ["normal", "cpu_optimized"]
         assert stats.calculation_time > 0
-        assert stats.rows_processed == 100
+        # Jetzt interpoliert auf ganzes Jahr: 365 Tage * 96 Zeitpunkte/Tag = 35040
+        assert stats.rows_processed == 35040
         assert stats.rows_per_second > 0
         
         # Prüfe to_dict()
