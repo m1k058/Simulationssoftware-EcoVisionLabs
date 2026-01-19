@@ -894,40 +894,72 @@ def standard_simulation_page() -> None:
                     else:
                         st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 
-            # Download-Buttons NACH den Visualisierungen (mit intelligentem Caching)
+            # Download-Buttons NACH den Visualisierungen (mit manueller Generierung)
             st.markdown("---")
             st.subheader("Download")
             
             # Hole Szenario-Namen aus session_state
             scenario_name = st.session_state.sm.scenario_data.get("metadata", {}).get("name", "Szenario")
             
-            # Excel für einzelnes Jahr (lazy loading mit Spinner)
-            excel_key = f"excel_{sel_year}"
-            if excel_key not in st.session_state.excel_exports:
-                # Zeige Spinner während der Generierung
-                with st.spinner(f"📊 Generiere Excel für {sel_year}..."):
-                    st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, sel_year)
+            # Excel für einzelnes Jahr - mit Jahr-Auswahl
+            st.markdown("#### Excel-Export (einzelnes Jahr)")
+            col_year_select, col_excel1, col_excel2 = st.columns([1, 1, 2])
             
-            st.download_button(
-                "📥 Download Jahresergebnisse (EXCEL)", 
-                data=st.session_state.excel_exports[excel_key],
-                file_name=f"Ergebnisse_{scenario_name}_{sel_year}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"download_excel_{sel_year}"
-            )
+            with col_year_select:
+                excel_year = st.selectbox(
+                    "Jahr wählen",
+                    options=years_available,
+                    index=years_available.index(sel_year) if sel_year in years_available else 0,
+                    key="excel_year_selector"
+                )
+            
+            excel_key = f"excel_{excel_year}"
+            
+            with col_excel1:
+                if st.button("📊 Excel generieren", key=f"btn_gen_excel_{excel_year}", use_container_width=True):
+                    with st.spinner(f"Generiere Excel für {excel_year}..."):
+                        st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, excel_year)
+                    st.success("✅ Excel generiert!")
+                    st.rerun()
+            
+            with col_excel2:
+                if excel_key in st.session_state.excel_exports:
+                    st.download_button(
+                        "📥 Download Jahresergebnisse (EXCEL)", 
+                        data=st.session_state.excel_exports[excel_key],
+                        file_name=f"Ergebnisse_{scenario_name}_{excel_year}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"download_excel_{excel_year}",
+                        use_container_width=True
+                    )
+                else:
+                    st.info("Bitte zuerst Excel generieren")
 
             # ZIP nur bei mehreren Jahren anzeigen
             if len(years_available) > 1:
-                zip_key = "excel_zip"
-                if zip_key not in st.session_state.excel_exports:
-                    # Zeige Spinner während der Generierung
-                    with st.spinner(f"📦 Generiere ZIP mit allen {len(years_available)} Jahren..."):
-                        st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
+                st.markdown("---")
+                st.markdown("#### ZIP-Export (alle Jahre)")
+                st.caption(f"Enthält Excel-Dateien für alle {len(years_available)} simulierten Jahre")
                 
-                st.download_button(
-                    "📦 Download alle Jahre (ZIP mit EXCEL)", 
-                    data=st.session_state.excel_exports[zip_key],
-                    file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
-                    mime="application/zip",
-                    key="download_zip_all"
-                )
+                zip_key = "excel_zip"
+                col_zip1, col_zip2 = st.columns([1, 3])
+                
+                with col_zip1:
+                    if st.button("📦 ZIP generieren", key="btn_gen_zip", use_container_width=True):
+                        with st.spinner(f"Generiere ZIP mit allen {len(years_available)} Jahren..."):
+                            st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
+                        st.success("✅ ZIP generiert!")
+                        st.rerun()
+                
+                with col_zip2:
+                    if zip_key in st.session_state.excel_exports:
+                        st.download_button(
+                            "📦 Download alle Jahre (ZIP mit EXCEL)", 
+                            data=st.session_state.excel_exports[zip_key],
+                            file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
+                            mime="application/zip",
+                            key="download_zip_all",
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("Bitte zuerst ZIP generieren")
