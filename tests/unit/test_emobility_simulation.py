@@ -159,27 +159,37 @@ class TestMainSimulation:
     
     @pytest.fixture
     def surplus_balance_df(self):
-        """Erstellt DataFrame mit konstantem Überschuss (sollte Laden auslösen)."""
+        """Erstellt DataFrame mit konstantem Überschuss (sollte Laden auslösen).
+        
+        VORZEICHEN-KONVENTION (nach Fix):
+            Bilanz > 0 = Überschuss (mehr Erzeugung als Verbrauch)
+            Bilanz < 0 = Defizit (mehr Verbrauch als Erzeugung)
+        """
         start = datetime(2030, 6, 15, 0, 0)
         timestamps = [start + timedelta(minutes=15*i) for i in range(96)]
         
-        # -300 MW Überschuss (in MWh: -300 * 0.25 = -75 MWh pro Intervall)
+        # +300 MW Überschuss (in MWh: +300 * 0.25 = +75 MWh pro Intervall)
         df = pd.DataFrame({
             'Zeitpunkt': timestamps,
-            'Rest Bilanz [MWh]': np.full(96, -75.0)
+            'Rest Bilanz [MWh]': np.full(96, 75.0)  # Positiv = Überschuss
         })
         return df
     
     @pytest.fixture
     def deficit_balance_df(self):
-        """Erstellt DataFrame mit konstantem Defizit (sollte Entladen auslösen)."""
+        """Erstellt DataFrame mit konstantem Defizit (sollte Entladen auslösen).
+        
+        VORZEICHEN-KONVENTION (nach Fix):
+            Bilanz > 0 = Überschuss (mehr Erzeugung als Verbrauch)
+            Bilanz < 0 = Defizit (mehr Verbrauch als Erzeugung)
+        """
         start = datetime(2030, 6, 15, 0, 0)
         timestamps = [start + timedelta(minutes=15*i) for i in range(96)]
         
-        # +300 MW Defizit (in MWh: +300 * 0.25 = +75 MWh pro Intervall)
+        # -300 MW Defizit (in MWh: -300 * 0.25 = -75 MWh pro Intervall)
         df = pd.DataFrame({
             'Zeitpunkt': timestamps,
-            'Rest Bilanz [MWh]': np.full(96, 75.0)
+            'Rest Bilanz [MWh]': np.full(96, -75.0)  # Negativ = Defizit
         })
         return df
     
