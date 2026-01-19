@@ -85,6 +85,25 @@ def _time_str_to_decimal(time_str: str) -> float:
     return (hour + minute / 60.0) / 24.0
 
 
+def _skewed_gaussian(x: np.ndarray, mu: float, sig_left: float, sig_right: float) -> np.ndarray:
+    """
+    Berechnet einen 'schiefen' Gauß-Peak mit unterschiedlichen 
+    Standardabweichungen links/rechts vom Maximum.
+    
+    Args:
+        x: Zeitpunkte in Stunden (0..24)
+        mu: Peak-Zeitpunkt (Stunde)
+        sig_left: Sigma für Werte < mu
+        sig_right: Sigma für Werte >= mu
+        
+    Returns:
+        Array mit Werten (Höhe ca. 1.0 bei x=mu, abhängig von Normalisierung)
+    """
+    # np.where handhabt die Verzweigung elementweise
+    sigma = np.where(x < mu, sig_left, sig_right)
+    return np.exp( -0.5 * ((x - mu) / sigma)**2 )
+
+
 def _is_between_times_over_midnight(time_of_day: float, t_start: float, t_end: float) -> bool:
     """
     Prüft ob time_of_day zwischen t_start und t_end liegt.
@@ -130,8 +149,6 @@ def generate_ev_profile(
     Returns:
         DataFrame mit allen EV-Profil-Spalten
     """
-    n = len(timestamps)
-    
     # Zeit-Dezimalwerte vorberechnen
     t_depart_dec = _time_str_to_decimal(scenario_params.t_depart)
     t_arrive_dec = _time_str_to_decimal(scenario_params.t_arrive)
@@ -147,69 +164,163 @@ def generate_ev_profile(
     # Basis-Fahrleistung pro Jahr → pro Stunde
     # E_drive_car_year [kWh/a] → Leistung = E / 8760 [kW]
     base_drive_power_per_car = scenario_params.E_drive_car_year / 8760.0
+
+    # -------------------------------------------------------------------------
+    # NEUER ANSATZ (Skewed Gaussian): Realistischeres Fahrprofil mit Weekday/Weekend
+    # -------------------------------------------------------------------------
+
+    # Zeit-Vektor in Stunden (0..24) für Vektorisierung
+    ts_hour = timestamps.dt.hour + timestamps.dt.minute / 60.0
+    ts_vals = ts_hour.values  # numpy array für Performance
     
-    # Arrays initialisieren
-    plug_share = np.zeros(n)
-    drive_power = np.zeros(n)
+    # === FEIERTAGS- & WOCHENEND-LOGIK ===
+    simu_jahr = timestamps.iloc[0].year
+    
+    # Feiertage ermitteln (BDEW-Definition via 'holidays')
+    try:
+        import holidays
+        de_holidays = holidays.Germany(years=simu_jahr, language='de')
+        feiertage_set = set(de_holidays.keys()) # für schnellen Lookup
+        
+        # Check ob Datum in Feiertagen (vektorisiert durch map)
+        # Dates extrahieren
+        dates = timestamps.dt.date
+        is_holiday = dates.isin(feiertage_set).values
+        
+    except ImportError:
+        # Fallback ohne Feiertage
+        print("Warnung: Package 'holidays' nicht installiert. Nutze vereinfachte Logik.")
+        is_holiday = np.zeros(len(timestamps), dtype=bool)
+
+    # Wochenende (Samstag=5, Sonntag=6)
+    is_weekend = (timestamps.dt.dayofweek >= 5).values
+    
+    # "Freizeit"-Tage (Wochenende oder Feiertag)
+    is_leisure_day = is_weekend | is_holiday
+    
+    # === 1. Aktivitäts-Profil generieren ===
+    
+    # A) WORKDAY Profil (Commute)
+    # Morning Peak: 07:45 (7.75h) - Scharfer Anstieg, flacher Abfall
+    peak_morning = _skewed_gaussian(ts_vals, mu=7.75, sig_left=1.5, sig_right=5.0)
+    # Evening Peak: 17:15 (17.25h) - Flacher Anstieg, scharfer Abfall
+    peak_evening = _skewed_gaussian(ts_vals, mu=17.25, sig_left=5.0, sig_right=2.0)
+    profile_workday = peak_morning + peak_evening + 0.1 # + Grundlast
+    
+    # B) LEISURE Profil (Wochenende/Feiertag)
+    # Einfacher "Mittagspeak" für Ausflüge etc., breitere Verteilung
+    # Peak um 13:00 (13.0h), sehr breit
+    peak_leisure = _skewed_gaussian(ts_vals, mu=13.0, sig_left=5.0, sig_right=5.0)
+    profile_leisure = (peak_leisure * 0.8) + 0.1 # Etwas flacher + Grundlast
+    
+    # C) Kombinieren basierend auf Tagestyp
+    activity_profile = np.where(is_leisure_day, profile_leisure, profile_workday)
+    
+    # 2. Normalisierung des Fahrprofils auf Gesamtenergie
+    # Gesamtes Integral der Aktivität über das Jahr (Summe * dt)
+    # WICHTIG: config_params.dt_h verwenden statt hardcoded 0.25
+    dt_h = config_params.dt_h
+    total_activity_sum = np.sum(activity_profile) * dt_h
+    
+    if total_activity_sum == 0: total_activity_sum = 1.0 # Safety
+    
+    # Ziel-Energie der gesamten Flotte pro Jahr [kWh]
+    target_energy_year = n_ev * scenario_params.E_drive_car_year
+    
+    # Skalierungsfaktor [kW pro Einheit Aktivität]
+    # Sum(P_i * dt) = E_total -> P_scale * Sum(Activity * dt) = E_total
+    power_scaling_factor = target_energy_year / total_activity_sum
+    
+    # Berechne drive_power [kW] für jeden Zeitschritt
+    drive_power = activity_profile * power_scaling_factor
+    
+    # 3. Plug Share (Verfügbarkeit am Stecker)
+    # Hängt invers von der Aktivität ab.
+    # Bei maximaler Aktivität (Fahren) sind die wenigsten Autos am Stecker.
+    # Annahme: Bei Peak-Activity sinkt Plug-Share auf Minimum (z.B. 10% der Max-Verfügbarkeit?).
+    # Oder einfache Invertierung:
+    # Wir nutzen eine weiche Invertierung: 
+    # plug_share ~ plug_share_max * (1.0 - normalized_activity * 0.9)
+    # So bleibt immer mind. 10% auch im Peak übrig (realistisch: Kurzzeitparker, etc.)
+    
+    act_min = np.min(activity_profile)
+    act_max = np.max(activity_profile)
+    # Normalisiere Aktivität auf 0..1
+    if act_max > act_min:
+        activity_norm = (activity_profile - act_min) / (act_max - act_min)
+    else:
+        activity_norm = np.zeros_like(activity_profile)
+    
+    # Invertiere für Plug-Availability
+    # High Driving -> Low Plug
+    plug_share_raw = 1.0 - (activity_norm * 0.9)  # Minimum 0.1
+    # Safety Check: Limit auf 0.0 bis 1.0
+    plug_share_raw = np.clip(plug_share_raw, 0.0, 1.0)
+    plug_share = plug_share_raw * scenario_params.plug_share_max
+
+    # 4. Zeit- und Status-abhängige Arrays (Vektorsisiert wo möglich)
+    n = len(timestamps)
     soc_min = np.zeros(n)
+    time_to_depart = np.zeros(n)
     preload_flag = np.zeros(n, dtype=int)
     soc_target = np.full(n, np.nan)
-    time_to_depart = np.zeros(n)  # NEU: Zeit bis Abfahrt in Stunden
     
-    for i in range(n):
-        ts = timestamps.iloc[i]
-        hour = ts.hour
-        minute = ts.minute
-        
-        # Zeit als Dezimalzahl (0.0 - <1.0)
-        time_of_day = (hour + minute / 60.0) / 24.0
-        
-        # 1. plug_share: Fahrzeuge sind zwischen t_arrive und t_depart angeschlossen
-        # Zeitraum geht über Mitternacht (18:00 - 07:30)
-        is_plugged_in = _is_between_times_over_midnight(time_of_day, t_arrive_dec, t_depart_dec)
-        if is_plugged_in:
-            plug_share[i] = scenario_params.plug_share_max
-        else:
-            plug_share[i] = 0.1 * scenario_params.plug_share_max
-        
-        # 2. drive_power: Fahrverbrauchsleistung [kW]
-        # Tagsüber (7-19 Uhr) höher, nachts niedriger
-        if 7 <= hour < 19:
-            drive_factor = 1.3
-        else:
-            drive_factor = 0.2
-        
-        # Gesamte Fahrleistung der Flotte [kW]
-        drive_power[i] = drive_factor * n_ev * base_drive_power_per_car
-        
-        # 3. soc_min: Minimaler SOC
-        # Tagsüber (zwischen t_depart und t_arrive): SOC_min_day
-        # Nachts: SOC_min_night
-        if _is_between_times_over_midnight(time_of_day, t_depart_dec, t_arrive_dec):
-            soc_min[i] = scenario_params.SOC_min_day
-        else:
-            soc_min[i] = scenario_params.SOC_min_night
-        
-        # 4. time_to_depart: Verbleibende Zeit bis Abfahrt [Stunden]
-        # Nur relevant wenn Fahrzeug angeschlossen ist
-        if is_plugged_in:
-            # Berechne Zeit bis t_depart
-            time_diff = t_depart_dec - time_of_day
-            if time_diff < 0:
-                time_diff += 1.0  # Über Mitternacht
-            time_to_depart[i] = time_diff * 24.0  # In Stunden
-        else:
-            time_to_depart[i] = 0.0
-        
-        # 5. preload_flag: Vorladezeit-Marker (Safety-Window)
-        # Vorladezeit: 2 Stunden vor t_depart bis t_depart
-        if _is_between_times_over_midnight(time_of_day, t_preload_start_dec, t_depart_dec):
-            preload_flag[i] = 1
-            
-        # 6. soc_target: Ziel-SOC - jetzt IMMER während der Nacht gesetzt
-        if is_plugged_in:
-            soc_target[i] = scenario_params.SOC_target_depart
+    # Umwandlung von time_of_day für Vergleiche
+    time_of_day_series = ts_vals / 24.0
+
+    # Bestimme, ob wir uns im "Driving Window" oder "Parking Window" befinden
+    # Basierend auf t_depart/t_arrive (wie zuvor, aber nun logisch für Limits genutzt)
+    # Vektorisierte Prüfung für 'is_driving_window'
+    # Achtung: _is_between ist scalar. Wir bauens vektorisiert nach.
     
+    if t_depart_dec < t_arrive_dec:
+        # Tag: depart -> arrive
+        is_driving_window = (time_of_day_series >= t_depart_dec) & (time_of_day_series < t_arrive_dec)
+    else:
+        # Tag (Fahren) über Mitternacht? Eher Nachtschicht.
+        is_driving_window = (time_of_day_series >= t_depart_dec) | (time_of_day_series < t_arrive_dec)
+    
+    is_parking_window = ~is_driving_window
+    
+    # SOC Min Zuordnung (vectorized)
+    soc_min[is_driving_window] = scenario_params.SOC_min_day
+    soc_min[is_parking_window] = scenario_params.SOC_min_night
+    
+    # Preload Flag (2h vor t_depart)
+    # Ist etwas komplexer vektorisiert, da t_depart fix ist.
+    # Wir prüfen einfach, ob time_of_day im Fenster [t_preload_start, t_depart] ist
+    if t_preload_start_dec < t_depart_dec:
+        is_preload = (time_of_day_series >= t_preload_start_dec) & (time_of_day_series < t_depart_dec)
+    else:
+        # über Mitternacht
+        is_preload = (time_of_day_series >= t_preload_start_dec) | (time_of_day_series < t_depart_dec)
+        
+    preload_flag[is_preload] = 1
+    
+    # Setze soc_target und time_to_depart (Loop der Einfachheit halber oder vector)
+    # soc_target gilt, wenn plugged in. Wir setzen es pauschal dort, wo wir "parken" erwarten oder immer.
+    # Das Original setzte es wenn 'is_plugged_in' (basierend auf Zeit).
+    # Da plug_share nun probabilistisch ist, "simulieren" wir hier den Zustand eines "typischen" Autos
+    # für die Logik-Steuerung (Preload, SOC Target).
+    
+    soc_target[is_parking_window] = scenario_params.SOC_target_depart
+    
+    # Time to depart calculation (Vektorsisiert)
+    # Differenz t_depart - t_now
+    diff = t_depart_dec - time_of_day_series
+    # Korrektur für negative Werte (t_now > t_depart -> nächster Tag)
+    # Moment... time to depart ist nur relevant VOR Abfahrt.
+    # Wenn wir im Park-Fenster sind (z.B. abends), ist t_classisch "morgen früh".
+    # Wir addieren 1.0, wenn diff < 0
+    diff[diff < 0] += 1.0
+    time_to_depart = diff * 24.0
+    # Wir setzen time_to_depart auf 0 während der Fahrzeit, damit Preload nicht triggered?
+    time_to_depart[is_driving_window] = 0.0
+
+    # -------------------------------------------------------------------------
+    # ENDE NEUER ANSATZ
+    # -------------------------------------------------------------------------
+
     # DataFrame erstellen
     df_profile = pd.DataFrame({
         'Zeitpunkt': timestamps.values,
@@ -218,7 +329,8 @@ def generate_ev_profile(
         'soc_min_share': soc_min,
         'preload_flag': preload_flag,
         'soc_target_share': soc_target,
-        'time_to_depart_h': time_to_depart  # NEU
+        'time_to_depart_h': time_to_depart,  # NEU
+        'is_leisure_day': is_leisure_day  # WICHTIG für V2G-Logik
     })
     
     return df_profile
@@ -301,7 +413,14 @@ def simulate_emobility_fleet(
     soc_min_share = df_ev_profile['soc_min_share'].values
     preload_flag = df_ev_profile['preload_flag'].values
     soc_target_share = df_ev_profile['soc_target_share'].values
-    time_to_depart_h = df_ev_profile['time_to_depart_h'].values  # NEU
+    time_to_depart_h = df_ev_profile['time_to_depart_h'].values
+    
+    # NEU: Freizeit-Flag extrahieren für V2G-Logik
+    if 'is_leisure_day' in df_ev_profile.columns:
+        is_leisure_day = df_ev_profile['is_leisure_day'].values
+    else:
+        # Fallback falls externes Profil ohne diese Spalte kommt (Default: Alles ist Arbeitstag)
+        is_leisure_day = np.zeros(n, dtype=bool)
     
     # Bestimme Balance-Spalte und konvertiere zu kW
     # WICHTIG: Die Bilanz verwendet die Konvention:
@@ -358,6 +477,18 @@ def simulate_emobility_fleet(
     # V2G-Teilnahmequote extrahieren
     v2g_share = scenario_params.v2g_share
     
+    # PHASE B: Setup für V2G-Logik
+    # Pre-Calculation für Performance
+    t_depart_dec = _time_str_to_decimal(scenario_params.t_depart)
+    t_arrive_dec = _time_str_to_decimal(scenario_params.t_arrive)
+    WORKPLACE_V2G_FACTOR = 0.15
+    
+    # Schnellzugriff auf Zeit für Loop (Vektorsisiert vorberechnen)
+    # timestamps ist eine Series
+    time_hours = timestamps.dt.hour.values
+    time_minutes = timestamps.dt.minute.values
+    time_dec_array = (time_hours + time_minutes / 60.0) / 24.0
+    
     for i in range(n):
         # --- Initialisierung aus vorherigem Zeitschritt ---
         if i > 0:
@@ -370,9 +501,25 @@ def simulate_emobility_fleet(
         # --- Leistungsgrenzen [kW] ---
         # Alle angeschlossenen Fahrzeuge können laden
         charge_limit = plug_share[i] * n_ev * P_ch_car_max
+        
+        # PHASE B: Realistische V2G-Limitierung
+        # Bestimme ob Arbeitszeit (t_depart ... t_arrive)
+        time_dec = time_dec_array[i]
+        is_work_time = _is_between_times_over_midnight(time_dec, t_depart_dec, t_arrive_dec)
+        
+        # Prüfung: Ist es ein Arbeitstag? (Kein Wochenende, kein Feiertag)
+        is_actual_workday = not is_leisure_day[i]
+        
+        # V2G-Share anpassen
+        # Beschränkung gilt NUR an Arbeitstagen während der Arbeitszeit (Auto steht am Arbeitsplatz)
+        if is_work_time and is_actual_workday:
+            current_v2g_share = v2g_share * WORKPLACE_V2G_FACTOR
+        else:
+            # Freizeit, Wochenende, Nacht -> Volles V2G Potenzial
+            current_v2g_share = v2g_share
+
         # Nur ein Teil der angeschlossenen Fahrzeuge speist ins Netz zurück (V2G)
-        # v2g_share gibt an, welcher Anteil der Besitzer bereit ist, V2G zu nutzen
-        discharge_limit = plug_share[i] * n_ev * P_dis_car_max * v2g_share
+        discharge_limit = plug_share[i] * n_ev * P_dis_car_max * current_v2g_share
         
         # --- Residuallast [kW] ---
         res_load = residual_load_kw[i]
