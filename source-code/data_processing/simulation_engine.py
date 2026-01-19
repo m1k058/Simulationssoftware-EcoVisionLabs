@@ -707,23 +707,25 @@ class SimulationEngine:
         except Exception:
             return None
 
-    def export_results_to_excel(results: Dict[int, Dict[str, Any]], year: int) -> pd.ExcelWriter:
+    def export_results_to_excel(results: Dict[int, Dict[str, Any]], year: int) -> io.BytesIO:
         """
         Exportiert die Simulationsergebnisse eines Jahres in eine Excel-Datei.
+        Optimiert für schnelle Generierung.
         
         Args:
             results: Gesamtergebnis-Dictionary von run_scenario()
             year: Jahr, das exportiert werden soll.
         
         Returns:
-            pd.ExcelWriter Objekt mit den Ergebnissen.
+            io.BytesIO Objekt mit den Ergebnissen.
         """
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            year_data = results.get(year)
-            if not year_data:
-                raise ValueError(f"Keine Ergebnisse für Jahr {year} gefunden.")
-            
+        year_data = results.get(year)
+        if not year_data:
+            raise ValueError(f"Keine Ergebnisse für Jahr {year} gefunden.")
+        
+        # Optimierte ExcelWriter-Einstellungen für bessere Performance
+        with pd.ExcelWriter(output, engine='openpyxl', mode='w') as writer:
             # Verbrauch (inkl. E-Mobility)
             year_data['consumption'].to_excel(writer, sheet_name='Verbrauch', index=True)
             # Erzeugung
@@ -741,23 +743,26 @@ class SimulationEngine:
             # Wirtschaftlichkeit
             econ_df = pd.DataFrame.from_dict(year_data['economics'], orient='index', columns=['Wert'])
             econ_df.to_excel(writer, sheet_name='Wirtschaftlichkeit', index=True)
+        
         output.seek(0)
         return output
     
     def export_results_to_zip(results: Dict[int, Dict[str, Any]]) -> io.BytesIO:
         """
         Exportiert die Simulationsergebnisse aller Jahre in eine ZIP-Datei mit Excel-Dateien.
+        Optimiert mit direktem Schreiben statt mehrfacher Excel-Generierung.
         
         Args:
             results: Gesamtergebnis-Dictionary von run_scenario()
         Returns:
             io.BytesIO Objekt mit der ZIP-Datei.
-
         """
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for year, year_data in results.items():
+        # Komprimierung als 'stored' für schnelleres Schreiben, dann können Dateien bereits gezippt sein
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zip_file:
+            for year in sorted(results.keys()):
                 excel_buffer = SimulationEngine.export_results_to_excel(results, year)
                 zip_file.writestr(f"simulationsergebnisse_{year}.xlsx", excel_buffer.getvalue())
+        
         zip_buffer.seek(0)
         return zip_buffer

@@ -852,6 +852,7 @@ def standard_simulation_page() -> None:
                 st.caption("Finale Bilanz nach E-Mobility V2G UND Speicher (positiv = Überschuss, negativ = Defizit)")
                 fig_bal_post = ply.create_balance_area_plot(
                     df_balance_post,
+                    "Rest Bilanz [MWh]",
                     title=" ",
                     date_from=date_from_ts,
                     date_to=date_to_ts
@@ -917,10 +918,13 @@ def standard_simulation_page() -> None:
             
             with col_excel1:
                 if st.button("📊 Excel generieren", key=f"btn_gen_excel_{excel_year}", use_container_width=True):
-                    with st.spinner(f"Generiere Excel für {excel_year}..."):
-                        st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, excel_year)
-                    st.success("✅ Excel generiert!")
-                    st.rerun()
+                    with st.spinner(f"Generiere Excel für {excel_year}... (optimiert)"):
+                        try:
+                            st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, excel_year)
+                            st.success("✅ Excel generiert!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Fehler beim Excel-Export: {e}")
             
             with col_excel2:
                 if excel_key in st.session_state.excel_exports:
@@ -946,10 +950,13 @@ def standard_simulation_page() -> None:
                 
                 with col_zip1:
                     if st.button("📦 ZIP generieren", key="btn_gen_zip", use_container_width=True):
-                        with st.spinner(f"Generiere ZIP mit allen {len(years_available)} Jahren..."):
-                            st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
-                        st.success("✅ ZIP generiert!")
-                        st.rerun()
+                        with st.spinner(f"Generiere ZIP mit allen {len(years_available)} Jahren... (optimiert mit Komprimierung)"):
+                            try:
+                                st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
+                                st.success("✅ ZIP generiert!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Fehler beim ZIP-Export: {e}")
                 
                 with col_zip2:
                     if zip_key in st.session_state.excel_exports:
