@@ -557,11 +557,20 @@ def simulate_emobility_fleet(
     # Zurück in MWh konvertieren
     residual_load_new_mwh = residual_load_new_kw * config_params.dt_h / 1000.0
     
+    # KRITISCH: Zurück zur Bilanz-Konvention!
+    # Am Anfang wurde: residual_load = -bilanz
+    # Daher muss am Ende: bilanz = -residual_load
+    # 
+    # Bilanz-Konvention (für nachgelagerte Speichermodule):
+    #   Bilanz > 0 = Überschuss (Laden möglich)
+    #   Bilanz < 0 = Defizit (Entladen möglich)
+    rest_bilanz_mwh = -residual_load_new_mwh
+    
     # Rest Bilanz aktualisieren oder erstellen
     if 'Rest Bilanz [MWh]' not in df_res.columns:
         df_res['Rest Bilanz [MWh]'] = df_res['Bilanz [MWh]']
     
-    df_res['Rest Bilanz [MWh]'] = residual_load_new_mwh
+    df_res['Rest Bilanz [MWh]'] = rest_bilanz_mwh
     
     return df_res
 
