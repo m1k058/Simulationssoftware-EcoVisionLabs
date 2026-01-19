@@ -263,5 +263,16 @@ def simulate_production(
     # Setze das Jahr in der Zeitpunkt-Spalte auf das Simulationsjahr
     df_result['Zeitpunkt'] = pd.to_datetime(df_result['Zeitpunkt'])
     df_result['Zeitpunkt'] = df_result['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
-    
+
+    # Berechne den erneuerbaren Anteil und die Gesamtproduktion
+    renewable_cols = [
+        'Wind Onshore [MWh]', 'Wind Offshore [MWh]', 'Photovoltaik [MWh]', 
+        'Biomasse [MWh]', 'Wasserkraft [MWh]', 'Sonstige Erneuerbare [MWh]'
+    ]
+    # Nur vorhandene Spalten verwenden
+    existing_renewable_cols = [col for col in renewable_cols if col in df_result.columns]
+    df_result['Erneuerbare [MWh]'] = df_result[existing_renewable_cols].sum(axis=1)
+    production_cols = [col for col in df_result.columns if col != 'Zeitpunkt']
+    df_result['Gesamt [MWh]'] = df_result[production_cols].sum(axis=1)
+
     return df_result

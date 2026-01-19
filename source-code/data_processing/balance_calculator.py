@@ -150,8 +150,11 @@ class BalanceCalculator:
         else:
             cons_sum = cons_aligned.select_dtypes(include=[np.number]).sum(axis=1)
         
-        # Für Produktion: Summiere alle MWh-Spalten (es gibt dort keine Gesamt-Spalte)
-        prod_sum = prod_aligned.select_dtypes(include=[np.number]).sum(axis=1)
+        # Für Produktion: Wenn "Gesamt [MWh]" vorhanden, verwende diese, sonst summiere alle
+        if "Gesamt [MWh]" in prod_aligned.columns:
+            prod_sum = prod_aligned["Gesamt [MWh]"]
+        else:
+            prod_sum = prod_aligned.select_dtypes(include=[np.number]).sum(axis=1)
         
         bilanz = prod_sum - cons_sum
         

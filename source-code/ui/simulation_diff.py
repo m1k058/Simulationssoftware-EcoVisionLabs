@@ -186,8 +186,8 @@ def diff_simulation_page() -> None:
                 # Für jeden Jahr in den Ergebnissen Tabs mit Downloads
                 for year in sorted(results_inc.keys()):
                     with st.expander(f"Jahr {year}", expanded=(year == sorted(results_inc.keys())[0])):
-                        tab_con, tab_prod, tab_bal, tab_stor = st.tabs([
-                            "Verbrauch", "Erzeugung", "Bilanz", "Speicher"
+                        tab_con, tab_prod, tab_bal_pre, tab_bal_post, tab_stor = st.tabs([
+                            "Verbrauch", "Erzeugung", "Bilanz (vor Speicher)", "Bilanz (nach Speicher)", "Speicher"
                         ])
 
                         with tab_con:
@@ -214,16 +214,28 @@ def diff_simulation_page() -> None:
                                 key=f"dl_prod_{sel_inc_str}_{year}"
                             )
 
-                        with tab_bal:
-                            df = results_inc[year]["balance"]
+                        with tab_bal_pre:
+                            df = results_inc[year]["balance_after_emob"]
                             st.dataframe(df, width='stretch')
                             csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
                             st.download_button(
-                                "Download Bilanz CSV",
+                                "Download Bilanz (vor Speicher) CSV",
                                 data=csv,
-                                file_name=f"diff_{sel_inc_str}_bilanz_{year}.csv",
+                                file_name=f"diff_{sel_inc_str}_bilanz_pre_{year}.csv",
                                 mime="text/csv",
-                                key=f"dl_bal_{sel_inc_str}_{year}"
+                                key=f"dl_bal_pre_{sel_inc_str}_{year}"
+                            )
+                        
+                        with tab_bal_post:
+                            df = results_inc[year]["balance_post_flex"]
+                            st.dataframe(df, width='stretch')
+                            csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
+                            st.download_button(
+                                "Download Bilanz (nach Speicher) CSV",
+                                data=csv,
+                                file_name=f"diff_{sel_inc_str}_bilanz_post_{year}.csv",
+                                mime="text/csv",
+                                key=f"dl_bal_post_{sel_inc_str}_{year}"
                             )
 
                         with tab_stor:
@@ -477,12 +489,12 @@ def _extract_kpi_for_saturation(diff_sim_results: dict, interpolated_scenarios: 
         kpi_summer = []
 
         for year, year_results in results.items():
-            # Quelle: bevorzugt storage Rest Bilanz, sonst original balance
+            # Nutze finale Bilanz nach allen Flexibilitäten
             df_source = None
             col_name = None
-            if "storage" in year_results and "Rest Bilanz [MWh]" in year_results["storage"].columns:
-                df_source = year_results["storage"]
-                col_name = "Rest Bilanz [MWh]"
+            if "balance_post_flex" in year_results and "Bilanz [MWh]" in year_results["balance_post_flex"].columns:
+                df_source = year_results["balance_post_flex"]
+                col_name = "Bilanz [MWh]"
             elif "balance" in year_results and "Bilanz [MWh]" in year_results["balance"].columns:
                 df_source = year_results["balance"]
                 col_name = "Bilanz [MWh]"

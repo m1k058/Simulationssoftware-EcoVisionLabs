@@ -362,7 +362,7 @@ def standard_simulation_page() -> None:
                 "Verbrauch (+ E-Mob)",      # results[year]["consumption"]
                 "Erzeugung",                # results[year]["production"]
                 "E-Mobilität",              # results[year]["emobility"]  <- NEU!
-                "Bilanz (vor Flex)",        # results[year]["balance_pre_flex"]
+                "Bilanz (vor Flex)",        # results[year]["balance_after_emob"]
                 "Speicher",                 # results[year]["balance_post_flex"] (nur Speicher-Spalten)
                 "Bilanz (nach Flex)",       # results[year]["balance_post_flex"] (kompakt)
                 "Wirtschaftlichkeit"        # results[year]["economics"]
@@ -444,17 +444,18 @@ def standard_simulation_page() -> None:
                     st.info("⚠️ Keine E-Mobilitäts-Daten verfügbar. Stellen Sie sicher, dass E-Mobility-Parameter im Szenario definiert sind.")
 
             with tab_bal_pre:
-                st.caption("Residuallast VOR Flexibilitäten (ohne Speicher/V2G)")
-                df = results[sel_year]["balance_pre_flex"]
+                st.caption("Residuallast 1 (ohne Speicher)")
+                df = results[sel_year]["balance_after_emob"]
                 
-                # Kompakte Ansicht: nur relevante Spalten
-                display_cols = ['Zeitpunkt', 'Produktion [MWh]', 'Verbrauch [MWh]', 'Bilanz [MWh]']
+                # Kompakte Ansicht: nur relevante Spalten (inkl. pre/post EV)
+                display_cols = ['Zeitpunkt', 'Produktion [MWh]', 'Verbrauch [MWh]', 'Bilanz pre EV [MWh]', 'Bilanz post EV [MWh]']
                 display_cols = [c for c in display_cols if c in df.columns]
                 st.dataframe(df[display_cols], width='stretch')
                 
-                # Analyse
-                surplus_hours = (df['Bilanz [MWh]'] > 0).sum() * 0.25 if 'Bilanz [MWh]' in df.columns else 0
-                deficit_hours = (df['Bilanz [MWh]'] < 0).sum() * 0.25 if 'Bilanz [MWh]' in df.columns else 0
+                # Analyse (verwende post EV Bilanz)
+                bilanz_col = 'Bilanz post EV [MWh]' if 'Bilanz post EV [MWh]' in df.columns else 'Bilanz [MWh]'
+                surplus_hours = (df[bilanz_col] > 0).sum() * 0.25 if bilanz_col in df.columns else 0
+                deficit_hours = (df[bilanz_col] < 0).sum() * 0.25 if bilanz_col in df.columns else 0
                 autarkie = (surplus_hours / (surplus_hours + deficit_hours) * 100) if (surplus_hours + deficit_hours) > 0 else 0
                 
                 col1, col2, col3 = st.columns(3)
@@ -516,21 +517,21 @@ def standard_simulation_page() -> None:
             with tab_bal_post:
                 st.caption("Final-Residuallast NACH allen Flexibilitäten")
                 df = results[sel_year]["balance_post_flex"]
-                df_pre = results[sel_year]["balance_pre_flex"]
+                df_pre = results[sel_year]["balance_after_emob"]
                 
-                # Kompakte Ansicht: Original-Bilanz vs. Rest-Bilanz
+                # Kompakte Ansicht: Bilanz post EV vs. finale Bilanz
                 df_compact = pd.DataFrame()
                 if 'Zeitpunkt' in df.columns:
                     df_compact['Zeitpunkt'] = df['Zeitpunkt']
                 
-                if 'Bilanz [MWh]' in df_pre.columns:
-                    df_compact['Bilanz (vor Flex) [MWh]'] = df_pre['Bilanz [MWh]'].values
+                if 'Bilanz post EV [MWh]' in df_pre.columns:
+                    df_compact['Bilanz (vor Speicher) [MWh]'] = df_pre['Bilanz post EV [MWh]'].values
                 
-                if 'Rest Bilanz [MWh]' in df.columns:
-                    df_compact['Rest Bilanz (nach Flex) [MWh]'] = df['Rest Bilanz [MWh]']
+                if 'Bilanz [MWh]' in df.columns:
+                    df_compact['Bilanz (nach Speicher) [MWh]'] = df['Bilanz [MWh]']
                     
-                    if 'Bilanz [MWh]' in df_pre.columns:
-                        df_compact['Flexibilität genutzt [MWh]'] = df_pre['Bilanz [MWh]'].values - df['Rest Bilanz [MWh]'].values
+                    if 'Bilanz post EV [MWh]' in df_pre.columns:
+                        df_compact['Flexibilität genutzt [MWh]'] = df_pre['Bilanz post EV [MWh]'].values - df['Bilanz [MWh]'].values
                 
                 st.dataframe(df_compact, width='stretch')
                 
@@ -540,8 +541,8 @@ def standard_simulation_page() -> None:
                 else:
                     flex_total = 0
                     
-                if 'Rest Bilanz [MWh]' in df.columns:
-                    rest_deficit_hours = (df['Rest Bilanz [MWh]'] < 0).sum() * 0.25
+                if 'Bilanz [MWh]' in df.columns:
+                    rest_deficit_hours = (df['Bilanz [MWh]'] < 0).sum() * 0.25
                 else:
                     rest_deficit_hours = 0
                 
@@ -800,19 +801,19 @@ def standard_simulation_page() -> None:
             # Speicher-Plots (wenn Speicher vorhanden)
             df_storage = results[sel_year].get("storage")
             df_balance_post = results[sel_year]["balance_post_flex"]
-            df_balance_pre = results[sel_year]["balance_pre_flex"]
+            df_balance_pre = results[sel_year]["balance_after_emob"]
             df_balance_after_emob = results[sel_year].get("balance_after_emob", df_balance_pre)  # Fallback auf pre_flex
             
             if df_storage is not None and not df_storage.empty:
                 st.markdown("### Speichersimulation")
                 st.markdown("#### Geordnete Jahresdauerlinie (Residuallast)")
-                st.caption("Wirkung der Flexibilitäten: Bilanz ohne Flexibilitäten (Erzeugung - Verbrauch) vs. Bilanz nach E-Mobility V2G und Speichern")
+                st.caption("Wirkung der Speicher-Flexibilität: Bilanz nach E-Mobility (vor Speichern) vs. Bilanz nach Speichern")
                 
-                # Kombiniere ursprüngliche Bilanz mit finaler Bilanz für Vergleich
+                # Kombiniere Bilanz post EV mit finaler Bilanz für Vergleich
                 duration_plot_df = pd.DataFrame({
                     'Zeitpunkt': df_balance_pre['Zeitpunkt'],
-                    'Bilanz [MWh]': df_balance_pre['Bilanz [MWh]'],  # Ursprüngliche Bilanz (Erzeugung - Verbrauch)
-                    'Rest Bilanz [MWh]': df_balance_post['Rest Bilanz [MWh]']  # Nach ALLEN Flexibilitäten
+                    'Bilanz [MWh]': df_balance_pre['Bilanz post EV [MWh]'],  # Nach E-Mobility, vor Speichern
+                    'Rest Bilanz [MWh]': df_balance_post['Bilanz [MWh]']  # Nach ALLEN Flexibilitäten (inkl. Speicher)
                 })
                 
                 fig_duration = ply.create_duration_curve_plot(
@@ -842,6 +843,7 @@ def standard_simulation_page() -> None:
                 st.caption("Bilanz nach E-Mobility V2G, aber VOR Speicher-Flexibilitäten (positiv = Überschuss, negativ = Defizit)")
                 fig_bal_pre_storage = ply.create_balance_area_plot(
                     df_balance_after_emob,
+                    balance_column="Bilanz post EV [MWh]",
                     title=" ",
                     date_from=date_from_ts,
                     date_to=date_to_ts
@@ -852,6 +854,7 @@ def standard_simulation_page() -> None:
                 st.caption("Finale Bilanz nach E-Mobility V2G UND Speicher (positiv = Überschuss, negativ = Defizit)")
                 fig_bal_post = ply.create_balance_area_plot(
                     df_balance_post,
+                    balance_column="Bilanz [MWh]",
                     title=" ",
                     date_from=date_from_ts,
                     date_to=date_to_ts
@@ -896,38 +899,64 @@ def standard_simulation_page() -> None:
 
             # Download-Buttons NACH den Visualisierungen (mit intelligentem Caching)
             st.markdown("---")
-            st.subheader("Download")
+            st.subheader("📥 Ergebnisse herunterladen")
             
             # Hole Szenario-Namen aus session_state
             scenario_name = st.session_state.sm.scenario_data.get("metadata", {}).get("name", "Szenario")
             
-            # Excel für einzelnes Jahr (lazy loading mit Spinner)
-            excel_key = f"excel_{sel_year}"
-            if excel_key not in st.session_state.excel_exports:
-                # Zeige Spinner während der Generierung
-                with st.spinner(f"📊 Generiere Excel für {sel_year}..."):
-                    st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, sel_year)
+            # Layout: Dropdown + Buttons
+            col_dropdown, col_excel_btn, col_zip_btn = st.columns([2, 1, 1])
             
-            st.download_button(
-                "📥 Download Jahresergebnisse (EXCEL)", 
-                data=st.session_state.excel_exports[excel_key],
-                file_name=f"Ergebnisse_{scenario_name}_{sel_year}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"download_excel_{sel_year}"
-            )
-
-            # ZIP nur bei mehreren Jahren anzeigen
-            if len(years_available) > 1:
-                zip_key = "excel_zip"
-                if zip_key not in st.session_state.excel_exports:
-                    # Zeige Spinner während der Generierung
-                    with st.spinner(f"📦 Generiere ZIP mit allen {len(years_available)} Jahren..."):
-                        st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
-                
-                st.download_button(
-                    "📦 Download alle Jahre (ZIP mit EXCEL)", 
-                    data=st.session_state.excel_exports[zip_key],
-                    file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
-                    mime="application/zip",
-                    key="download_zip_all"
+            with col_dropdown:
+                # Dropdown für Jahr-Auswahl
+                download_year = st.selectbox(
+                    "Jahr für Excel-Download:",
+                    options=years_available,
+                    index=years_available.index(sel_year) if sel_year in years_available else 0,
+                    key="download_year_select"
                 )
+            
+            with col_excel_btn:
+                # Excel-Download für ausgewähltes Jahr
+                excel_key = f"excel_{download_year}"
+                
+                # Button mit Callback
+                if st.button("📊 Excel generieren", key="generate_excel_btn", use_container_width=True):
+                    with st.spinner(f"Generiere Excel für {download_year}..."):
+                        st.session_state.excel_exports[excel_key] = SimulationEngine.export_results_to_excel(results, download_year)
+                    st.success(f"✅ Excel für {download_year} erstellt!")
+                
+                # Download-Button (nur wenn Excel vorhanden)
+                if excel_key in st.session_state.excel_exports:
+                    st.download_button(
+                        f"⬇️ {download_year}.xlsx",
+                        data=st.session_state.excel_exports[excel_key],
+                        file_name=f"Ergebnisse_{scenario_name}_{download_year}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"download_excel_btn_{download_year}",
+                        use_container_width=True
+                    )
+            
+            with col_zip_btn:
+                # ZIP-Download (nur bei mehreren Jahren)
+                if len(years_available) > 1:
+                    zip_key = "excel_zip"
+                    
+                    # Button mit Callback
+                    if st.button(f"📦 ZIP generieren ({len(years_available)} Jahre)", key="generate_zip_btn", use_container_width=True):
+                        with st.spinner(f"Generiere ZIP mit {len(years_available)} Jahren..."):
+                            st.session_state.excel_exports[zip_key] = SimulationEngine.export_results_to_zip(results)
+                        st.success(f"✅ ZIP mit allen Jahren erstellt!")
+                    
+                    # Download-Button (nur wenn ZIP vorhanden)
+                    if zip_key in st.session_state.excel_exports:
+                        st.download_button(
+                            "⬇️ Alle Jahre.zip",
+                            data=st.session_state.excel_exports[zip_key],
+                            file_name=f"Ergebnisse_{scenario_name}_alle_jahre.zip",
+                            mime="application/zip",
+                            key="download_zip_btn",
+                            use_container_width=True
+                        )
+                else:
+                    st.caption("📦 ZIP-Download nur bei mehreren Simulationsjahren verfügbar")
