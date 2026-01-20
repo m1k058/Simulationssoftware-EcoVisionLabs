@@ -1,7 +1,10 @@
 """
-Scoring system for energy simulation results.
+Fixed scoring system for energy simulation results.
 
-Calculates KPIs across three categories: Security, Ecology, and Economy.
+Fixes:
+1. Storage utilization based on balance BEFORE storage (not after)
+2. Proper CO2 intensity calculation with correct reference values
+3. Added safety bounds for all ratios
 """
 
 from typing import Dict, Optional, Any
@@ -15,7 +18,14 @@ import pandas as pd
 CO2_FACTORS = {
     'gas': 490,  # gCO2/kWh
     'coal': 820,  # gCO2/kWh
-    'worst_case': 500  # gCO2/kWh - maximum today
+    'biomass': 50,  # gCO2/kWh (lifecycle)
+    'hydro': 5,   # gCO2/kWh (lifecycle)
+}
+
+# Reference values for scoring
+CO2_REFERENCE = {
+    'best': 0,      # g/kWh - 100% renewable
+    'worst': 1000,  # g/kWh - 100% coal
 }
 
 DEFAULT_VALUE_MAPPING = {
@@ -42,6 +52,7 @@ DEFAULT_VALUE_MAPPING = {
     'h2_discharged': {'df': 'Speicher', 'col': 'Wasserstoffspeicher Entladene MWh'},
     
     # Balance
+    'balance_before_flex': {'df': 'Bilanz_vor_Flex', 'col': 'Rest Bilanz [MWh]'},  # ADDED
     'balance_after_flex': {'df': 'Bilanz_nach_Flex', 'col': 'Rest Bilanz [MWh]'},
     'production_total': {'df': 'Bilanz_nach_Flex', 'col': 'Produktion [MWh]'},
     'consumption_total': {'df': 'Bilanz_nach_Flex', 'col': 'Verbrauch [MWh]'},
@@ -58,18 +69,7 @@ def _get_value(
     var_name: str,
     agg_func: str = 'sum'
 ) -> Optional[Any]:
-    """
-    Extract and aggregate a value from results DataFrames.
-    
-    Args:
-        results: Dictionary of DataFrames
-        value_mapping: Mapping of variable names to df/column locations
-        var_name: Name of the variable to extract
-        agg_func: Aggregation function ('sum', 'max', 'min', 'mean', 'series')
-    
-    Returns:
-        Aggregated value or None if not found
-    """
+    """Extract and aggregate a value from results DataFrames."""
     if var_name not in value_mapping:
         return None
     
@@ -102,15 +102,15 @@ def _extract_security_values(
     """Extract values needed for security KPIs."""
     values = {}
     
-    # Total hours in simulation - auf ganze Stunden runden
+    # Total hours in simulation
     values['total_hours'] = round(len(results['Verbrauch']) * 0.25)
     
-    # Unserved energy from balance
+    # Unserved energy from balance AFTER flexibility
     balance = _get_value(results, value_mapping, 'balance_after_flex', 'series')
     if balance is not None:
         deficit_mask = balance < 0
         values['total_unserved_mwh'] = abs(balance[deficit_mask].sum())
-        values['max_unserved_mw'] = abs(balance[deficit_mask].min()) * 4
+        values['max_unserved_mw'] = abs(balance[deficit_mask].min()) * 4 if deficit_mask.any() else 0
         values['deficit_hours'] = deficit_mask.sum() * 0.25
     else:
         values['total_unserved_mwh'] = 0
@@ -121,14 +121,47 @@ def _extract_security_values(
     values['total_load_mwh'] = _get_value(results, value_mapping, 'total_load_mwh', 'sum') or 0
     values['max_load_mw'] = (_get_value(results, value_mapping, 'total_load_mwh', 'max') or 0) * 4
     
-    # H2 storage
+    # H2 storage winter availability
+    h2_soc_series = _get_value(results, value_mapping, 'h2_soc', 'series')
     year_str = str(year)
-    if 'h2_storage' in storage_config and year_str in storage_config['h2_storage']:
-        values['h2_capacity_mwh'] = storage_config['h2_storage'][year_str]['installed_capacity_mwh']
-        values['h2_soc_avg_mwh'] = _get_value(results, value_mapping, 'h2_soc', 'mean') or 0
+    
+    if h2_soc_series is not None and 'h2_storage' in storage_config and year_str in storage_config['h2_storage']:
+        h2_capacity = storage_config['h2_storage'][year_str]['installed_capacity_mwh']
+        
+        # Winter months: November (10), December (11), January (0), February (1)
+        # Assuming data has datetime index or we can derive month from position
+        try:
+            # Try to get datetime index
+            if hasattr(results['Speicher'], 'index') and hasattr(results['Speicher'].index, 'month'):
+                winter_mask = results['Speicher'].index.month.isin([11, 12, 1, 2])
+                h2_winter_avg = h2_soc_series[winter_mask].mean()
+            else:
+                # Fallback: Assume data starts at beginning of year, 15-min intervals
+                # Winter: Nov-Feb = months 11,12,1,2
+                # Nov: hours 7320-8040, Dec: 8040-8760, Jan: 0-744, Feb: 744-1416
+                total_intervals = len(h2_soc_series)
+                intervals_per_hour = 4  # 15-min intervals
+                
+                # Get intervals for winter months (Nov, Dec, Jan, Feb)
+                nov_start = int(7320 * intervals_per_hour)  # Nov 1st
+                dec_end = total_intervals  # End of year
+                jan_start = 0
+                feb_end = int(1416 * intervals_per_hour)  # End of Feb
+                
+                winter_data = pd.concat([
+                    h2_soc_series.iloc[nov_start:dec_end],  # Nov-Dec
+                    h2_soc_series.iloc[jan_start:feb_end]   # Jan-Feb
+                ])
+                h2_winter_avg = winter_data.mean()
+        except Exception:
+            # If month detection fails, use overall average as fallback
+            h2_winter_avg = h2_soc_series.mean()
+        
+        values['h2_capacity_mwh'] = h2_capacity
+        values['h2_winter_avg_mwh'] = h2_winter_avg
     else:
         values['h2_capacity_mwh'] = 0
-        values['h2_soc_avg_mwh'] = 0
+        values['h2_winter_avg_mwh'] = 0
     
     return values
 
@@ -140,39 +173,49 @@ def _extract_ecology_values(
     """Extract values needed for ecology KPIs."""
     values = {}
     
-    # Renewable generation
-    renewable_sources = ['wind_onshore_mwh', 'wind_offshore_mwh', 'pv_mwh', 'biomass_mwh', 'hydro_mwh']
-    values['renewable_generation_mwh'] = sum(
-        _get_value(results, value_mapping, source, 'sum') or 0
-        for source in renewable_sources
+    # Individual generation sources
+    sources = {
+        'wind_onshore': _get_value(results, value_mapping, 'wind_onshore_mwh', 'sum') or 0,
+        'wind_offshore': _get_value(results, value_mapping, 'wind_offshore_mwh', 'sum') or 0,
+        'pv': _get_value(results, value_mapping, 'pv_mwh', 'sum') or 0,
+        'biomass': _get_value(results, value_mapping, 'biomass_mwh', 'sum') or 0,
+        'hydro': _get_value(results, value_mapping, 'hydro_mwh', 'sum') or 0,
+        'gas': _get_value(results, value_mapping, 'gas_mwh', 'sum') or 0,
+    }
+    
+    # Renewable generation (wind, solar = 0 CO2 in operation)
+    values['renewable_generation_mwh'] = (
+        sources['wind_onshore'] + sources['wind_offshore'] + sources['pv']
     )
     
     # Fossil generation
-    values['fossil_generation_mwh'] = _get_value(results, value_mapping, 'gas_mwh', 'sum') or 0
+    values['fossil_generation_mwh'] = sources['gas']
     
     # Total generation
     values['total_generation_mwh'] = _get_value(results, value_mapping, 'production_total', 'sum') or 0
     
-    # Fallback: Falls production_total nicht verfügbar, berechne aus Komponenten
+    # Fallback
     if values['total_generation_mwh'] == 0:
-        values['total_generation_mwh'] = values['renewable_generation_mwh'] + values['fossil_generation_mwh']
+        values['total_generation_mwh'] = sum(sources.values())
     
-    # Curtailment
+    # Curtailment from balance AFTER storage
     balance = _get_value(results, value_mapping, 'balance_after_flex', 'series')
     if balance is not None:
         values['curtailment_mwh'] = balance[balance > 0].sum()
     else:
         values['curtailment_mwh'] = 0
     
-    # CO2 emissions (MWh * 1000 * gCO2/kWh / 1_000_000 = tons)
-    values['total_co2_tons'] = (
-        values['fossil_generation_mwh'] * 1000 * CO2_FACTORS['gas'] / 1_000_000
+    # CO2 emissions calculation
+    total_co2_kg = (
+        sources['gas'] * 1000 * CO2_FACTORS['gas'] / 1000 +
+        sources['biomass'] * 1000 * CO2_FACTORS['biomass'] / 1000 +
+        sources['hydro'] * 1000 * CO2_FACTORS['hydro'] / 1000
     )
     
-    # Get total load for worst case calculation
-    total_load = _get_value(results, value_mapping, 'total_load_mwh', 'sum') or 0
-    values['worst_case_co2_tons'] = (
-        total_load * 1000 * CO2_FACTORS['worst_case'] / 1_000_000
+    # CO2 intensity in g/kWh
+    total_generation_kwh = values['total_generation_mwh'] * 1000
+    values['co2_intensity_g_per_kwh'] = (
+        (total_co2_kg * 1000) / total_generation_kwh if total_generation_kwh > 0 else 0
     )
     
     return values
@@ -191,7 +234,29 @@ def _extract_economy_values(
     # Import equals unserved energy
     values['import_mwh'] = unserved_mwh
     
-    # Storage throughput and capacity
+    # FIXED: Calculate storage need from BEFORE storage balance
+    balance_before = _get_value(results, value_mapping, 'balance_before_flex', 'series')
+    
+    if balance_before is not None:
+        # Use balance BEFORE storage intervention
+        surplus_energy = balance_before[balance_before > 0].sum()
+        deficit_energy = abs(balance_before[balance_before < 0].sum())
+        values['storage_need_mwh'] = min(surplus_energy, deficit_energy)
+    else:
+        # Fallback: use balance after if before not available
+        balance_after = _get_value(results, value_mapping, 'balance_after_flex', 'series')
+        if balance_after is not None:
+            surplus_energy = balance_after[balance_after > 0].sum()
+            deficit_energy = abs(balance_after[balance_after < 0].sum())
+            # Add back what storage actually moved
+            storage_total = 0
+            for key in ['battery_discharged', 'pumped_storage_discharged', 'h2_discharged']:
+                storage_total += _get_value(results, value_mapping, key, 'sum') or 0
+            values['storage_need_mwh'] = min(surplus_energy, deficit_energy) + storage_total
+        else:
+            values['storage_need_mwh'] = 0
+    
+    # Storage throughput
     storage_mapping = {
         'battery_storage': ('battery_charged', 'battery_discharged'),
         'pumped_hydro_storage': ('pumped_storage_charged', 'pumped_storage_discharged'),
@@ -200,25 +265,18 @@ def _extract_economy_values(
     
     total_charged = 0
     total_discharged = 0
-    total_charge_capacity_mw = 0
     
-    year_str = str(year)
     for storage_key, (charged_key, discharged_key) in storage_mapping.items():
-        # Get capacity from config
-        if storage_key in storage_config and year_str in storage_config[storage_key]:
-            config = storage_config[storage_key][year_str]
-            total_charge_capacity_mw += config['max_charge_power_mw']
-        
-        # Get actual charged/discharged
         total_charged += _get_value(results, value_mapping, charged_key, 'sum') or 0
         total_discharged += _get_value(results, value_mapping, discharged_key, 'sum') or 0
     
     values['storage_charged_mwh'] = total_charged
     values['storage_discharged_mwh'] = total_discharged
-    values['storage_total_throughput_mwh'] = total_charged + total_discharged
-    values['storage_charge_capacity_mw'] = total_charge_capacity_mw
     
-    # LCOE from Wirtschaftlichkeit
+    # Useful throughput (minimum ensures we don't count losses twice)
+    values['useful_storage_throughput_mwh'] = min(total_charged, total_discharged)
+    
+    # LCOE
     if 'Wirtschaftlichkeit' in results and isinstance(results['Wirtschaftlichkeit'], dict):
         values['system_lcoe'] = results['Wirtschaftlichkeit'].get('system_lco_e')
     else:
@@ -231,43 +289,103 @@ def _extract_economy_values(
 # HELPER FUNCTIONS - KPI CALCULATION
 # ============================================================================
 
-def _safe_ratio(numerator: float, denominator: float) -> float:
-    """Calculate ratio safely, returning 0 if denominator is 0."""
-    return numerator / denominator if denominator > 0 else 0
+def _safe_ratio(numerator: float, denominator: float, max_value: float = None) -> float:
+    """
+    Calculate ratio safely with optional capping.
+    
+    Args:
+        numerator: Top of ratio
+        denominator: Bottom of ratio
+        max_value: Optional maximum value to cap at
+    
+    Returns:
+        Ratio, capped at max_value if provided
+    """
+    if denominator <= 0:
+        return 0.0
+    
+    ratio = numerator / denominator
+    
+    if max_value is not None:
+        ratio = min(ratio, max_value)
+    
+    return ratio
 
 
 def _calculate_security_kpis(values: Dict[str, float]) -> Dict[str, float]:
     """Calculate security KPIs from extracted values."""
     return {
-        'unserved_mwh': _safe_ratio(values['total_unserved_mwh'], values['total_load_mwh']),
-        'max_unserved_mw': _safe_ratio(values['max_unserved_mw'], values['max_load_mw']),
-        'deficit_h': _safe_ratio(values['deficit_hours'], values['total_hours']),
-        'h2_soc': _safe_ratio(values['h2_soc_avg_mwh'], values['h2_capacity_mwh'])
+        # Anteil der nicht gedeckten Energie (0-100%)
+        'energy_deficit_share': _safe_ratio(
+            values['total_unserved_mwh'], 
+            values['total_load_mwh'],
+            max_value=1.0  # Cap at 100%
+        ),
+        
+        # Schlimmster Moment (0-100%)
+        'peak_deficit_ratio': _safe_ratio(
+            values['max_unserved_mw'], 
+            values['max_load_mw'],
+            max_value=1.0  # Cap at 100%
+        ),
+        
+        # Anteil der Stunden mit Defizit (0-100%)
+        'deficit_frequency': _safe_ratio(
+            values['deficit_hours'], 
+            values['total_hours'],
+            max_value=1.0  # Cap at 100%
+        ),
     }
 
 
 def _calculate_ecology_kpis(values: Dict[str, float]) -> Dict[str, float]:
     """Calculate ecology KPIs from extracted values."""
     return {
-        'co2_intensity': _safe_ratio(values['total_co2_tons'], values['worst_case_co2_tons']),
-        'curtailment_mwh': _safe_ratio(values['curtailment_mwh'], values['renewable_generation_mwh']),
-        'fossil_share': _safe_ratio(values['fossil_generation_mwh'], values['total_generation_mwh'])
+        # CO2-Intensität in g/kWh (raw value for display, normalized for scoring)
+        'co2_intensity': values['co2_intensity_g_per_kwh'],
+        
+        # Anteil abgeregelter erneuerbarer Energie (0-40%)
+        'curtailment_share': _safe_ratio(
+            values['curtailment_mwh'], 
+            values['renewable_generation_mwh'],
+            max_value=0.4  # Cap at 40% (extreme cases)
+        ),
+        
+        # Anteil fossiler Erzeugung (0-100%)
+        'fossil_share': _safe_ratio(
+            values['fossil_generation_mwh'], 
+            values['total_generation_mwh'],
+            max_value=1.0  # Cap at 100%
+        )
     }
 
 
 def _calculate_economy_kpis(values: Dict[str, float]) -> Dict[str, float]:
     """Calculate economy KPIs from extracted values."""
-    # Get total load for import dependency
-    # Note: This should be passed in values dict
     total_load = values.get('total_load_mwh', 0)
     
-    # Storage utilization: throughput / max possible throughput
-    max_possible_throughput = values['storage_charge_capacity_mw'] * values.get('total_hours', 0)
+    # FIXED: Cap storage utilization at reasonable maximum
+    storage_util_raw = _safe_ratio(
+        values['useful_storage_throughput_mwh'], 
+        values['storage_need_mwh']
+    )
+    
+    # Cap at 120% (allows for some inefficiency/losses but prevents extreme values)
+    storage_utilization = min(storage_util_raw, 1.2)
     
     return {
+        # System-Kosten-Index (LCOE in €/MWh or ct/kWh)
         'system_cost_index': values['system_lcoe'] if values['system_lcoe'] is not None else 0,
-        'import_dependency': _safe_ratio(values['import_mwh'], total_load),
-        'storage_utilization': _safe_ratio(values['storage_total_throughput_mwh'], max_possible_throughput)
+        
+        # Import-Abhängigkeit (0-100%)
+        'import_dependency': _safe_ratio(
+            values['import_mwh'], 
+            total_load,
+            max_value=1.0  # Cap at 100%
+        ),
+        
+        # Speichernutzung (0-120%)
+        'storage_utilization': storage_utilization
     }
 
 
@@ -284,25 +402,22 @@ def get_score_and_kpis(
     """
     Calculate scoring and KPIs based on simulation results.
     
-    Args:
-        results: Simulation results with DataFrames:
-            - 'Verbrauch': Consumption data
-            - 'Erzeugung': Generation data
-            - 'E-Mobility': E-Mobility data
-            - 'Speicher': Storage data
-            - 'Bilanz_vor_Flex': Balance before flexibility
-            - 'Bilanz_nach_Flex': Balance after flexibility
-            - 'Wirtschaftlichkeit': Economic metrics (dict)
-        storage_config: Storage capacities from YAML configuration
-        year: Simulation year (e.g. 2030, 2045)
-        value_mapping: Optional custom mapping for value extraction
+    Returns KPIs:
     
-    Returns:
-        Dictionary containing:
-            - 'security': Security KPIs
-            - 'ecology': Ecology KPIs
-            - 'economy': Economy KPIs
-            - 'raw_values': All extracted values for debugging
+    Security (all 0-1 ratios):
+    - energy_deficit_share: Total unmet energy / total demand
+    - peak_deficit_ratio: Max unmet power / peak demand
+    - deficit_frequency: Hours with deficit / total hours
+    
+    Ecology:
+    - co2_intensity: Actual g CO2/kWh (0-1000 range)
+    - curtailment_share: Curtailed / renewable generation (0-0.4)
+    - fossil_share: Fossil / total generation (0-1)
+    
+    Economy:
+    - system_cost_index: LCOE in ct/kWh
+    - import_dependency: Imports / total demand (0-1)
+    - storage_utilization: Useful throughput / storage need (0-1.2)
     """
     # Use default mapping if none provided
     mapping = value_mapping or DEFAULT_VALUE_MAPPING

@@ -16,7 +16,7 @@ KPI_CONFIG = {
         'title': '🛡️ Security',
         'color': '#FF6B6B',
         'kpis': {
-            'unserved_mwh': {
+            'energy_deficit_share': {
                 'name': 'Unserved Energy Ratio',
                 'description': 'Anteil ungedeckter Energie an Gesamtlast',
                 'unit': '%',
@@ -24,7 +24,7 @@ KPI_CONFIG = {
                 'worst': 1,
                 'best': 0
             },
-            'max_unserved_mw': {
+            'peak_deficit_ratio': {
                 'name': 'Max Unserved Power Ratio',
                 'description': 'Maximale ungedeckte Leistung',
                 'unit': '%',
@@ -32,7 +32,7 @@ KPI_CONFIG = {
                 'worst': 1,
                 'best': 0
             },
-            'deficit_h': {
+            'deficit_frequency': {
                 'name': 'Deficit Hours Ratio',
                 'description': 'Anteil Stunden mit Defizit',
                 'unit': '%',
@@ -56,13 +56,13 @@ KPI_CONFIG = {
         'kpis': {
             'co2_intensity': {
                 'name': 'CO2 Intensity',
-                'description': 'CO2-Emissionen vs. Worst Case',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
+                'description': 'CO2-Emissionen pro kWh Stromerzeugung',
+                'unit': 'g/kWh',
+                'format': '.2f',
+                'worst': 1000,
                 'best': 0
             },
-            'curtailment_mwh': {
+            'curtailment_share': {
                 'name': 'Curtailment Ratio',
                 'description': 'Abgeregelter Anteil erneuerbarer Energie',
                 'unit': '%',
@@ -119,24 +119,31 @@ KPI_CONFIG = {
 
 def _calculate_kpi_score(value: float, worst: float, best: float) -> float:
     """
-    Calculate a score (0-100) for a KPI value.
+    Calculate a score (0-100) for a KPI value using min-max normalization.
     
     Args:
-        value: Current KPI value
-        worst: Worst possible value
-        best: Best possible value
+        value: Current KPI value (can be absolute or relative)
+        worst: Worst possible value (gets 0 points)
+        best: Best possible value (gets 100 points)
     
     Returns:
         Score between 0 and 100 (100 = best)
+    
+    Examples:
+        - co2_intensity: value=173, worst=1000, best=0 → score≈83
+        - deficit_share: value=0.1, worst=1, best=0 → score=90
     """
-    lower_is_better = best < worst
+    # Avoid division by zero
+    if worst == best:
+        return 100 if value == best else 0
     
-    if lower_is_better:
-        score = max(0, min(100, (1 - value / worst) * 100)) if worst > 0 else 100
-    else:
-        score = max(0, min(100, (value / best) * 100)) if best > 0 else 0
+    # Min-Max normalization: (value - best) / (worst - best)
+    # Then invert to get score: 1 - normalized
+    normalized = (value - best) / (worst - best)
+    score = (1 - normalized) * 100
     
-    return score
+    # Clamp to 0-100 range
+    return max(0, min(100, score))
 
 
 def _get_score_color(score: float) -> str:
