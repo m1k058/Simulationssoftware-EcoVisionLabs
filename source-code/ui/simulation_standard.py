@@ -1189,6 +1189,38 @@ def standard_simulation_page() -> None:
                         else:
                             st.info("Investitionsverteilung nach Technologie nicht verfügbar.")
 
+# Plot restbilanz Monatlich aufsummiert + Signifikante Werte
+            with st.expander("📈 Zu Importierende Restbilanz", expanded=True):
+                st.markdown("### Monatlich aufaddierte Restbilanz")
+                st.caption("Zeigt die monatlich aufsummierte Restbilanz nach allen Flexibilitäten (positiv = Überschuss, negativ = Defizit)")
+                
+                df_balance_post = results[sel_year]["balance_post_flex"]
+                
+                fig_monthly_balance = ply.create_monthly_balance_plot(
+                    df_balance_post,
+                    title=" ",
+                )
+                st.plotly_chart(fig_monthly_balance, key=f"monthly_balance_{sel_year}", use_container_width=True)
+                
+                # Signifikante Kennzahlen
+                total_surplus = df_balance_post[df_balance_post['Rest Bilanz [MWh]'] > 0]['Rest Bilanz [MWh]'].sum()
+                total_deficit = df_balance_post[df_balance_post['Rest Bilanz [MWh]'] < 0]['Rest Bilanz [MWh]'].sum()
+                yearly_sum = df_balance_post['Rest Bilanz [MWh]'].sum()
+                
+                col1, col2, col3 = st.columns(3, border=True)
+                with col1:
+                    col1.metric(":green[Gesamt Überschuss]", f"{total_surplus / 1e6:.2f} TWh")
+                    st.write(":green[Summe aller Monate mit Energieüberschuss]: " \
+                    "Diese sind für den Export oder weitere Speicherung verfügbar.")
+                with col2:
+                    col2.metric(":red[Gesamt Defizit]", f"{abs(total_deficit) / 1e6:.2f} TWh")
+                    st.write(":red[Summe aller Monate mit Energiedefizit]: " \
+                    "Diese müssen durch Wasserstoff/Gas Importe und/oder Strom Importe gedeckt werden.")
+                with col3:
+                    col3.metric("Jährliche Gesamtbilanz", f"{yearly_sum / 1e6:.2f} TWh")
+                    st.write("Netto-Bilanz für das gesamte Jahr (Überschuss - Defizit)")
+
+
             # KPI-Dashboard als Expander
             with st.expander("⚡ KPI-Scoring Dashboard", expanded=True):
                 # Prüfe ob Storage Config vorhanden ist

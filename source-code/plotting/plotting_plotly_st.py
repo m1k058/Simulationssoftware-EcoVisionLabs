@@ -1017,3 +1017,103 @@ def create_soc_stacked_plot(
     
     return fig
 
+
+def create_monthly_balance_plot(
+    df: pd.DataFrame,
+    balance_column: str = "Rest Bilanz [MWh]",
+    title: str = "",
+    date_from: pd.Timestamp | None = None,
+    date_to: pd.Timestamp | None = None,
+) -> go.Figure:
+    """
+    Erstellt einen grouped Bar-Plot für monatlich getrennte Überschüsse und Defizite.
+    
+    Args:
+        df: DataFrame mit Zeitpunkt und Bilanzspalte
+        balance_column: Name der Bilanzspalte (default: "Rest Bilanz [MWh]")
+        title: Plot-Titel
+        date_from: Startdatum für Filterung
+        date_to: Enddatum für Filterung
+    
+    Returns:
+        Plotly Figure mit gruppiertem Balkendiagramm für monatliche Überschüsse und Defizite
+    """
+    
+    if "Zeitpunkt" not in df.columns or balance_column not in df.columns:
+        raise KeyError(f"Benötigte Spalten fehlen: Zeitpunkt, {balance_column}")
+    
+    # Kopie erstellen und Zeitpunkt konvertieren
+    df = df.copy()
+    df['Zeitpunkt'] = pd.to_datetime(df['Zeitpunkt'])
+    
+    # Zeitfilter anwenden
+    if date_from is not None:
+        df = df[df['Zeitpunkt'] >= date_from]
+    if date_to is not None:
+        df = df[df['Zeitpunkt'] <= date_to]
+    
+    # Extrahiere Jahr und Monat
+    df['Jahr'] = df['Zeitpunkt'].dt.year
+    df['Monat'] = df['Zeitpunkt'].dt.month
+    df['Monat_Name'] = df['Zeitpunkt'].dt.strftime('%B')
+    
+    # Berechne Überschüsse und Defizite separat
+    df['Überschuss'] = df[balance_column].clip(lower=0)  # Nur positive Werte
+    df['Defizit'] = df[balance_column].clip(upper=0).abs()  # Nur negative Werte, als positive Darstellung
+    
+    # Aufsummieren pro Monat
+    monthly_data = df.groupby(['Jahr', 'Monat', 'Monat_Name']).agg({
+        'Überschuss': 'sum',
+        'Defizit': 'sum'
+    }).reset_index()
+    
+    monthly_data['Label'] = monthly_data['Monat_Name'] + ' ' + monthly_data['Jahr'].astype(str)
+    
+    fig = go.Figure()
+    
+    # Überschüsse (grün)
+    fig.add_trace(
+        go.Bar(
+            x=monthly_data['Label'],
+            y=monthly_data['Überschuss'],
+            name='Überschuss',
+            marker=dict(color='rgba(34, 197, 94, 0.8)'),  # Grün
+            text=monthly_data['Überschuss'].apply(lambda x: f"{x/1e3:.1f}" if x > 0 else ""),
+            textposition='outside',
+            hovertemplate="<b>%{x}</b><br>Überschuss: %{y:,.0f} MWh<extra></extra>",
+        )
+    )
+    
+    # Defizite (rot)
+    fig.add_trace(
+        go.Bar(
+            x=monthly_data['Label'],
+            y=monthly_data['Defizit'],
+            name='Defizit',
+            marker=dict(color='rgba(239, 68, 68, 0.8)'),  # Rot
+            text=monthly_data['Defizit'].apply(lambda x: f"{x/1e3:.1f}" if x > 0 else ""),
+            textposition='outside',
+            hovertemplate="<b>%{x}</b><br>Defizit: %{y:,.0f} MWh<extra></extra>",
+        )
+    )
+    
+    fig.update_layout(
+        title=title if title else None,
+        xaxis_title="Monat",
+        yaxis_title="Monatliche Bilanz [MWh]",
+        barmode='group',
+        hovermode="x unified",
+        template="plotly_white",
+        xaxis=dict(tickangle=-45),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+    )
+    
+    return fig
+
+
