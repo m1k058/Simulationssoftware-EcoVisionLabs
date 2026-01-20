@@ -21,12 +21,6 @@ from plotting.scoring_plots import (
     KPI_CONFIG
 )
 
-# Manager Imports
-from data_manager import DataManager
-from config_manager import ConfigManager
-from scenario_manager import ScenarioManager
-
-
 def create_date_range_selector(df: pd.DataFrame, key_suffix: str = "") -> tuple[pd.Timestamp, pd.Timestamp]:
     """
     Erstellt Zeitauswahl-Felder basierend auf den verfügbaren Daten im DataFrame.
@@ -46,12 +40,12 @@ def create_date_range_selector(df: pd.DataFrame, key_suffix: str = "") -> tuple[
     min_date = df_time.min()
     max_date = df_time.max()
     
-    # Standard: 01. Mai - 07. Mai (oder erste verfügbare Woche)
+    # Standard: 01. Mai - 07. Mai
     year = min_date.year
     default_start = pd.Timestamp(year=year, month=5, day=1)
     default_end = pd.Timestamp(year=year, month=5, day=7)
     
-    # Falls Mai nicht im Datensatz, nimm erste Woche der verfügbaren Daten
+    # IF Mai nicht im Datensatz DO erste Woche der verfügbaren Daten
     if default_start < min_date or default_start > max_date:
         default_start = min_date
         default_end = min_date + pd.Timedelta(days=7)
@@ -81,7 +75,7 @@ def create_date_range_selector(df: pd.DataFrame, key_suffix: str = "") -> tuple[
     with col3:
         holeYear = st.button("Ganzes Jahr anzeigen", key=f"full_year_btn_{key_suffix}", on_click=lambda: None)
     
-    # Konvertiere zu Timestamp (bis enthält den ganzen Tag)
+    # Konvert zu Timestamp
     if holeYear:
         date_from_ts = min_date
         date_to_ts = max_date
@@ -94,21 +88,21 @@ def create_date_range_selector(df: pd.DataFrame, key_suffix: str = "") -> tuple[
 
 def convert_results_to_scoring_format(results: dict, year: int) -> dict:
     """
-    Konvertiert Simulationsergebnisse in das Format für das KPI-Scoring-System.
+    Konvertiert Simulationsergebnisse in das Format für das KPI-Scoring-System
     
     Args:
         results: Volles results Dictionary (indexiert nach Jahr)
         year: Zu extrahierendes Jahr
     
     Returns:
-        Dictionary im Format für scoring_system
+        Dictionary im Format für scoring_system.py
     """
     if year not in results:
         raise ValueError(f"Jahr {year} nicht in results gefunden")
     
     year_results = results[year]
     
-    # Mapping der Simulationsergebnis-Keys zu Scoring-System-Keys
+    # Mapping
     scoring_results = {
         'Verbrauch': year_results['consumption'],
         'Erzeugung': year_results['production'],
@@ -123,7 +117,7 @@ def convert_results_to_scoring_format(results: dict, year: int) -> dict:
 
 
 def normalize_storage_config(storage_cfg: dict) -> dict:
-    """Konvertiert Jahres-Keys in Strings, damit Scoring-System sie findet."""
+    """Konvertiert Jahres-Keys in Strings für Scoring-System"""
     if not isinstance(storage_cfg, dict):
         return {}
     normalized = {}
@@ -138,7 +132,8 @@ def normalize_storage_config(storage_cfg: dict) -> dict:
 
 
 def render_kpi_overview(kpis: dict):
-    """Rendert den KPI-Übersichts-Bereich mit Radar-Chart und Kategorie-Scores."""
+    """Rendert den KPI-Übersichts-Bereich"""
+
     st.subheader('📊 KPI Überblick')
     
     col1, col2 = st.columns([2, 1])
@@ -155,7 +150,7 @@ def render_kpi_overview(kpis: dict):
         for category, score in category_scores.items():
             config = KPI_CONFIG[category]
             
-            # Farbbestimmung basierend auf Score
+            # farbe nach score
             if score >= 80:
                 delta_color = 'normal'
             elif score >= 60:
@@ -170,7 +165,7 @@ def render_kpi_overview(kpis: dict):
                 delta_color=delta_color
             )
         
-        # Gesamtscore
+        # gesamtscore
         overall_score = sum(category_scores.values()) / len(category_scores)
         st.markdown('---')
         st.metric(
@@ -184,9 +179,9 @@ def render_category_details(category: str, kpis: dict, config: dict):
     """Rendert Detailansicht für eine Kategorie."""
     st.subheader(f'{config["title"]} Details')
     
-    # Gauge Charts in Spalten
+    # gauge in Spalten
     num_kpis = len(kpis)
-    cols = st.columns(min(num_kpis, 3))  # Max 3 Spalten
+    cols = st.columns(min(num_kpis, 3))
     
     for idx, (kpi_name, kpi_value) in enumerate(kpis.items()):
         kpi_config = config['kpis'].get(kpi_name, {})
@@ -202,7 +197,7 @@ def render_category_details(category: str, kpis: dict, config: dict):
             )
             st.plotly_chart(gauge_fig, width='stretch')
             
-            # Zeige aktuellen Wert
+            # zeige Wert
             value_format = kpi_config.get('format', '.2f')
             if value_format == '.2%':
                 formatted_value = f'{kpi_value * 100:.2f}%'
@@ -214,7 +209,7 @@ def render_category_details(category: str, kpis: dict, config: dict):
             st.markdown(f'**Wert:** {formatted_value}')
             st.caption(kpi_config.get('description', ''))
     
-    # Bar Chart
+    # bar chart
     st.markdown('---')
     st.subheader('KPI Werte')
     bar_fig = create_kpi_bar_chart(kpis, config)
@@ -226,7 +221,7 @@ def render_detailed_table(kpis: dict):
     st.subheader('📋 Detaillierte KPI-Tabelle')
     df = create_kpi_table(kpis)
     
-    # Stylen des DataFrames
+    # stylen des dataframes
     st.dataframe(
         df,
         width='stretch',
@@ -242,42 +237,43 @@ def render_detailed_table(kpis: dict):
     )
 
     # Raw Values als Expander
-    with st.expander('🔧 Raw Data (Debug)', expanded=False):
-        st.subheader('Rohwerte nach Kategorie')
-        
-        if 'raw_values' in kpis:
-            # Gruppiere Werte nach Kategorie
-            security_vals = {k: v for k, v in kpis['raw_values'].items() 
-                            if any(x in k.lower() for x in ['unserved', 'deficit', 'load', 'h2', 'security', 'autarkie'])}
-            ecology_vals = {k: v for k, v in kpis['raw_values'].items() 
-                           if any(x in k.lower() for x in ['co2', 'renewable', 'fossil', 'curtailment', 'ecology', 'generation', 'total_generation'])}
-            economy_vals = {k: v for k, v in kpis['raw_values'].items() 
-                           if any(x in k.lower() for x in ['import', 'storage', 'lcoe', 'hours', 'economy', 'cost'])}
+    if st.session_state.get("debug_mode"):
+        with st.expander('🔧 Raw Data (Debug)', expanded=False):
+            st.subheader('Rohwerte nach Kategorie')
             
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown('**Security Values**')
-                st.json(security_vals)
-            
-            with col2:
-                st.markdown('**Ecology Values**')
-                st.json(ecology_vals)
-            
-            with col3:
-                st.markdown('**Economy Values**')
-                st.json(economy_vals)
-        else:
-            st.info('Keine Raw Values verfügbar')
+            if 'raw_values' in kpis:
+                # Gruppiere Werte nach Kategorie
+                security_vals = {k: v for k, v in kpis['raw_values'].items() 
+                                if any(x in k.lower() for x in ['unserved', 'deficit', 'load', 'h2', 'security', 'autarkie'])}
+                ecology_vals = {k: v for k, v in kpis['raw_values'].items() 
+                            if any(x in k.lower() for x in ['co2', 'renewable', 'fossil', 'curtailment', 'ecology', 'generation', 'total_generation'])}
+                economy_vals = {k: v for k, v in kpis['raw_values'].items() 
+                            if any(x in k.lower() for x in ['import', 'storage', 'lcoe', 'hours', 'economy', 'cost'])}
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown('**Security Values**')
+                    st.json(security_vals)
+                
+                with col2:
+                    st.markdown('**Ecology Values**')
+                    st.json(ecology_vals)
+                
+                with col3:
+                    st.markdown('**Economy Values**')
+                    st.json(economy_vals)
+            else:
+                st.info('Keine Raw Values verfügbar')
 
 def render_kpi_dashboard(results: dict, storage_config: dict, year: int):
     """
     Rendert das vollständige KPI-Dashboard.
     
     Args:
-        results: Volles Simulationsergebnis Dictionary (indexiert nach Jahr)
+        results: Simulationsergebnis Dictionary (indexiert nach Jahr)
         storage_config: Speicherkonfiguration aus Szenario
-        year: Zu analysierende Jahr (initial - kann durch Nutzer überschrieben werden)
+        year: Zu analysierendes Jahr
     """
     st.markdown('### ⚡ KPI-Dashboard')
     
@@ -302,7 +298,7 @@ def render_kpi_dashboard(results: dict, storage_config: dict, year: int):
     
     st.markdown('---')
     
-    # Konvertiere results zu Scoring-Format
+    # konvertiere results zu Scoring format
     try:
         scoring_results = convert_results_to_scoring_format(results, selected_year)
     except ValueError as e:
@@ -310,11 +306,11 @@ def render_kpi_dashboard(results: dict, storage_config: dict, year: int):
         st.info(f'Verfügbare Jahre: {available_years}')
         return
     
-    # Berechne KPIs
+    # calc KPIs
     with st.spinner(f'Berechne KPIs für {selected_year}...'):
         kpis = get_score_and_kpis(scoring_results, storage_config, selected_year)
     
-    # Übersichts-Sektion
+    # Overview
     render_kpi_overview(kpis)
     
     st.markdown('---')
@@ -332,23 +328,27 @@ def render_kpi_dashboard(results: dict, storage_config: dict, year: int):
     
     st.markdown('---')
     
-    # Zusätzliche Informationen
+    # zusatzliche info
     with st.expander('📋 Detaillierte Tabelle'):
         render_detailed_table(kpis)
 
 
 def standard_simulation_page() -> None:
-    """Single Mode: Ein Szenario laden und simulieren."""
+    """Single Mode: Ein Szenario laden und simulieren"""
     st.title("Simulation (Single Mode)")
     st.caption("Laden Sie ein Szenario und führen Sie eine vollständige Simulation durch.")
 
-    # Überprüfe ob DataManager, ConfigManager, ScenarioManager geladen sind
+    # -----------------------------------------#
+    #          Szenario Laden Bereich          #
+    # -----------------------------------------#
+
+    # check IF DataManager, ConfigManager, ScenarioManager geladen sind
     if st.session_state.dm is None or st.session_state.cfg is None or st.session_state.sm is None:
         st.warning("DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
         return
     uploaded_file = st.file_uploader("Lade ein Szenario YAML Datei hoch", type=["yaml"], key="scenario_uploader")
     
-    # Buttons unter dem Uploader
+    # Lade / Beispiel / Zurücksetzen Buttons
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     
     with col_btn1:
@@ -356,7 +356,6 @@ def standard_simulation_page() -> None:
             if uploaded_file is not None:
                 try:
                     st.session_state.sm.load_scenario(uploaded_file)
-                    # Speichere Storage Config in session_state für KPI Dashboard (Jahres-Keys als Strings)
                     storage_config = st.session_state.sm.scenario_data.get("target_storage_capacities", {})
                     st.session_state.storage_config = normalize_storage_config(storage_config)
                     st.success("✅ Szenario erfolgreich geladen!")
@@ -370,11 +369,9 @@ def standard_simulation_page() -> None:
         if st.button(":material/assignment: Beispiel laden", width='stretch'):
             try:
                 from pathlib import Path
-                # Scenarios folder is at project root, not in source-code
                 example_path = Path(__file__).resolve().parent.parent.parent / "scenarios" / "Szenario_Beispiel_SW.yaml"
                 if example_path.exists():
                     st.session_state.sm.load_scenario(example_path)
-                    # Speichere Storage Config in session_state für KPI Dashboard (Jahres-Keys als Strings)
                     storage_config = st.session_state.sm.scenario_data.get("target_storage_capacities", {})
                     st.session_state.storage_config = normalize_storage_config(storage_config)
                     st.success("✅ Beispiel-Szenario geladen!")
@@ -391,11 +388,15 @@ def standard_simulation_page() -> None:
             st.success("✅ Datei gelöscht!")
             st.rerun()
     
-    # Info wenn kein Szenario geladen ist
+    # loaded Szenario check
     if st.session_state.sm.scenario_name is None:
         st.info("Bitte lade eine Szenario YAML Datei hoch, um fortzufahren.")
 
-    # Zeige die geladenen Szenarien an
+    # -----------------------------------------#
+    #       Szenario Informationen Bereich     #
+    # -----------------------------------------#
+
+    # show geladenes Szenario
     if st.session_state.sm is not None and st.session_state.sm.scenario_name is not None:
         metadata = st.session_state.sm.scenario_data.get("metadata", {})
         years = metadata.get("valid_for_years", [])
@@ -408,26 +409,24 @@ def standard_simulation_page() -> None:
             st.markdown(
                 f"**Gültig für Jahre:** :blue[{', '.join(map(str, years)) if isinstance(years, (list, tuple)) else years}]"
             )
-
-        # Szenario Daten anzeigen    
+    
         with st.popover("📋 Szenario Daten"):
             st.subheader("Szenario Rohdaten")
 
-            # Szenario-Daten abrufen
             scenario = st.session_state.sm.scenario_data
             
-            # Verfügbare Jahre aus dem Szenario
+            # available Jahre aus Szenario
             valid_years = scenario.get("metadata", {}).get("valid_for_years", [])
             selected_year = st.selectbox("Wähle das Simulationsjahr", valid_years)
             
-            # Erzeugungskapazitäten für das ausgewählte Jahr
+            # Erzeugungskapazitäten
             gen_capacities = st.session_state.sm.get_generation_capacities(year=selected_year)
             load_demand = st.session_state.sm.get_load_demand(year=selected_year)
             storage_data = st.session_state.sm.scenario_data.get("target_storage_capacities", {})
             
             st.write(f"**Simulationsjahr: {selected_year}**")
 
-            # Detail-Ansichten (Erzeugung / Verbrauch / Speicher / Wärmepumpen / E-Mobilität)
+            # Details in Tabs
             tab1, tab2, tab3, tab4, tab5 = st.tabs(["Erzeugung", "Verbrauch", "Speicher", "Wärmepumpen", "E-Mobilität"])
 
             with tab1:
@@ -532,7 +531,6 @@ def standard_simulation_page() -> None:
                 st.subheader("E-Mobilität - Parameter")
                 em_params = st.session_state.sm.get_emobility_parameters(selected_year) if hasattr(st.session_state.sm, "get_emobility_parameters") else {}
                 if em_params:
-                    # Neue Parameter-Struktur
                     col_em1, col_em2 = st.columns(2)
                     with col_em1:
                         st.metric("Anteil E-Fahrzeuge", f"{em_params.get('s_EV', 0):.0%}")
@@ -547,7 +545,6 @@ def standard_simulation_page() -> None:
                         st.metric("SOC-Ziel Abfahrt", f"{em_params.get('SOC_target_depart', 0):.0%}")
                         st.metric("Abfahrt/Ankunft", f"{em_params.get('t_depart', '07:30')} / {em_params.get('t_arrive', '18:00')}")
                     
-                    # Erweiterte Parameter in Expander
                     with st.expander("Dispatch-Schwellwerte"):
                         col_thr1, col_thr2 = st.columns(2)
                         with col_thr1:
@@ -558,38 +555,23 @@ def standard_simulation_page() -> None:
                     st.info("Keine E-Mobilitäts-Parameter für das ausgewählte Jahr definiert.")
 
 
-        # ==============================================================
-        # Ein-Knopf-Simulation: führt alle Schritte aus und zeigt DFs an
-        # ==============================================================
-        st.subheader("Simulation ausführen")
-
-        # Modus-Auswahl für Wärmepumpen-Berechnung
-        st.markdown("#### Berechnungsmodus")
-        calculation_mode_display = st.radio(
-            "Wählen Sie den Berechnungsmodus für Wärmepumpen:",
-            ["Normal", "CPU-Beschleunigt (Numba)"],
-            index=1,  # CPU-Beschleunigt als Standard
-            horizontal=True
-        )
+        # -----------------------------------------#
+        #       Simulation Ausführen Bereich       #
+        # -----------------------------------------#
         
-        # Mapping von UI-Namen zu internen Modus-Namen
-        mode_mapping = {
-            "Normal": "normal",
-            "CPU-Beschleunigt (Numba)": "cpu_optimized"
-        }
-        calculation_mode = mode_mapping[calculation_mode_display]
         
+        st.subheader("Simulation ausführen")        
 
         if "fullSimResults" not in st.session_state:
             st.session_state.fullSimResults = {}
         
-        # Initialisiere Excel-Cache
+        # Excel-Cache
         if "excel_exports" not in st.session_state:
             st.session_state.excel_exports = {}
 
         if st.button("Simulation starten", type="primary"):
             try:
-                # Progress Bar Placeholder
+                # loading bar
                 progress_container = st.container()
                 progress_bar = progress_container.progress(0, "Initializing...")
                 log_area = progress_container.empty()
@@ -603,8 +585,8 @@ def standard_simulation_page() -> None:
                     st.session_state.cfg,
                     st.session_state.dm,
                     st.session_state.sm,
-                    verbose=True,  # Debug-Modus aktiviert
-                    calculation_mode=calculation_mode,
+                    verbose=st.session_state.get("debug_mode", False),  # globaler Debug-Modus
+                    calculation_mode="cpu_optimized",
                     progress_callback=on_simulation_progress
                 )
                 
@@ -1200,7 +1182,7 @@ def standard_simulation_page() -> None:
                     df_balance_post,
                     title=" ",
                 )
-                st.plotly_chart(fig_monthly_balance, key=f"monthly_balance_{sel_year}", use_container_width=True)
+                st.plotly_chart(fig_monthly_balance, key=f"monthly_balance_{sel_year}", width='stretch')
                 
                 # Signifikante Kennzahlen
                 total_surplus = df_balance_post[df_balance_post['Rest Bilanz [MWh]'] > 0]['Rest Bilanz [MWh]'].sum()

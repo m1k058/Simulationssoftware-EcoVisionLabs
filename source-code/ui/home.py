@@ -74,7 +74,7 @@ def home_page() -> None:
         st.warning(":material/sync: Daten werden beim Start automatisch geladen...")
         st.info("Falls das Laden fehlgeschlagen ist, verwende den Button unten zum manuellen Neuladen.")
 
-    st.checkbox(":material/bug_report: Debug Modus", value=False, key="debug_mode")
+    
 
     # Button für manuelles (Neu-)Laden
     if st.button(":material/refresh: Daten neu laden", width='stretch', type="secondary" if is_loaded else "primary"):
@@ -97,5 +97,13 @@ def home_page() -> None:
                     st.write("Keine Datasets geladen")
             except Exception as e:
                 st.warning(f"Konnte Datasets nicht abrufen: {e}")
+    
+    # Globaler Debug-Schalter: steuert verboses Logging in der gesamten App
+    st.checkbox(
+        ":material/bug_report: Debug Modus",
+        value=st.session_state.get("debug_mode", False),
+        key="debug_mode",
+        help="Aktiviere detailliertes Logging und verbosen Modus in allen Simulationen."
+    )
 
 
