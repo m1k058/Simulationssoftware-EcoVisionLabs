@@ -68,7 +68,8 @@ class SimulationEngine:
         data_manager,
         scenario_manager,
         verbose: bool = False,
-        calculation_mode: str = "cpu_optimized"
+        calculation_mode: str = "cpu_optimized",
+        progress_callback=None
     ):
         """
         Initialisiert die Simulation Engine mit benötigten Managern.
@@ -79,12 +80,14 @@ class SimulationEngine:
             scenario_manager: ScenarioManager für Szenario-Parameter
             verbose: Wenn True, detaillierte Logging-Ausgaben
             calculation_mode: Berechnungsmodus für Wärmepumpen ("normal", "cpu_optimized")
+            progress_callback: Callback function(message, progress) für Progress-Updates
         """
         self.cfg = cfg
         self.dm = data_manager
         self.sm = scenario_manager
         self.logger = _SimpleLogger(verbose=verbose)
         self.calculation_mode = calculation_mode
+        self.progress_callback = progress_callback
         
         # Initialisiere spezialisierte Module
         self.storage_sim = StorageSimulation()
@@ -110,6 +113,7 @@ class SimulationEngine:
                 }
             }
         """
+        self._report_progress(5, "Simulation wird vorbereitet...")
         self.logger.start_step("Simulation wird vorbereitet", "Laden von Konfiguration und Daten")
         
         # Jahre bestimmen
@@ -120,8 +124,10 @@ class SimulationEngine:
                 raise ValueError("Keine gültigen Jahre im Szenario gefunden und keine years übergeben.")
         
         self.logger.finish_step(True, f"{len(years)} Jahre identifiziert: {years}")
+        self._report_progress(10, f"{len(years)} Jahre identifiziert")
         
         # Lade Basisdaten (einmalig)
+        self._report_progress(15, "Lade Basisdaten...")
         self._load_base_data()
         
         # Simuliere jedes Jahr
@@ -129,10 +135,21 @@ class SimulationEngine:
         for idx, year in enumerate(years, 1):
             year_result = self._simulate_year(year, idx, len(years))
             results[year] = year_result
+            
+            # Progress nach jedem Jahr
+            progress = 20 + int((idx / len(years)) * 75)
+            self._report_progress(progress, f"Jahr {year} abgeschlossen ({idx}/{len(years)})")
         
         # Abschließende Zusammenfassung
+        self._report_progress(98, "Simulation wird finalisiert...")
         self.logger.print_summary()
+        self._report_progress(100, "Simulation abgeschlossen!")
         return results
+    
+    def _report_progress(self, progress: int, message: str):
+        """Ruft den Progress-Callback auf, falls vorhanden."""
+        if self.progress_callback:
+            self.progress_callback(progress, message)
     
     def _load_base_data(self):
         """Lädt alle Basisdaten, die für alle Jahre benötigt werden."""

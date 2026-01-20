@@ -8,17 +8,20 @@ import warnings
 class DataManager:
     """Handles loading, accessing, and managing datasets from the configuration or directly from file paths."""
 
-    def __init__(self, config_manager=None):
+    def __init__(self, config_manager=None, progress_callback=None):
         """
         Initialize the DataManager.
 
         Args:
             config_manager (ConfigManager, optional):
                 Reference to a ConfigManager instance used to load datasets automatically.
+            progress_callback (callable, optional):
+                Callback function(current, total, dataset_name) for progress tracking.
         """
         self.dataframes: dict[int, pd.DataFrame] = {}
         self.metadata: dict[int, dict] = {}
         self.config_manager = config_manager
+        self.progress_callback = progress_callback
 
         if self.config_manager:
             self.max_datasets = self.config_manager.get_global("max_datasets") or 100
@@ -44,23 +47,31 @@ class DataManager:
             warnings.warn("No datasets defined in configuration.", category=UserWarning)
             return
 
-        for df in dataframes[: self.max_datasets]:
+        total_datasets = len(dataframes[: self.max_datasets])
+        
+        for idx, df in enumerate(dataframes[: self.max_datasets], start=1):
             path = df["path"]
+            dataset_name = df["name"]
+            
+            # Report progress
+            if self.progress_callback:
+                self.progress_callback(idx, total_datasets, dataset_name)
+            
             if not path.exists():
-                warnings.warn(f"File not found for dataset '{df['name']}': {path}", category=UserWarning)
+                warnings.warn(f"File not found for dataset '{dataset_name}': {path}", category=UserWarning)
                 continue
 
             try:
                 self.load_from_path(
                     path=path,
                     dataset_id=df["id"],
-                    name=df["name"],
+                    name=dataset_name,
                     datatype=df.get("datatype", "SMARD"),
                     description=df.get("description", "")
                 )
-                print(f"Loaded dataset '{df['name']}' successfully.")
+                print(f"Loaded dataset '{dataset_name}' successfully.")
             except Exception as e:
-                warnings.warn(f"Failed to load dataset '{df['name']}': {e}", category=UserWarning)
+                warnings.warn(f"Failed to load dataset '{dataset_name}': {e}", category=UserWarning)
 
         if not self.dataframes:
             warnings.warn("No datasets could be loaded from configuration.", category=UserWarning)

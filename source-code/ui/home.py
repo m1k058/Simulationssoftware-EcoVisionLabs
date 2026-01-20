@@ -6,8 +6,11 @@ from config_manager import ConfigManager
 from scenario_manager import ScenarioManager
 
 
-def load_data_manager() -> bool:
+def load_data_manager(progress_callback=None) -> bool:
     """Lädt den DataManager und ConfigManager und speichert sie im Session-State.
+    
+    Args:
+        progress_callback (callable, optional): Callback function(current, total, name) für Progress-Updates
     
     Returns:
         bool: True wenn erfolgreich geladen, sonst False.
@@ -17,7 +20,7 @@ def load_data_manager() -> bool:
         # config.json is in source-code/, home.py is in source-code/ui/
         config_path = Path(__file__).parent.parent / "config.json"
         cfg = ConfigManager(config_path=config_path)
-        dm = DataManager(config_manager=cfg)
+        dm = DataManager(config_manager=cfg, progress_callback=progress_callback)
         sm = ScenarioManager()
         
         st.session_state.cfg = cfg
