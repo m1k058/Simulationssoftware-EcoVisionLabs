@@ -14,7 +14,6 @@ Alle Speicher-Spalten folgen dem Muster: "{Speichertyp} {Metrik} MWh"
     - Batteriespeicher SOC MWh, Batteriespeicher Geladene MWh, ...
     - Pumpspeicher SOC MWh, Pumpspeicher Geladene MWh, ...
     - Wasserstoffspeicher SOC MWh, Wasserstoffspeicher Geladene MWh, ...
-Hinweis: NICHT "H2-Speicher" sondern "Wasserstoffspeicher" für Konsistenz!
 ===============================
 """
 
@@ -371,8 +370,6 @@ class StorageSimulation:
                 
                 if bal_eff > 0:
                     # -- ÜBERSCHUSS FALL --
-                    # Wir haben Must-Run schon abgezogen.
-                    # Können wir NOCH MEHR laden ("Zusätzliche Elektrolyse")?
                     
                     surplus_mwh = bal_eff
                     surplus_mw = surplus_mwh / dt
@@ -382,14 +379,12 @@ class StorageSimulation:
                     
                     # Freie Speicherkapazität (Energie) bis voll (100%, nicht nur 80%)
                     e_space_chem = capacity_mwh - current_soc
-                    # Achtung: current_soc wird durch Must-Run schon steigen!
-                    # Berechnen wir den SOC nach Must-Run vorher? Besser alles in einem Schritt.
+
                     
                     # Wir berechnen die ZUSÄTZLICHE Leistung:
                     p_el_add = min(p_el_free_cap, surplus_mw)
                     
-                    # Kapazitätscheck später beim Energie-Update machen oder hier grob?
-                    # Machen wir Energy-Check am Ende.
+
                     
                     p_el_actual = p_el_must + p_el_add
                     p_fc_actual = 0.0 # Keine Rückverstromung im Sommer

@@ -35,6 +35,9 @@ import numpy as np
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
+# GLOBALE KONSTANTEN
+WORKPLACE_V2G_FACTOR = 0.15 # V2G-Faktor am Arbeitsplatz (nur 15% der Autos können V2G)
+
 
 @dataclass
 class EVConfigParams:
@@ -194,18 +197,26 @@ def generate_ev_profile(
 
     # Wochenende (Samstag=5, Sonntag=6)
     is_weekend = (timestamps.dt.dayofweek >= 5).values
+
+    # BDEW-Regel für Lastprofile: 24.12. und 31.12. gelten wie Samstage (also Leisure)
+    # unabhängig vom Wochentag
+    da = timestamps.dt.day.values
+    mo = timestamps.dt.month.values
+    is_heiligabend_silvester = (mo == 12) & ((da == 24) | (da == 31))
     
-    # "Freizeit"-Tage (Wochenende oder Feiertag)
-    is_leisure_day = is_weekend | is_holiday
+    # "Freizeit"-Tage (Wochenende oder Feiertag oder Heiligabend/Silvester)
+    is_leisure_day = is_weekend | is_holiday | is_heiligabend_silvester
     
     # === 1. Aktivitäts-Profil generieren ===
     
     # A) WORKDAY Profil (Commute)
     # Morning Peak: 07:45 (7.75h) - Scharfer Anstieg, flacher Abfall
-    peak_morning = _skewed_gaussian(ts_vals, mu=7.75, sig_left=1.5, sig_right=5.0)
+    peak_morning = _skewed_gaussian(ts_vals, mu=7.75, sig_left=1.5, sig_right=2.5)
     # Evening Peak: 17:15 (17.25h) - Flacher Anstieg, scharfer Abfall
-    peak_evening = _skewed_gaussian(ts_vals, mu=17.25, sig_left=5.0, sig_right=2.0)
-    profile_workday = peak_morning + peak_evening + 0.1 # + Grundlast
+    peak_evening = _skewed_gaussian(ts_vals, mu=17.25, sig_left=2.5, sig_right=2.0)
+    
+    # Gewichtung: Morgens (Pendeln) weniger stark, Abends (Pendeln + Einkaufen/Freizeit) stärker
+    profile_workday = (peak_morning * 0.9) + (peak_evening * 1.1) + 0.1 # + Grundlast
     
     # B) LEISURE Profil (Wochenende/Feiertag)
     # Einfacher "Mittagspeak" für Ausflüge etc., breitere Verteilung
@@ -309,12 +320,11 @@ def generate_ev_profile(
     # Differenz t_depart - t_now
     diff = t_depart_dec - time_of_day_series
     # Korrektur für negative Werte (t_now > t_depart -> nächster Tag)
-    # Moment... time to depart ist nur relevant VOR Abfahrt.
-    # Wenn wir im Park-Fenster sind (z.B. abends), ist t_classisch "morgen früh".
+    # time to depart ist nur relevant VOR Abfahrt.
     # Wir addieren 1.0, wenn diff < 0
     diff[diff < 0] += 1.0
     time_to_depart = diff * 24.0
-    # Wir setzen time_to_depart auf 0 während der Fahrzeit, damit Preload nicht triggered?
+    # Wir setzen time_to_depart auf 0 während der Fahrzeit, damit Preload nicht triggered
     time_to_depart[is_driving_window] = 0.0
 
     # -------------------------------------------------------------------------
@@ -451,12 +461,12 @@ def simulate_emobility_fleet(
     residual_load_kw = residual_load_mwh * 1000.0 / config_params.dt_h
     
     # Parameter extrahieren
-    dt_h = config_params.dt_h
-    eta_ch = config_params.eta_ch
-    eta_dis = config_params.eta_dis
-    SOC0 = config_params.SOC0
-    P_ch_car_max = config_params.P_ch_car_max
-    P_dis_car_max = config_params.P_dis_car_max
+    dt_h = config_params.dt_h            # Zeitschrittlänge [h]
+    eta_ch = config_params.eta_ch      # Ladewirkungsgrad
+    eta_dis = config_params.eta_dis    # Entladewirkungsgrad    
+    SOC0 = config_params.SOC0          # Initialer SOC [0-1]    
+    P_ch_car_max = config_params.P_ch_car_max   # Max. Ladeleistung pro Fahrzeug [kW]
+    P_dis_car_max = config_params.P_dis_car_max  # Max. Entladeleistung pro Fahrzeug [kW]
     thr_surplus = scenario_params.thr_surplus  # kW
     thr_deficit = scenario_params.thr_deficit  # kW
     
@@ -481,7 +491,6 @@ def simulate_emobility_fleet(
     # Pre-Calculation für Performance
     t_depart_dec = _time_str_to_decimal(scenario_params.t_depart)
     t_arrive_dec = _time_str_to_decimal(scenario_params.t_arrive)
-    WORKPLACE_V2G_FACTOR = 0.15
     
     # Schnellzugriff auf Zeit für Loop (Vektorsisiert vorberechnen)
     # timestamps ist eine Series
@@ -489,6 +498,27 @@ def simulate_emobility_fleet(
     time_minutes = timestamps.dt.minute.values
     time_dec_array = (time_hours + time_minutes / 60.0) / 24.0
     
+    # BDEW-Regel auch hier sicherstellen (falls nicht über is_leisure_day übergeben)
+    if 'is_leisure_day' not in df_ev_profile.columns:
+        # Fallback calc
+        sim_year = timestamps.iloc[0].year
+        try:
+            import holidays
+            de_holidays = holidays.Germany(years=sim_year, language='de')
+            feiertage_set = set(de_holidays.keys())
+            idx_holiday = np.isin(timestamps.dt.date, list(feiertage_set))
+        except ImportError:
+            idx_holiday = np.zeros(n, dtype=bool)
+            
+        idx_weekend = (timestamps.dt.dayofweek >= 5).values
+        
+        # BDEW 24.12 / 31.12
+        mo = timestamps.dt.month.values
+        da = timestamps.dt.day.values
+        idx_special = (mo == 12) & ((da == 24) | (da == 31))
+        
+        is_leisure_day = idx_weekend | idx_holiday | idx_special
+
     for i in range(n):
         # --- Initialisierung aus vorherigem Zeitschritt ---
         if i > 0:
