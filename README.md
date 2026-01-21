@@ -1,77 +1,100 @@
 # Simulationssoftware-EcoVisionLabs
 
-Ein Projekt von **EcoVision Labs** :) 
+Ein Projekt von **EcoVision Labs** 🌱
 
 > [!NOTE]
-> **Alpha Version:** Diese Software ist noch stark in Entwicklung.
+> **Alpha Version:** Diese Software befindet sich noch in aktiver Entwicklung.
 
-### Shortcuts 
-[![Run Software](https://img.shields.io/badge/Web_App-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)  
-[![Technische Planung](https://img.shields.io/badge/Technische_Planung-docs-blue.svg)](docs/technische_planung.md)   
-[![raw-input doku](https://img.shields.io/badge/RAW_INPUT_Tabelle-docs-blue.svg)](raw-data/raw-data.md) 
-   
-## 1. Funktionen
+[![Web App](https://img.shields.io/badge/Web_App-Live_Demo-green.svg)](https://ecovisionlabs.streamlit.app)
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Die Software dient zur **Simulation und Analyse der Energieerzeugung in Deutschland**,  
-mit Fokus auf erneuerbare Energien und das Erreichen der Klimaziele 2030/2045.  
+## 📋 Über das Projekt
+
+Software zur **Simulation und Analyse der Energieerzeugung in Deutschland** mit Fokus auf erneuerbare Energien und die Erreichung der Klimaziele 2030/2045.
 
 ### Hauptfunktionen
-- **Simulation verschiedener Energiequellen**
-  - Windenergie  
-  - Solarenergie
-  - und mehr
-- **Visualisierung**
-  - Diagramme und Statistiken zur Stromerzeugung, -nachfrage und zum Anteil erneuerbarer Energien  
+- **Energiequellen-Simulation**: Wind, Solar, Biomasse, Wasserkraft, Speichersysteme
+- **Nachfrage-Modellierung**: Verbrauchsprofile, E-Mobilität, Wärmepumpen
+- **Szenario-Vergleich**: Vordefinierte und eigene Szenarien
+- **Visualisierung**: Interaktive Diagramme, Zeitreihen, Kennzahlen
+- **Wirtschaftlichkeit**: Kosten- und Emissionsanalyse
 
-
-
-## 2. Schnellstart
-
-### Software starten (gehostete WebApp):
-[![Run Software](https://img.shields.io/badge/Klicke_hier:-Start-green.svg)](https://simu-ecovisionlabs.streamlit.app/)
-
-### Software starten (lokal):
-
-**Voraussetzungen :** 
-- Python 3.9 oder höher
-
-
-Die Software kann **direkt** gestartet werden, ohne Installation:
-
-**Linux/macOS :**  
-1.  **Öffne das Terminal** und navigiere in das Hauptverzeichnis des Projekts:
-    ```bash
-    cd /Pfad_zu/Simulationssoftware-EcoVisionLabs
-    ```
-
-2.  **Mache das Skript ausführbar** (nur einmalig nötig):
-    ```bash
-    chmod +x start_app.sh
-    ```
-
-3.  **Starte die Anwendung:**
-    ```bash
-    ./start_app.sh
-    ```
-
-**Windows :**
-1.  **Öffne den Projektordner** (diesen Ordner, der das Skript `start_app.bat` enthält).
-2.  Mache einen **Doppelklick** auf die Datei **`start_app.bat`**.
+[Rohdaten-Dokumentation](raw-data/raw-data.md)
 
 ---
 
+## Installation & Start
 
-### Tests ausführen (nach editable install)
+### Voraussetzungen
+- **Python 3.12** (erforderlich für Numba)
+  - Download: https://www.python.org/downloads/release/python-31210/
 
+### 1. Repository klonen
 ```bash
-# Alle Tests
-python -m unittest discover tests -v
-
-# Einzelne Test-Datei
-python -m unittest tests.test_config_manager -v
+git clone https://github.com/m1k058/Simulationssoftware-EcoVisionLabs.git
+cd Simulationssoftware-EcoVisionLabs
 ```
 
-## 3. Das EcoVision-Team
+### 2. Virtual Environment erstellen (empfohlen)
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/macOS
+python3.12 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Dependencies installieren
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Anwendung starten
+```bash
+streamlit run source-code/streamlit_ui.py
+```
+
+Die Anwendung öffnet sich automatisch im Browser unter `http://localhost:8501`
+
+
+
+## Alternative: Gehostete Web-App
+
+**Ohne lokale Installation direkt nutzen:**  
+👉 [ecovisionlabs.streamlit.app](ecovisionlabs.streamlit.app)
+
+
+---
+
+## 📁 Projektstruktur
+
+```
+├── source-code/          # Hauptanwendung
+│   ├── streamlit_ui.py   # Streamlit-Interface
+│   ├── data_processing/  # Simulationsengine
+│   ├── plotting/         # Visualisierungen
+│   └── ui/               # UI-Komponenten
+├── scenarios/            # Szenario-Definitionen
+│   ├── EVL_own/          # Eigene Szenarien
+│   └── Studien_rebuild/  # Studien-basierte Szenarien
+├── raw-data/             # Eingangsdaten (CSV)
+├── tests/                # Integration Tests
+└── requirements.txt      # Python Dependencies
+```
+
+
+---
+
+## Das EcoVision-Team
 
 ![Teamfoto](assets/team1.png)  
-*Team EcoVision Labs – Gründung Oktober 2025*
+*Team EcoVision Labs – Gegründet Oktober 2025*
+
+---
+
+## Lizenz
+
+Dieses Projekt ist unter der [MIT-Lizenz](LICENSE) veröffentlicht.

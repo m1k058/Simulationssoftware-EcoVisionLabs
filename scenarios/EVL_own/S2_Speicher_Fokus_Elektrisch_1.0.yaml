@@ -1,0 +1,195 @@
+metadata:
+  name: S2_Speicher_Fokus_Elektrisch
+  valid_for_years:
+  - 2025
+  - 2030
+  - 2045
+  description: "Speicher-Fokus-Szenario (elektrisch): Ausbaupfad mit starkem Schwerpunkt\
+    \ auf Batteriespeichern (Energie + Leistung), um Überschüsse aufzunehmen und\
+    \ Residuallastspitzen zu glätten. EE-Ausbau hoch, aber weniger Überbau als im\
+    \ EE-Max-Szenario. H2 wird nur begrenzt für saisonale Reserve genutzt; Backup\
+    \ über (H2-ready) Gaskraftwerke bleibt verfügbar."
+  version: '1.0'
+  author: SW-Team EcoVisionLabs
+
+target_load_demand_twh:
+  Haushalt_Basis:
+    load_profile: Verbrauchsprofil Haushalte BDEW
+    2025: 125.0
+    2030: 130.0
+    2045: 120.0
+  Gewerbe_Basis:
+    load_profile: Verbrauchsprofil Gewerbe BDEW
+    2025: 140.0
+    2030: 140.0
+    2045: 130.0
+  Landwirtschaft_Basis:
+    load_profile: Verbrauchsprofil Landwirtschaft BDEW
+    2025: 10.0
+    2030: 10.0
+    2045: 10.0
+
+target_generation_capacities_mw:
+  Photovoltaik:
+    2025: 170000.0
+    2030: 240000.0
+    2045: 420000.0
+  Wind_Onshore:
+    2025: 68067.0
+    2030: 130000.0
+    2045: 190000.0
+  Wind_Offshore:
+    2025: 9500.0
+    2030: 35000.0
+    2045: 85000.0
+  Biomasse:
+    2025: 9000.0
+    2030: 8000.0
+    2045: 6000.0
+  Wasserkraft:
+    2025: 5000.0
+    2030: 5000.0
+    2045: 5000.0
+  Erdgas:
+    2025: 32000.0
+    2030: 28000.0
+    2045: 18000.0
+  Steinkohle:
+    2025: 0.0
+    2030: 0.0
+    2045: 0.0
+  Braunkohle:
+    2025: 0.0
+    2030: 0.0
+    2045: 0.0
+  Kernenergie:
+    2025: 0.0
+    2030: 0.0
+    2045: 0.0
+
+weather_generation_profiles:
+  2025:
+    Wind_Onshore: average
+    Wind_Offshore: average
+    Photovoltaik: average
+  2030:
+    Wind_Onshore: average
+    Wind_Offshore: average
+    Photovoltaik: average
+  2045:
+    Wind_Onshore: average
+    Wind_Offshore: average
+    Photovoltaik: average
+
+target_storage_capacities:
+  battery_storage:
+    2030:
+      installed_capacity_mwh: 120000.0
+      max_charge_power_mw: 45000.0
+      max_discharge_power_mw: 45000.0
+      initial_soc: 0.5
+    2045:
+      installed_capacity_mwh: 420000.0
+      max_charge_power_mw: 140000.0
+      max_discharge_power_mw: 140000.0
+      initial_soc: 0.7
+    2025:
+      installed_capacity_mwh: 15000.0
+      max_charge_power_mw: 8000.0
+      max_discharge_power_mw: 8000.0
+      initial_soc: 0.5
+
+  pumped_hydro_storage:
+    2030:
+      installed_capacity_mwh: 42000.0
+      max_charge_power_mw: 7500.0
+      max_discharge_power_mw: 7500.0
+      initial_soc: 0.6
+    2045:
+      installed_capacity_mwh: 48000.0
+      max_charge_power_mw: 8500.0
+      max_discharge_power_mw: 8500.0
+      initial_soc: 0.6
+    2025:
+      installed_capacity_mwh: 40000.0
+      max_charge_power_mw: 7000.0
+      max_discharge_power_mw: 7000.0
+      initial_soc: 0.5
+
+  h2_storage:
+    2030:
+      installed_capacity_mwh: 25000000.0
+      max_charge_power_mw: 12000.0
+      max_discharge_power_mw: 15000.0
+      initial_soc: 0.4
+    2045:
+      installed_capacity_mwh: 70000000.0
+      max_charge_power_mw: 40000.0
+      max_discharge_power_mw: 25000.0
+      initial_soc: 0.45
+    2025:
+      installed_capacity_mwh: 20000.0
+      max_charge_power_mw: 500.0
+      max_discharge_power_mw: 500.0
+      initial_soc: 0.5
+
+target_emobility_parameters:
+  2025:
+    s_EV: 0.95
+    N_cars: 48000000
+    E_drive_car_year: 2250.0
+    E_batt_car: 50.0
+    plug_share_max: 0.6
+    v2g_share: 0.3
+    SOC_min_day: 0.4
+    SOC_min_night: 0.2
+    SOC_target_depart: 0.6
+    t_depart: 07:30
+    t_arrive: '18:00'
+    thr_surplus: 200000.0
+    thr_deficit: 200000.0
+  2030:
+    s_EV: 0.7
+    N_cars: 48000000
+    E_drive_car_year: 2250.0
+    E_batt_car: 50.0
+    plug_share_max: 0.6
+    v2g_share: 0.3
+    SOC_min_day: 0.4
+    SOC_min_night: 0.2
+    SOC_target_depart: 0.6
+    t_depart: 07:30
+    t_arrive: '18:00'
+    thr_surplus: 200000.0
+    thr_deficit: 200000.0
+  2045:
+    s_EV: 0.95
+    N_cars: 45000000
+    E_drive_car_year: 2000.0
+    E_batt_car: 70.0
+    plug_share_max: 0.7
+    v2g_share: 0.5
+    SOC_min_day: 0.3
+    SOC_min_night: 0.15
+    SOC_target_depart: 0.7
+    t_depart: 07:30
+    t_arrive: '18:00'
+    thr_surplus: 300000.0
+    thr_deficit: 300000.0
+
+target_heat_pump_parameters:
+  2025:
+    installed_units: 3000000
+    annual_heat_demand_kwh: 51000.0
+    cop_avg: 3.4
+    weather_data: Lufttemperatur-2019
+  2030:
+    installed_units: 3000000
+    annual_heat_demand_kwh: 51000.0
+    cop_avg: 3.4
+    weather_data: Lufttemperatur-2019
+  2045:
+    installed_units: 3000000
+    annual_heat_demand_kwh: 51000.0
+    cop_avg: 3.4
+    weather_data: Lufttemperatur-2019
