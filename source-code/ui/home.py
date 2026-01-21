@@ -35,6 +35,7 @@ def load_data_manager(progress_callback=None) -> bool:
 
 def home_page() -> None:
     """Home-Page und Datenverwaltung."""
+    
     st.title("Simulationssoftware EcoVision Labs")
     
     # Logo

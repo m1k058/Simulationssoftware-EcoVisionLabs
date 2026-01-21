@@ -6,6 +6,7 @@ from ui.simulation_standard import standard_simulation_page
 from ui.simulation_diff import diff_simulation_page
 from ui.simulation_comparison import comparison_simulation_page
 from ui.scenario_generation import scenario_generation_page
+from ui.debug_scoring import debug_scoring_page
 
 
 st.set_page_config(
@@ -101,7 +102,10 @@ def main() -> None:
     page_scenario = st.Page(scenario_generation_page, title="Szenario Konfiguration", icon=":material/tune:")
     page_analysis = st.Page(analysis_page, title="Daten Analyse", icon=":material/area_chart:")
     
-    # Speichere Page-Objekte im session_state für Navigation
+    # Debug-Seite nur im DEBUG-Modus
+    page_debug_scoring = st.Page(debug_scoring_page, title="⚠️ Nur im Notfall benutzen!", icon=":material/warning:")
+    
+    # Speichere Page-Objekte im session_state für Navigation (inkl. Debug-Seite für direkten Zugriff)
     st.session_state.pages = {
         "home": page_home,
         "simulation": page_simulation,
@@ -109,8 +113,10 @@ def main() -> None:
         "comparison_simulation": page_comparison_simulation,
         "scenario": page_scenario,
         "analysis": page_analysis,
+        "debug_scoring": page_debug_scoring,  # Immer verfügbar für direkten Zugriff
     }
     
+    # Baue das pages Dictionary basierend auf DEBUG-Modus
     pages = {
         "Hauptseiten": [
             page_home,
@@ -119,6 +125,9 @@ def main() -> None:
             page_comparison_simulation,
             page_scenario,
             page_analysis,
+        ],
+        "🔧 Debug Tools": [
+            page_debug_scoring,
         ]
     }
 
