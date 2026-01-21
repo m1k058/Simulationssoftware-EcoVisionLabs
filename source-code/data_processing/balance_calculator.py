@@ -1,32 +1,5 @@
 """
 Bilanz-Berechnungsmodul für Energiesysteme.
-
-Dieses Modul berechnet die Bilanz zwischen Energieerzeugung und -verbrauch
-und analysiert Überschüsse, Defizite und Netzmetriken.
-
-=== VORZEICHEN-KONVENTION ===
-
-Die Bilanz wird berechnet als:
-    Bilanz [MWh] = Produktion - Verbrauch
-
-Interpretation:
-    Bilanz > 0 (positiv) = ÜBERSCHUSS
-        → Mehr Erzeugung als Verbrauch
-        → Energie kann in Speicher geladen werden
-        → Bei E-Mobility: Ladevorgänge möglich
-    
-    Bilanz < 0 (negativ) = DEFIZIT
-        → Mehr Verbrauch als Erzeugung  
-        → Energie muss aus Speicher entladen werden
-        → Bei E-Mobility: V2G-Rückspeisung möglich
-
-ACHTUNG für nachgelagerte Module:
-    Das E-Mobility-Modul (e_mobility_simulation.py) invertiert das Vorzeichen
-    intern zu "Residuallast" = -Bilanz, damit positive Werte Netzbedarf bedeuten.
-    
-    Speichermodule (storage_simulation.py) erwarten die originale Bilanz-Konvention.
-
-=================================
 """
 
 import pandas as pd
@@ -34,7 +7,6 @@ import numpy as np
 from typing import Optional
 from data_processing.simulation_logger import SimulationLogger
 
-# Import zentrale Spaltennamen für konsistente Namensgebung
 try:
     from constants import COLUMN_NAMES
     COL_ZEITPUNKT = COLUMN_NAMES.get("ZEITPUNKT", "Zeitpunkt")
@@ -44,7 +16,6 @@ try:
     COL_VERBRAUCH = COLUMN_NAMES.get("VERBRAUCH", "Verbrauch [MWh]")
     COL_GESAMT_VERBRAUCH = COLUMN_NAMES.get("GESAMT_VERBRAUCH", "Gesamt [MWh]")
 except ImportError:
-    # Fallback für Standalone-Nutzung
     COL_ZEITPUNKT = "Zeitpunkt"
     COL_BILANZ = "Bilanz [MWh]"
     COL_REST_BILANZ = "Rest Bilanz [MWh]"
@@ -59,7 +30,6 @@ class BalanceCalculator:
     
     Funktionalität:
     - Bilanzberechnung (Erzeugung - Verbrauch) pro Zeitschritt
-    - Validierung und Alignment auf Viertelstunden-Raster
     - Berechnung von Metriken (Überschuss, Defizit, Autarkiegrad, etc.)
     """
     
@@ -68,7 +38,7 @@ class BalanceCalculator:
         Initialisiert den BalanceCalculator.
         
         Args:
-            logger: Optional SimulationLogger für strukturiertes Logging
+            logger: Optional SimulationLogger für Logging
         """
         self.logger = logger
     
@@ -79,7 +49,7 @@ class BalanceCalculator:
         label: str
     ) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
         """
-        Bringt ein DataFrame auf das vollständige 15-Minuten-Raster des Simulationsjahres.
+        Bringt ein DataFrame auf das vollständige 15-Minuten-Raster
         
         Args:
             df: DataFrame mit Zeitstempel-Spalte 'Zeitpunkt'
@@ -89,9 +59,6 @@ class BalanceCalculator:
         Returns:
             Tuple aus (aligned DataFrame, target DatetimeIndex)
         
-        Raises:
-            KeyError: Wenn 'Zeitpunkt' Spalte fehlt
-            ValueError: Wenn Daten lückenhaft sind
         """
         if "Zeitpunkt" not in df.columns:
             raise KeyError(f"{label}: Spalte 'Zeitpunkt' fehlt.")
@@ -122,7 +89,7 @@ class BalanceCalculator:
         simu_jahr: int
     ) -> pd.DataFrame:
         """
-        Berechnet die Bilanz (Erzeugung - Verbrauch) je 15-Minuten-Zeitschritt des Simulationsjahres.
+        Berechnet die Bilanz (Erzeugung - Verbrauch) je 15-Minuten-Zeitschritt
         
         Args:
             simProd: DataFrame mit Erzeugungsdaten (Spalten: 'Zeitpunkt', '{Technologie} [MWh]', ...)
@@ -134,8 +101,7 @@ class BalanceCalculator:
             - 'Zeitpunkt': Zeitstempel (15-Minuten-Auflösung)
             - 'Produktion [MWh]': Gesamterzeugung
             - 'Verbrauch [MWh]': Gesamtverbrauch
-            - 'Bilanz [MWh]': Differenz (Produktion - Verbrauch)
-                              > 0: Überschuss, < 0: Defizit
+            - 'Bilanz [MWh]': Differenz 
         """
         if self.logger:
             self.logger.info(f"Berechne Bilanz für Jahr {simu_jahr}")
@@ -143,14 +109,11 @@ class BalanceCalculator:
         prod_aligned, target_index = self._align_to_quarter_hour(simProd, simu_jahr, "Produktion")
         cons_aligned, _ = self._align_to_quarter_hour(simCons, simu_jahr, "Verbrauch")
         
-        # Summiere nur relevante Spalten, nicht die Gesamt-Spalte (sonst Doppelzählung!)
-        # Wenn "Gesamt [MWh]" vorhanden ist, verwende nur diese, ansonsten summiere alle MWh-Spalten
         if "Gesamt [MWh]" in cons_aligned.columns:
             cons_sum = cons_aligned["Gesamt [MWh]"]
         else:
             cons_sum = cons_aligned.select_dtypes(include=[np.number]).sum(axis=1)
         
-        # Für Produktion: Summiere alle MWh-Spalten (es gibt dort keine Gesamt-Spalte)
         prod_sum = prod_aligned.select_dtypes(include=[np.number]).sum(axis=1)
         
         bilanz = prod_sum - cons_sum
@@ -170,7 +133,7 @@ class BalanceCalculator:
     
     def analyze_balance(self, df_balance: pd.DataFrame) -> dict:
         """
-        Analysiert die Bilanz und berechnet wichtige Metriken.
+        Analysiert die Bilanz und berechnet wichtige Metriken
         
         Args:
             df_balance: DataFrame mit Spalten ['Zeitpunkt', 'Produktion [MWh]', 'Verbrauch [MWh]', 'Bilanz [MWh]']
@@ -183,7 +146,7 @@ class BalanceCalculator:
             - total_deficit_twh: Summe aller Defizite [TWh]
             - surplus_hours: Anzahl Stunden mit Überschuss
             - deficit_hours: Anzahl Stunden mit Defizit
-            - autarkie_grad: Autarkiegrad [%] (Zeit ohne Import)
+            - autarkie_grad: Autarkiegrad [%]
             - max_surplus_mw: Maximaler Überschuss [MW]
             - max_deficit_mw: Maximales Defizit [MW]
         """
@@ -200,10 +163,10 @@ class BalanceCalculator:
             'total_consumption_twh': cons.sum() / 1e6,
             'total_surplus_twh': bilanz[surplus_mask].sum() / 1e6,
             'total_deficit_twh': abs(bilanz[deficit_mask].sum()) / 1e6,
-            'surplus_hours': surplus_mask.sum() * 0.25,  # 15min = 0.25h
+            'surplus_hours': surplus_mask.sum() * 0.25,
             'deficit_hours': deficit_mask.sum() * 0.25,
             'autarkie_grad': (surplus_mask.sum() / len(bilanz) * 100) if len(bilanz) > 0 else 0.0,
-            'max_surplus_mw': bilanz.max() * 4,  # MWh (15min) -> MW
+            'max_surplus_mw': bilanz.max() * 4,
             'max_deficit_mw': abs(bilanz.min()) * 4,
         }
         
@@ -211,10 +174,7 @@ class BalanceCalculator:
     
     def calculate_residual_load(self, df_balance: pd.DataFrame) -> pd.DataFrame:
         """
-        Berechnet die Residuallast nach Speichern (wenn vorhanden).
-        
-        Falls df_balance bereits 'Rest Bilanz [MWh]' enthält (nach Speichersimulation),
-        wird diese verwendet. Ansonsten entspricht die Residuallast der ursprünglichen Bilanz.
+        Berechnet die Residuallast nach Speichern
         
         Args:
             df_balance: DataFrame mit Bilanz (und optional 'Rest Bilanz [MWh]')

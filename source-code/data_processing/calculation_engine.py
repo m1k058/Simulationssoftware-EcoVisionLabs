@@ -1,43 +1,10 @@
 """
-Performance-Optimierte Berechnungs-Engine für Wärmepumpen-Simulation.
-
-Bietet zwei Berechnungsmodi:
-1. Normal: Standard Python mit iterrows() (~20 Minuten)
-2. CPU-Optimiert: Numba JIT mit Parallelisierung (~10-30 Sekunden)
-
-Performance-Ziele:
-- Normal: Baseline (1x)
-- CPU: 50-200x Speedup
-
-Author: Claude
-Date: 2026-01-18
+Berechnungs-Engine für Simulation.
 """
 
 import pandas as pd
 import numpy as np
-import time
-from typing import Dict, Tuple, Optional, Any
-from dataclasses import dataclass
-
-
-@dataclass
-class PerformanceStats:
-    """Statistiken zur Berechnungs-Performance."""
-    mode: str                      # "normal", "cpu_optimized"
-    mode_display: str              # "Normal", "CPU-Beschleunigt (Numba)"
-    calculation_time: float        # Sekunden
-    rows_processed: int            # Anzahl Zeilen
-    rows_per_second: float         # Performance-Metrik
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Konvertiert zu Dictionary für einfache Weitergabe."""
-        return {
-            "mode": self.mode,
-            "mode_display": self.mode_display,
-            "calculation_time": self.calculation_time,
-            "rows_processed": self.rows_processed,
-            "rows_per_second": self.rows_per_second
-        }
+from typing import Tuple, Optional
 
 
 class CalculationEngine:
@@ -50,15 +17,15 @@ class CalculationEngine:
     
     Usage:
         engine = CalculationEngine(mode="cpu_optimized")
-        results, stats = engine.calculate_heatpump_load(
+        results = engine.calculate_heatpump_load(
             weather_df, hp_profile_matrix, n_heatpumps, Q_th_a, COP_avg, dt, simu_jahr
         )
     """
     
     VALID_MODES = ["normal", "cpu_optimized"]
     MODE_DISPLAY_NAMES = {
-        "normal": "Normal (Python)",
-        "cpu_optimized": "CPU-Beschleunigt (Numba)",
+        "normal": "Normal",
+        "cpu_optimized": "Numba",
     }
     
     def __init__(self, mode: str = "cpu_optimized"):
@@ -99,9 +66,7 @@ class CalculationEngine:
                 self.prange = prange
             except ImportError:
                 raise ImportError(
-                    "Numba ist nicht installiert.\n"
-                    "Installation: pip install numba\n"
-                    "Oder wählen Sie den 'Normal' Modus."
+                    "Numba ist nicht installiert."
                 )
     
     def calculate_heatpump_load(
@@ -114,7 +79,7 @@ class CalculationEngine:
         dt: float,
         simu_jahr: int,
         debug: bool = False
-    ) -> Tuple[pd.DataFrame, PerformanceStats]:
+    ) -> pd.DataFrame:
         """
         Berechnet Wärmepumpen-Last mit gewähltem Modus.
         
@@ -129,9 +94,8 @@ class CalculationEngine:
             debug: Debug-Ausgaben
         
         Returns:
-            (DataFrame, PerformanceStats): Resultate und Performance-Metriken
+            DataFrame mit Spalten ['Zeitpunkt', 'Wärmepumpen [MWh]']
         """
-        start_time = time.time()
         
         if self.mode == "normal":
             df_result = self._calculate_normal(
@@ -146,19 +110,7 @@ class CalculationEngine:
         else:
             raise ValueError(f"Unbekannter Modus: {self.mode}")
         
-        calc_time = time.time() - start_time
-        rows_processed = len(df_result)
-        rows_per_sec = rows_processed / calc_time if calc_time > 0 else 0
-        
-        stats = PerformanceStats(
-            mode=self.mode,
-            mode_display=self.mode_display,
-            calculation_time=calc_time,
-            rows_processed=rows_processed,
-            rows_per_second=rows_per_sec
-        )
-        
-        return df_result, stats
+        return df_result
     
     def _calculate_normal(
         self,
@@ -172,21 +124,15 @@ class CalculationEngine:
         debug: bool = False
     ) -> pd.DataFrame:
         """
-        Normale Berechnung mit Python iterrows().
-        
-        WICHTIG: Nutzt gleiche Logik wie _calculate_numba, aber ohne Numba-Optimierung.
-        Arbeitet direkt mit den Eingabedaten ohne Jahr-Interpolation.
+        Normale Berechnung
         
         Returns:
             DataFrame mit Spalten ['Zeitpunkt', 'Wärmepumpen [MWh]']
         """
-        # 1. Wetterdaten vorbereiten
         df_weather = self._prep_weather_data_simple(weather_df, simu_jahr)
         
-        # 2. HP-Profil-Matrix vorbereiten
         hp_matrix_prepared = self._prep_hp_profile_matrix(hp_profile_matrix)
         
-        # 3. Normierungssumme berechnen
         summe_lp_dt = 0.0
         for index, row in df_weather.iterrows():
             time = row['Zeitpunkt']
@@ -197,24 +143,22 @@ class CalculationEngine:
         if summe_lp_dt <= 0:
             raise ValueError(f"Normierungssumme summe_lp_dt={summe_lp_dt} ist nicht positiv!")
         
-        # 4. Skalierungsfaktor
         f = Q_th_a / summe_lp_dt
         
         if debug:
             print(f"[Normal] Normierungsfaktor f: {f:.2f} kW (Q_th_a={Q_th_a} kWh, summe={summe_lp_dt:.1f} h-äquiv)")
         
-        # 5. Berechne finale Werte
         results = []
         for index, row in df_weather.iterrows():
             time = row['Zeitpunkt']
             temp = row['Temperatur [°C]']
             
             lp_faktor = self._get_hp_factor_simple(time, temp, hp_matrix_prepared)
-            p_th = lp_faktor * f  # kW thermisch
-            p_el = p_th / COP_avg  # kW elektrisch
-            p_el_ges = p_el * n_heatpumps  # kW gesamt
-            p_el_ges_mw = p_el_ges / 1000.0  # MW
-            energy_mwh = p_el_ges_mw * dt  # MWh
+            p_th = lp_faktor * f 
+            p_el = p_th / COP_avg  
+            p_el_ges = p_el * n_heatpumps 
+            p_el_ges_mw = p_el_ges / 1000.0
+            energy_mwh = p_el_ges_mw * dt 
             
             results.append({
                 'Zeitpunkt': time,
@@ -241,11 +185,10 @@ class CalculationEngine:
         """
         df_local = weather_df.copy()
         
-        # Konvertiere Zeitpunkt falls nötig
+        # Konvertiere Zeitpunkt
         if not pd.api.types.is_datetime64_any_dtype(df_local['Zeitpunkt']):
             df_local['Zeitpunkt'] = pd.to_datetime(df_local['Zeitpunkt'], format='%d.%m.%y %H:%M')
         
-        # Wähle AVERAGE Spalte
         location = "AVERAGE"
         if location not in df_local.columns:
             raise ValueError(f"Spalte '{location}' nicht gefunden")
@@ -257,18 +200,15 @@ class CalculationEngine:
         df_local = df_local.dropna(subset=['Zeitpunkt', 'Temperatur [°C]'])
         df_local = df_local.sort_values('Zeitpunkt').reset_index(drop=True)
         
-        # Erstelle vollständigen 15-Minuten-Zeitindex für das Wetterjahr
         weather_year = int(df_local['Zeitpunkt'].dt.year.iloc[0])
         start = pd.Timestamp(f'{weather_year}-01-01 00:00')
         end = pd.Timestamp(f'{weather_year}-12-31 23:45')
         full_index = pd.date_range(start=start, end=end, freq='15min')
         df_full = pd.DataFrame({'Zeitpunkt': full_index})
         
-        # Merge und interpoliere Temperaturdaten
         df_local = df_full.merge(df_local, on='Zeitpunkt', how='left')
         df_local['Temperatur [°C]'] = df_local['Temperatur [°C]'].ffill().bfill()
         
-        # Verschiebe auf Simulationsjahr
         df_local['Zeitpunkt'] = df_local['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
         
         return df_local
@@ -325,27 +265,21 @@ class CalculationEngine:
         debug: bool = False
     ) -> pd.DataFrame:
         """
-        Numba-optimierte Berechnung mit JIT und Parallelisierung.
+        Numba-optimierte Berechnung
         
         Returns:
             DataFrame mit Spalten ['Zeitpunkt', 'Wärmepumpen [MWh]']
         """
-        # 1. Wetterdaten vorbereiten (wie in HeatPumpSimulation)
         df_weather = self._prep_weather_data(weather_df, simu_jahr)
         
-        # 2. HP-Profil-Matrix vorbereiten
         hp_matrix_prepared = self._prep_hp_profile_matrix(hp_profile_matrix)
         
-        # 3. Konvertiere zu NumPy Arrays für Numba
         temps = df_weather['Temperatur [°C]'].values
         hours = df_weather['Zeitpunkt'].dt.hour.values
         minutes = df_weather['Zeitpunkt'].dt.minute.values
         
-        # 4. Extrahiere Profil-Matrix als NumPy Array
-        # Spalten: LOW, -14 bis 17, HIGH (insgesamt 34 Spalten)
         profile_array, _ = self._convert_profile_to_array(hp_matrix_prepared)
         
-        # 5. Berechne Normierungssumme mit Numba
         hp_factors = _calculate_hp_factors_numba(
             temps, hours, minutes, profile_array
         )
@@ -354,17 +288,14 @@ class CalculationEngine:
         if summe_lp_dt <= 0:
             raise ValueError(f"Normierungssumme summe_lp_dt={summe_lp_dt} ist nicht positiv!")
         
-        # 6. Skalierungsfaktor
         f = Q_th_a / summe_lp_dt
         
         if debug:
             print(f"[Numba] Normierungsfaktor f: {f:.2f} kW (Q_th_a={Q_th_a} kWh, summe={summe_lp_dt:.1f} h-äquiv)")
         
-        # 7. Berechne finale Werte mit Numba
         power_mw = _numba_calculate_power(hp_factors, f, COP_avg, n_heatpumps)
         energy_mwh = power_mw * dt
         
-        # 8. Zurück zu DataFrame
         df_result = pd.DataFrame({
             'Zeitpunkt': df_weather['Zeitpunkt'],
             'Wärmepumpen [MWh]': energy_mwh
@@ -404,18 +335,15 @@ class CalculationEngine:
         df_local = df_local.dropna(subset=['Zeitpunkt', 'Temperatur [°C]'])
         df_local = df_local.sort_values('Zeitpunkt').reset_index(drop=True)
         
-        # Erstelle vollständigen 15-Minuten-Zeitindex für das Wetterjahr
         weather_year = int(df_local['Zeitpunkt'].dt.year.iloc[0])
         start = pd.Timestamp(f'{weather_year}-01-01 00:00')
         end = pd.Timestamp(f'{weather_year}-12-31 23:45')
         full_index = pd.date_range(start=start, end=end, freq='15min')
         df_full = pd.DataFrame({'Zeitpunkt': full_index})
         
-        # Merge und interpoliere Temperaturdaten
         df_local = df_full.merge(df_local, on='Zeitpunkt', how='left')
         df_local['Temperatur [°C]'] = df_local['Temperatur [°C]'].ffill().bfill()
         
-        # Verschiebe auf Simulationsjahr
         df_local['Zeitpunkt'] = df_local['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
         
         return df_local
@@ -430,7 +358,6 @@ class CalculationEngine:
         hp_matrix = hp_profile_matrix.copy()
         hp_matrix.columns = hp_matrix.columns.astype(str)
         
-        # Parse Zeitpunkt zu hour/minute
         if 'Zeitpunkt' in hp_matrix.columns:
             time_str = hp_matrix['Zeitpunkt'].astype(str).str.split('-', n=1).str[0]
             parsed_time = pd.to_datetime(time_str, format='%H:%M', errors='coerce')
@@ -440,7 +367,6 @@ class CalculationEngine:
             hp_matrix['hour'] = hp_matrix.index
             hp_matrix['minute'] = 0
         
-        # Konvertiere alle Werte-Spalten zu numerisch
         value_cols = [c for c in hp_matrix.columns if c not in {'Zeitpunkt', 'hour', 'minute'}]
         for c in value_cols:
             hp_matrix[c] = pd.to_numeric(
@@ -461,33 +387,25 @@ class CalculationEngine:
                 - profile_array: shape (96, 34) mit Profilwerten
                 - temp_columns: Dummy (für Kompatibilität)
         """
-        # Sortiere nach hour, minute
         hp_matrix = hp_matrix.sort_values(['hour', 'minute']).reset_index(drop=True)
         
-        # Temperatur-Spalten in richtiger Reihenfolge
-        # Erwartet: 'LOW', '-14', '-13', ..., '17', 'HIGH'
+        # Temperatur-Spalten
         expected_cols = ['LOW'] + [str(i) for i in range(-14, 18)] + ['HIGH']
         
-        # Finde vorhandene Spalten
         available_temp_cols = [c for c in hp_matrix.columns if c not in {'Zeitpunkt', 'hour', 'minute'}]
         
-        # Baue finale Spalten-Liste (mit Fallback auf 0 wenn Spalte fehlt)
         final_cols = []
         for col in expected_cols:
             if col in available_temp_cols:
                 final_cols.append(col)
             else:
-                # Fülle fehlende Spalte mit 0
                 hp_matrix[col] = 0.0
                 final_cols.append(col)
         
-        # Konvertiere zu Array in richtiger Reihenfolge
-        profile_array = hp_matrix[final_cols].values  # shape: (96, 34)
+        profile_array = hp_matrix[final_cols].values
         
         return profile_array, np.array(final_cols)
 
-
-# ========== NUMBA JIT FUNKTIONEN (außerhalb der Klasse) ==========
 
 try:
     from numba import jit, prange
@@ -514,28 +432,24 @@ try:
         n = len(temps)
         result = np.zeros(n)
         
-        for i in prange(n):  # Parallel über alle CPU-Kerne!
+        for i in prange(n):
             temp = temps[i]
             hour_val = hours[i]
             minute_val = minutes[i]
             
-            # Konvertiere zu int ZUERST
             hour_int = int(hour_val)
             minute_int = int(minute_val)
             
-            # Finde Zeile (Tageszeit) - alles integer Arithmetik
             row_idx = hour_int * 4 + (minute_int // 15)
             
-            # Finde Spalte basierend auf Temperatur
             t_rounded = int(round(temp))
             
             if t_rounded < -14:
-                col_idx = 0  # LOW
+                col_idx = 0
             elif t_rounded >= 18:
-                col_idx = 33  # HIGH
+                col_idx = 33
             else:
-                # -14 bis 17 → Spalte 1 bis 32
-                col_idx = t_rounded + 15  # Bereits int
+                col_idx = t_rounded + 15
             
             result[i] = profile_array[row_idx, col_idx]
         
@@ -570,7 +484,7 @@ try:
         n = len(factors)
         result = np.zeros(n)
         
-        for i in prange(n):  # Parallel!
+        for i in prange(n):
             p_th = factors[i] * f  # kW thermisch
             p_el = p_th / COP_avg  # kW elektrisch
             p_el_ges = p_el * n_heatpumps  # kW gesamt
@@ -579,7 +493,6 @@ try:
         return result
 
 except ImportError:
-    # Numba nicht verfügbar - Fallback-Definitionen
     def _calculate_hp_factors_numba(*args, **kwargs):
         raise ImportError("Numba nicht installiert. Bitte 'pip install numba' ausführen.")
     

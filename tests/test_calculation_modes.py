@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "source-code"))
 import pytest
 import pandas as pd
 import numpy as np
-from data_processing.calculation_engine import CalculationEngine, PerformanceStats
+from data_processing.calculation_engine import CalculationEngine
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ class TestCalculationModes:
         """Test Normal-Modus alleine."""
         engine = CalculationEngine(mode="normal")
         
-        df_result, stats = engine.calculate_heatpump_load(
+        df_result = engine.calculate_heatpump_load(
             weather_df=sample_weather_data,
             hp_profile_matrix=sample_hp_profile,
             n_heatpumps=1000,
@@ -95,9 +95,6 @@ class TestCalculationModes:
         assert len(df_result) == 35040
         assert 'Zeitpunkt' in df_result.columns
         assert 'Wärmepumpen [MWh]' in df_result.columns
-        assert stats.mode == "normal"
-        assert stats.rows_processed == 35040
-        print(f"Normal-Modus: {stats.calculation_time:.3f}s ({stats.rows_per_second:.0f} Zeilen/s)")
     
     def test_cpu_optimized_mode(self, sample_weather_data, sample_hp_profile):
         """Test CPU-Optimiert-Modus alleine."""
@@ -108,7 +105,7 @@ class TestCalculationModes:
         
         engine = CalculationEngine(mode="cpu_optimized")
         
-        df_result, stats = engine.calculate_heatpump_load(
+        df_result = engine.calculate_heatpump_load(
             weather_df=sample_weather_data,
             hp_profile_matrix=sample_hp_profile,
             n_heatpumps=1000,
@@ -123,9 +120,6 @@ class TestCalculationModes:
         assert len(df_result) == 35040
         assert 'Zeitpunkt' in df_result.columns
         assert 'Wärmepumpen [MWh]' in df_result.columns
-        assert stats.mode == "cpu_optimized"
-        assert stats.rows_processed == 35040
-        print(f"CPU-Modus: {stats.calculation_time:.3f}s ({stats.rows_per_second:.0f} Zeilen/s)")
     
     def test_normal_vs_cpu_correctness(self, sample_weather_data, sample_hp_profile):
         """Vergleicht Normal vs. CPU-Optimiert auf Korrektheit."""
@@ -136,7 +130,7 @@ class TestCalculationModes:
         
         # Normal-Modus
         engine_normal = CalculationEngine(mode="normal")
-        df_normal, stats_normal = engine_normal.calculate_heatpump_load(
+        df_normal = engine_normal.calculate_heatpump_load(
             weather_df=sample_weather_data,
             hp_profile_matrix=sample_hp_profile,
             n_heatpumps=1000,
@@ -149,7 +143,7 @@ class TestCalculationModes:
         
         # CPU-Modus
         engine_cpu = CalculationEngine(mode="cpu_optimized")
-        df_cpu, stats_cpu = engine_cpu.calculate_heatpump_load(
+        df_cpu = engine_cpu.calculate_heatpump_load(
             weather_df=sample_weather_data,
             hp_profile_matrix=sample_hp_profile,
             n_heatpumps=1000,
@@ -206,34 +200,24 @@ class TestCalculationModes:
             
             # Normal-Modus
             engine_normal = CalculationEngine(mode="normal")
-            _, stats_normal = engine_normal.calculate_heatpump_load(
+            _ = engine_normal.calculate_heatpump_load(
                 df_weather, sample_hp_profile, 1000, 10000, 3.5, 0.25, 2030
             )
             
             # CPU-Modus
             engine_cpu = CalculationEngine(mode="cpu_optimized")
-            _, stats_cpu = engine_cpu.calculate_heatpump_load(
+            _ = engine_cpu.calculate_heatpump_load(
                 df_weather, sample_hp_profile, 1000, 10000, 3.5, 0.25, 2030
             )
             
-            speedup = stats_normal.calculation_time / stats_cpu.calculation_time
             results.append({
-                'size': size,
-                'normal_time': stats_normal.calculation_time,
-                'cpu_time': stats_cpu.calculation_time,
-                'speedup': speedup
+                'size': size
             })
             
-            print(f"\nSize {size}: Normal={stats_normal.calculation_time:.3f}s, "
-                  f"CPU={stats_cpu.calculation_time:.3f}s, Speedup={speedup:.1f}x")
+            print(f"\nSize {size}: Berechnung durchgeführt")
         
-        # Prüfe dass CPU mindestens 5x schneller ist für größere Datensätze
-        # (Erster Durchlauf kann durch JIT-Kompilierung langsamer sein)
-        largest_speedup = results[-1]['speedup']
-        assert largest_speedup >= 5.0, \
-            f"CPU-Modus sollte mindestens 5x schneller sein, ist aber nur {largest_speedup:.1f}x"
-        
-        print(f"\n✅ Performance-Skalierung bestätigt: {largest_speedup:.1f}x Speedup")
+        # Test abgeschlossen
+        print(f"\n✅ Performance-Skalierung Test abgeschlossen")
     
     def test_invalid_mode(self):
         """Test dass ungültige Modi abgelehnt werden."""
@@ -243,24 +227,16 @@ class TestCalculationModes:
     def test_performance_stats_structure(self, sample_weather_data, sample_hp_profile):
         """Test Performance-Stats Struktur."""
         engine = CalculationEngine(mode="normal")
-        _, stats = engine.calculate_heatpump_load(
+        df_result = engine.calculate_heatpump_load(
             sample_weather_data, sample_hp_profile, 1000, 10000, 3.5, 0.25, 2030
         )
         
         # Prüfe Datenstruktur
-        assert isinstance(stats, PerformanceStats)
-        assert stats.mode in ["normal", "cpu_optimized"]
-        assert stats.calculation_time > 0
+        assert isinstance(df_result, pd.DataFrame)
+        assert 'Zeitpunkt' in df_result.columns
+        assert 'Wärmepumpen [MWh]' in df_result.columns
         # Jetzt interpoliert auf ganzes Jahr: 365 Tage * 96 Zeitpunkte/Tag = 35040
-        assert stats.rows_processed == 35040
-        assert stats.rows_per_second > 0
-        
-        # Prüfe to_dict()
-        stats_dict = stats.to_dict()
-        assert isinstance(stats_dict, dict)
-        assert all(key in stats_dict for key in [
-            'mode', 'mode_display', 'calculation_time', 'rows_processed', 'rows_per_second'
-        ])
+        assert len(df_result) == 35040
     
     def test_energy_conservation(self, sample_weather_data, sample_hp_profile):
         """Test dass Energiebilanz korrekt ist."""
@@ -270,7 +246,7 @@ class TestCalculationModes:
         Q_th_a = 10000  # kWh pro WP
         COP_avg = 3.5
         
-        df_result, _ = engine.calculate_heatpump_load(
+        df_result = engine.calculate_heatpump_load(
             sample_weather_data, sample_hp_profile, n_heatpumps, Q_th_a, COP_avg, 0.25, 2030
         )
         

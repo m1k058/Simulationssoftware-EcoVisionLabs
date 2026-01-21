@@ -1,9 +1,5 @@
 """
 Erzeugungssimulation für Energiesystem-Szenarien.
-
-Dieses Modul simuliert die Energieerzeugung basierend auf SMARD-Daten und 
-Ziel-Kapazitäten. Es berechnet Kapazitätsfaktoren aus historischen Daten und 
-skaliert diese auf die gewünschten installierten Leistungen.
 """
 
 import pandas as pd
@@ -21,8 +17,7 @@ def _generate_generation_profile(
     Generiert ein Erzeugungsprofil basierend auf SMARD-Daten.
     
     Berechnet Kapazitätsfaktoren (0-1) aus historischen Erzeugungsdaten und 
-    installierten Kapazitäten. Standardmäßig werden nur erneuerbare Energien 
-    berücksichtigt, mit include_conv auch konventionelle Kraftwerke.
+    installierten Kapazitäten
     
     Args:
         smard_erzeugung_df: DataFrame mit SMARD Erzeugungsdaten für ein Jahr
@@ -48,43 +43,33 @@ def _generate_generation_profile(
     
     erzeugung_filterd_df = smard_erzeugung_df[erzeugung_cols].copy()
     installiert_filterd_df = smard_instaliert_df[installiert_cols].copy()
-
-    # Capacity Factor berechnen: cf_i,t = P_ist_i,t / P_inst_i,t
-    # P_ist_i,t: historische Erzeugung in MW zum Zeitpunkt t
-    # P_inst_i,t: installierte Leistung in MW (konstant für das Jahr)
-    # Ergebnis: dimensionsloser Wert zwischen 0 und 1
     
-    # Rename installiert columns to match erzeugung columns for alignment
     col_mapping = {installiert_cols[i]: erzeugung_cols[i] for i in range(len(erzeugung_cols))}
     installiert_filterd_df = installiert_filterd_df.rename(columns=col_mapping)
     
     # Extrahiere das Jahr aus den Erzeugungsdaten
     jahr = erzeugung_filterd_df.index[0].year
     
-    # Finde die passende Zeile mit der installierten Leistung für dieses Jahr
+    # Finde Zeile mit der installierten Leistung
     if 'Jahr' in smard_instaliert_df.columns:
         installiert_jahr_row = smard_instaliert_df[smard_instaliert_df['Jahr'] == jahr]
         if installiert_jahr_row.empty:
             raise ValueError(f"Keine installierten Leistungsdaten für Jahr {jahr} gefunden.")
         installiert_werte = installiert_jahr_row[installiert_cols].iloc[0]
     else:
-        # Nutze Index (Zeitpunkt) - finde Eintrag für das Jahr
         installiert_jahr_row = smard_instaliert_df[smard_instaliert_df.index.year == jahr]
         if installiert_jahr_row.empty:
             raise ValueError(f"Keine installierten Leistungsdaten für Jahr {jahr} gefunden.")
         installiert_werte = installiert_jahr_row[installiert_cols].iloc[0]
     
-    # Rename für Alignment
     installiert_werte.index = [col_mapping[col] for col in installiert_werte.index]
     
-    # Konvertiere MWh zu MW (Viertelstunden: * 4)
+    # Konvertiere MWh zu MW
     erzeugung_mw_df = erzeugung_filterd_df * 4
     capacity_factor_df = erzeugung_mw_df.div(installiert_werte)
     
-    # NaN-Werte auf 0 setzen (tritt auf wenn installierte Leistung = 0)
     capacity_factor_df = capacity_factor_df.fillna(0)
     
-    # Werte auf [0, 1] begrenzen (Sicherheitscheck)
     capacity_factor_df = capacity_factor_df.clip(lower=0, upper=1)
     
     return capacity_factor_df
@@ -103,12 +88,6 @@ def simulate_production(
     """
     Simuliert die Energieproduktion für alle Technologien basierend auf SMARD-Daten
     und Ziel-installierten Leistungen für ein Simulationsjahr.
-    
-    Die Funktion:
-    1. Lädt SMARD-Referenzjahre basierend auf Wetterprofilen (good/average/bad)
-    2. Generiert Kapazitätsfaktoren aus historischen Daten
-    3. Skaliert auf Ziel-Kapazitäten für das Simulationsjahr
-    4. Passt an Schaltjahre/Normaljahre an
     
     Args:
         cfg: ConfigManager Instanz
@@ -159,7 +138,7 @@ def simulate_production(
     end_date = pd.Timestamp(year=simu_jahr, month=12, day=31, hour=23, minute=45)
     target_time_index = pd.date_range(start=start_date, end=end_date, freq='15min')
     
-    # Funktion zum Anpassen der Profile auf Zieljahr-Länge (Schaltjahr-Handling)
+    # Funktion zum Anpassen der Profile auf Zieljahr-Länge
     def align_profile_to_target_year(df_profile, target_index):
         """Passt ein Profil an die Länge des Zieljahres an (kürzt oder wiederholt)."""
         profile_len = len(df_profile)
@@ -197,7 +176,6 @@ def simulate_production(
         target_capacity = capacity_dict['Wind_Onshore'].get(target_year_str, 
                          capacity_dict['Wind_Onshore'].get(target_year_int, 0))
         if target_capacity > 0:
-            # Suche nach passender Spalte (verschiedene Namensformate)
             possible_cols = ['Wind Onshore [MWh]', 'Wind_Onshore [MWh]', 'Wind Onshore', 'Wind_Onshore', 'Onshore [MWh]']
             wind_on_col = None
             for col in possible_cols:
@@ -244,7 +222,7 @@ def simulate_production(
                     df_pv_Profile[pv_col].values * target_capacity * quarter_hour_factor
                 )
     
-    # 4. Alle anderen Technologien (konventionelle + Biomasse/Wasser)
+    # 4. andere Technologien
     other_technologies = [
         'Biomasse', 'Wasserkraft', 'Erdgas', 'Steinkohle', 'Braunkohle', 
         'Kernenergie', 'Sonstige Erneuerbare'

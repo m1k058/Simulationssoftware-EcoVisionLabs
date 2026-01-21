@@ -1,12 +1,8 @@
 """
 Verbrauchssimulation für Energiesystem-Szenarien.
-
-Dieses Modul simuliert den Energieverbrauch basierend auf BDEW-Standardlastprofilen
-(Haushalte H25, Gewerbe G25, Landwirtschaft L25) und integriert Wärmepumpen-Last.
 """
 
 import pandas as pd
-import numpy as np
 from typing import Optional
 from data_processing.calculation_engine import CalculationEngine
 
@@ -21,14 +17,7 @@ def simulate_consumption_BDEW(
     simu_jahr: int
 ) -> pd.DataFrame:
     """
-    Simuliert den Energieverbrauch basierend auf BDEW-Standardlastprofilen.
-    
-    Die Funktion:
-    1. Lädt BDEW-Standardlastprofile (H25 Haushalte, G25 Gewerbe, L25 Landwirtschaft)
-    2. Erstellt einen vollständigen Jahresverlauf mit Tagestypen (WT/SA/FT)
-    3. Wendet Dynamisierungsfaktor für Haushalte an (saisonale Variation)
-    4. Skaliert Profile auf Jahres-Zielwerte
-    5. Gibt Viertelstunden-Zeitreihe zurück
+    Simuliert den Energieverbrauch basierend auf BDEW-Standardlastprofilen
     
     Args:
         lastH: BDEW H25-Lastprofil (Haushalte)
@@ -50,33 +39,27 @@ def simulate_consumption_BDEW(
         """Bereitet BDEW-Lastprofil vor: Komma -> Punkt, numerische Konvertierung."""
         df = df.copy()
         
-        # Ersetze Kommas durch Punkte in value_kWh
         if 'value_kWh' in df.columns:
             if df['value_kWh'].dtype == 'object':
                 df['value_kWh'] = df['value_kWh'].astype(str).str.replace(',', '.')
             df['value_kWh'] = pd.to_numeric(df['value_kWh'], errors='coerce')
         
-        # Konvertiere timestamp zu Datetime
         if 'timestamp' in df.columns:
             df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
         
-        # Konvertiere month zu int
         if 'month' in df.columns:
             df['month'] = pd.to_numeric(df['month'], errors='coerce').astype('Int64')
         
         return df
     
-    # Vorbereiten der drei Lastprofile
     lastH = _prepare_load_profile(lastH)
     lastG = _prepare_load_profile(lastG)
     lastL = _prepare_load_profile(lastL)
     
-    # Erstelle vollständigen Jahreskalender
     start_date = pd.Timestamp(f'{simu_jahr}-01-01 00:00:00')
     end_date = pd.Timestamp(f'{simu_jahr}-12-31 23:45:00')
     zeitpunkte = pd.date_range(start=start_date, end=end_date, freq='15min')
     
-    # Basis-DataFrame mit Zeitinformationen
     df_result = pd.DataFrame({'Zeitpunkt': zeitpunkte})
     df_result['month'] = df_result['Zeitpunkt'].dt.month
     df_result['weekday'] = df_result['Zeitpunkt'].dt.weekday  # 0=Montag, 6=Sonntag
@@ -89,7 +72,6 @@ def simulate_consumption_BDEW(
         de_holidays = holidays.Germany(years=simu_jahr, language='de')
         feiertage = [pd.Timestamp(date) for date in de_holidays.keys()]
     except ImportError:
-        # Fallback: Feste Feiertage (ohne bewegliche Feiertage)
         print("Warnung: Package 'holidays' nicht verfügbar. Bewegliche Feiertage fehlen!")
         feiertage = [
             pd.Timestamp(f'{simu_jahr}-01-01'),  # Neujahr
@@ -105,7 +87,6 @@ def simulate_consumption_BDEW(
         is_holiday = pd.Timestamp(date) in feiertage
         is_sunday = row['weekday'] == 6
         
-        # BDEW-Regel: 24.12. und 31.12. gelten als Samstag
         is_heiligabend_silvester = (row['month'] == 12) and (row['day'] in [24, 31])
         
         if is_holiday or is_sunday:
@@ -141,12 +122,9 @@ def simulate_consumption_BDEW(
         
         return df_merged['value_kWh']
     
-    # Mappe Lastprofile auf Jahreskalender
     df_result['Haushalte_kWh'] = _map_load_profile(df_result, lastH, 'Haushalte')
     
-    # Dynamisierung für Haushalte (H25) - Saisonaler Faktor
-    # Formel: f(t) = -3,92E-10*t^4 + 3,20E-7*t^3 - 7,02E-5*t^2 + 2,10E-3*t + 1,24
-    # t = Tag des Jahres (1-365/366)
+    # Dynamisierung für Haushalte
     t = df_result['Zeitpunkt'].dt.dayofyear.astype(float)
     
     dyn_faktor = (
@@ -163,7 +141,7 @@ def simulate_consumption_BDEW(
     df_result['Gewerbe_kWh'] = _map_load_profile(df_result, lastG, 'Gewerbe')
     df_result['Landwirtschaft_kWh'] = _map_load_profile(df_result, lastL, 'Landwirtschaft')
     
-    # Berechne Skalierungsfaktoren (Jahressumme Profil -> Zielwert)
+    # Berechne Skalierungsfaktoren
     sum_H_kWh = df_result['Haushalte_kWh'].sum()
     sum_G_kWh = df_result['Gewerbe_kWh'].sum()
     sum_L_kWh = df_result['Landwirtschaft_kWh'].sum()
@@ -261,9 +239,8 @@ def simulate_consumption_all(
     
     if wetter_df is not None and hp_profile_matrix is not None and anzahl_heatpumps > 0:
         try:
-            # Nutze CalculationEngine statt HeatPumpSimulation direkt
             engine = CalculationEngine(mode=calculation_mode)
-            df_heatpump, stats = engine.calculate_heatpump_load(
+            df_heatpump = engine.calculate_heatpump_load(
                 weather_df=wetter_df,
                 hp_profile_matrix=hp_profile_matrix,
                 n_heatpumps=anzahl_heatpumps,
@@ -274,11 +251,6 @@ def simulate_consumption_all(
                 debug=debug
             )
             
-            if debug:
-                print(f"Wärmepumpen-Berechnung: {stats.mode_display}, "
-                      f"{stats.calculation_time:.2f}s, {stats.rows_per_second:.0f} Zeilen/s")
-            
-            # Merge mit BDEW-Daten
             df_result = df_result.merge(df_heatpump, on='Zeitpunkt', how='outer')
             df_result['Wärmepumpen [MWh]'] = df_result['Wärmepumpen [MWh]'].fillna(0.0)
             
@@ -287,10 +259,8 @@ def simulate_consumption_all(
                 print(f"Warnung: Wärmepumpen-Simulation fehlgeschlagen: {e}")
             df_result['Wärmepumpen [MWh]'] = 0.0
     else:
-        # Keine Wärmepumpen konfiguriert
         df_result['Wärmepumpen [MWh]'] = 0.0
     
-    # 3. Berechne Gesamtverbrauch
     mwh_cols = [col for col in df_result.columns if '[MWh]' in col and col != 'Gesamt [MWh]']
     if mwh_cols:
         df_result['Gesamt [MWh]'] = df_result[mwh_cols].sum(axis=1)

@@ -1,11 +1,5 @@
 """
 Wärmepumpen-Simulationsmodul.
-
-Dieses Modul berechnet den elektrischen Energiebedarf von Wärmepumpen basierend auf:
-- Außentemperatur
-- Standardlastprofilen (abhängig von Temperatur und Tageszeit)
-- COP (Coefficient of Performance)
-- Anzahl und thermischem Bedarf der Wärmepumpen
 """
 
 import pandas as pd
@@ -17,12 +11,6 @@ from data_processing.simulation_logger import SimulationLogger
 class HeatPumpSimulation:
     """
     Klasse zur Simulation des elektrischen Energiebedarfs von Wärmepumpen.
-    
-    Nutzt standardisierte Lastprofile abhängig von:
-    - Außentemperatur (-14°C bis +17°C, plus LOW/HIGH für Extreme)
-    - Uhrzeit (96 Viertelstunden pro Tag)
-    - Jahreswärmebedarf pro Wärmepumpe
-    - COP (Coefficient of Performance)
     """
     
     def __init__(self, logger: Optional[SimulationLogger] = None):
@@ -38,8 +26,8 @@ class HeatPumpSimulation:
         """
         Bereitet das Wetter-DataFrame vor:
         - Konvertiert Zeitpunkt von 'DD.MM.YY HH:MM' zu DateTime
-        - Wählt die angegebene Spalte aus (location)
-        - Interpoliert zu Viertelstunden (aktuell nur stündliche Werte)
+        - Wählt die angegebene Spalte aus
+        - Interpoliert zu Viertelstunden
         
         Args:
             df: Wetterdaten-DataFrame
@@ -50,17 +38,14 @@ class HeatPumpSimulation:
         """
         df_local = df.copy()
         
-        # Konvertiere Zeitpunkt-Format "01.01.19 01:00" zu DateTime
         df_local['Zeitpunkt'] = pd.to_datetime(df_local['Zeitpunkt'], format='%d.%m.%y %H:%M')
         
-        # Wähle nur AVERAGE Spalte
         if location not in df_local.columns:
             raise ValueError(f"Spalte '{location}' nicht gefunden im Weather-DataFrame")
         
         df_local = df_local[['Zeitpunkt', location]].copy()
         df_local.columns = ['Zeitpunkt', 'Temperatur [°C]']
-        
-        # Entferne Zeilen mit NaT oder NaN (wichtig!)
+       
         df_local = df_local.dropna(subset=['Zeitpunkt', 'Temperatur [°C]'])
         
         # Sortiere nach Zeitpunkt
@@ -83,12 +68,11 @@ class HeatPumpSimulation:
             hp_profile_matrix: Matrix mit Lastprofilen
         
         Returns:
-            Lastprofilfaktor (dimensionslos, 0-1 oder höher) aus der Matrix
+            Lastprofilfaktor
         
         Raises:
-            KeyError: Wenn Spalte nicht in Matrix gefunden
+            KeyError: Wenn Spalte nicht in Matrix
         """
-        # Temperatur Clamping: -14 bis 17 oder String 'LOW'/'HIGH'
         t_lookup = int(round(temp))
         if t_lookup < -14:
             t_lookup = 'LOW'
@@ -97,7 +81,6 @@ class HeatPumpSimulation:
         
         t_col = str(t_lookup) if isinstance(t_lookup, int) else t_lookup
         
-        # Zeile anhand Stunde und Minute finden (Matrix hat 96 Zeilen/Tag)
         row = hp_profile_matrix[
             (hp_profile_matrix['hour'] == time_index.hour) & 
             (hp_profile_matrix['minute'] == time_index.minute)
@@ -150,10 +133,8 @@ class HeatPumpSimulation:
             self.logger.info(f"Simuliere {n_heatpumps:,} Wärmepumpen, "
                            f"Q_th={Q_th_a:.0f} kWh/WP, COP={COP_avg:.2f}")
         
-        # Stelle sicher, dass alle Spaltennamen Strings sind (für konsistenten Matrix-Zugriff)
         hp_profile_matrix.columns = hp_profile_matrix.columns.astype(str)
         
-        # Vorbereiten der HP-Lastprofilmatrix: Zeitspalten parsen, Kommas als Dezimalpunkte wandeln
         hp_profile_matrix = hp_profile_matrix.copy()
         if 'Zeitpunkt' in hp_profile_matrix.columns:
             time_str = hp_profile_matrix['Zeitpunkt'].astype(str).str.split('-', n=1).str[0]
@@ -171,26 +152,21 @@ class HeatPumpSimulation:
                 errors='coerce'
             )
         
-        # Bereite Wetterdaten vor: Konvertiere, bereinige und interpoliere auf Viertelstunden-Auflösung
         df_weather = self._prep_temp_df(weather_df, location="AVERAGE")
         df_weather = df_weather.drop_duplicates(subset='Zeitpunkt', keep='first')
         df_weather = df_weather.sort_values('Zeitpunkt').reset_index(drop=True)
         
-        # Erstelle vollständigen 15-Minuten-Zeitindex für das Wetterjahr
         weather_year = int(df_weather['Zeitpunkt'].dt.year.iloc[0])
         start = pd.Timestamp(f'{weather_year}-01-01 00:00')
         end = pd.Timestamp(f'{weather_year}-12-31 23:45')
         full_index = pd.date_range(start=start, end=end, freq='15min')
         df_full = pd.DataFrame({'Zeitpunkt': full_index})
         
-        # Merge und interpoliere Temperaturdaten
         df_weather = df_full.merge(df_weather, on='Zeitpunkt', how='left')
         df_weather['Temperatur [°C]'] = df_weather['Temperatur [°C]'].ffill().bfill()
         
-        # Verschiebe Jahr auf Simulationsjahr für Merge mit BDEW-Daten
         df_weather['Zeitpunkt'] = df_weather['Zeitpunkt'].apply(lambda x: x.replace(year=simu_jahr))
         
-        # Berechne Normierungsfaktor für Lastprofile
         summe_lp_dt = 0.0
         for index, row in df_weather.iterrows():
             time = row['Zeitpunkt']
@@ -198,54 +174,42 @@ class HeatPumpSimulation:
             lp_faktor = self._get_hp_factor(time, temp, hp_profile_matrix)
             summe_lp_dt += lp_faktor * dt
         
-        # VALIDIERUNG
         if summe_lp_dt <= 0:
             raise ValueError(f"Fehler: Normierungssumme summe_lp_dt={summe_lp_dt} ist nicht positiv!")
         
-        # Skalierungsfaktor: Jahreslast / Summe aller Profile
         f = Q_th_a / summe_lp_dt
         if debug:
             print(f"Normierungsfaktor f: {f:.2f} kW (Q_th_a={Q_th_a} kWh, summe={summe_lp_dt:.1f} h-äquiv)")
         
-        # Berechne Leistungen und Energieverbrauch für jede Viertelstunde
         ergebnisse = []
         
         for index, row in df_weather.iterrows():
             time = row['Zeitpunkt']
             temp = row['Temperatur [°C]']
             
-            # A. Profilwert holen (dimensionslos, 0-1 oder höher)
             lp_wert = self._get_hp_factor(time, temp, hp_profile_matrix)
             
-            # B. Thermische Leistung EINER WP (kW)
             p_th = lp_wert * f
             
-            # C. Elektrische Leistung EINER WP (kW)
             p_el = p_th / COP_avg
             
-            # D. Gesamtleistung ALLER n WP (kW)
             p_el_ges = p_el * n_heatpumps
             
-            # Speichern
             ergebnisse.append({
                 "Zeitpunkt": time,
                 "Temperatur [°C]": temp,
                 "P_th [kW]": p_th,
                 "P_el [kW]": p_el,
                 "P_el_ges [kW]": p_el_ges,
-                "P_el_ges [MW]": p_el_ges / 1000  # Umrechnung zu MW
+                "P_el_ges [MW]": p_el_ges / 1000
             })
         
-        # Konvertiere zu DataFrame
         df_result = pd.DataFrame(ergebnisse)
         
-        # --- KONVERTIERUNG ZU ENERGIEERZEUGUNG (MWh) ---
         df_result['Wärmepumpen [MWh]'] = df_result['P_el_ges [MW]'] * dt
         
-        # Rückgabe nur mit Zeitpunkt und Verbrauch
         df_result = df_result[['Zeitpunkt', 'Wärmepumpen [MWh]']]
         
-        # VALIDIERUNG
         if debug:
             jahres_verbrauch_mwh = df_result['Wärmepumpen [MWh]'].sum()
             jahres_verbrauch_twh = jahres_verbrauch_mwh / 1e6
