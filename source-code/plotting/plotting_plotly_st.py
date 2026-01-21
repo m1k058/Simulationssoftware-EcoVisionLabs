@@ -512,120 +512,6 @@ def create_renewable_histogram(
     mask = df_combined["Verbrauch"] > 0
 
 
-def plot_economic_trends(results_list: list[dict]) -> go.Figure:
-    """
-    Erstellt einen Kombi-Plot (Bar & Line) für die wirtschaftliche Entwicklung.
-
-    Args:
-        results_list: Liste von Dictionaries mit den Ergebnissen pro Jahr.
-
-    Returns:
-        Plotly Figure mit Primär-Bars (Investitionen) und Sekundär-Linie (LCOE).
-    """
-    if not results_list:
-        return go.Figure()
-
-    df = pd.DataFrame(results_list)
-
-    # Sanity: notwendige Spalten sicherstellen
-    required = ["year", "total_investment_bn", "system_lco_e"]
-    for col in required:
-        if col not in df.columns:
-            raise KeyError(f"Spalte '{col}' fehlt für den Economic-Trend-Plot.")
-
-    # Sortierung und Typ-Korrektur
-    df = df.copy()
-    df["year"] = pd.to_numeric(df["year"], errors="coerce")
-    df = df.dropna(subset=["year"])
-    df = df.sort_values("year")
-
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-    # Primärachse: Investitionen als Balken
-    fig.add_trace(
-        go.Bar(
-            x=df["year"],
-            y=df["total_investment_bn"],
-            name="Investitionsbedarf (Mrd. €)",
-            marker_color="#1f4b99",  # Modernes Dunkelblau
-            opacity=0.9,
-            hovertemplate="Jahr %{x}<br>Investitionen: %{y:,.2f} Mrd. €<extra></extra>",
-        ),
-        secondary_y=False,
-    )
-
-    # Sekundärachse: LCOE als Linie
-    fig.add_trace(
-        go.Scatter(
-            x=df["year"],
-            y=df["system_lco_e"],
-            mode="lines+markers",
-            name="LCOE (ct/kWh)",
-            line=dict(color="#e4572e", width=3),  # Auffälliges Rot/Orange
-            marker=dict(size=8, color="#e4572e", line=dict(color="white", width=1)),
-            hovertemplate="Jahr %{x}<br>LCOE: %{y:,.2f} ct/kWh<extra></extra>",
-        ),
-        secondary_y=True,
-    )
-
-    fig.update_layout(
-        template="plotly_white",
-        barmode="group",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.08,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=12)
-        ),
-        margin=dict(l=60, r=60, t=60, b=60),
-        height=500,
-        xaxis_title="Jahr",
-        yaxis_title="Investitionen (Mrd. €)",
-        yaxis2_title="LCOE (ct/kWh)",
-        hovermode="x unified",
-        bargap=0.15,
-        title="",
-    )
-
-    # Stelle sicher, dass jede Jahresmarke gezeigt wird
-    fig.update_xaxes(dtick=1)
-
-    # Grid nur auf primärer Achse
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.1)", secondary_y=False)
-    fig.update_yaxes(showgrid=False, secondary_y=True)
-
-    return fig
-    df_combined.loc[mask, "EE_Anteil"] = (
-        df_combined.loc[mask, "Erzeugung_EE"] / df_combined.loc[mask, "Verbrauch"]
-    ) * 100
-    
-    df_combined["EE_Anteil_Clipped"] = df_combined["EE_Anteil"].clip(0, 100.1)
-    
-    fig = px.histogram(
-        df_combined,
-        x="EE_Anteil_Clipped",
-        nbins=11,
-        title=title if title else None,
-        template="plotly_white",
-    )
-    
-    # Custom Tick Labels
-    tick_vals = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105]
-    tick_text = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", 
-                 "60-70", "70-80", "80-90", "90-100", "100+"]
-    
-    fig.update_layout(
-        xaxis_title="Anteil erneuerbarer Energien am Verbrauch (%)",
-        yaxis_title="Anzahl 15-Minuten-Intervalle",
-        xaxis=dict(tickvals=tick_vals, ticktext=tick_text),
-        bargap=0.1,
-    )
-    
-    return fig
-
-
 def create_balance_area_plot(
     df: pd.DataFrame,
     balance_column: str = "Bilanz [MWh]",
@@ -1112,6 +998,144 @@ def create_monthly_balance_plot(
             xanchor="right",
             x=1
         ),
+    )
+    
+    return fig
+
+
+def create_emobility_soc_plot(
+    df: pd.DataFrame,
+    soc_column: str = "EMobility SOC [MWh]",
+    title: str = "",
+    date_from: pd.Timestamp | None = None,
+    date_to: pd.Timestamp | None = None,
+) -> go.Figure:
+    """
+    Erstellt einen gefüllten Linienplot für E-Mobility State of Charge (SOC).
+    
+    Args:
+        df: DataFrame mit Zeitpunkt und SOC-Spalte
+        soc_column: Name der SOC-Spalte (default: "EMobility SOC [MWh]")
+        title: Plot-Titel
+        date_from: Startdatum für Filterung
+        date_to: Enddatum für Filterung
+    
+    Returns:
+        Plotly Figure mit SOC-Linie
+    """
+    
+    if "Zeitpunkt" not in df.columns or soc_column not in df.columns:
+        raise KeyError(f"Benötigte Spalten fehlen: Zeitpunkt, {soc_column}")
+    
+    # Kopie erstellen und Zeitpunkt konvertieren
+    df = df.copy()
+    df['Zeitpunkt'] = pd.to_datetime(df['Zeitpunkt'])
+    
+    # Zeitfilter anwenden
+    if date_from is not None:
+        df = df[df['Zeitpunkt'] >= date_from]
+    if date_to is not None:
+        df = df[df['Zeitpunkt'] <= date_to]
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=df['Zeitpunkt'],
+        y=df[soc_column],
+        mode='lines',
+        name='EV-Flotte SOC',
+        fill='tozeroy',
+        line=dict(color='#2ecc71', width=1),
+        fillcolor='rgba(46, 204, 113, 0.3)',
+        hovertemplate="<b>%{x|%d.%m.%Y %H:%M}</b><br>SOC: %{y:,.0f} MWh<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        title=title if title else None,
+        xaxis_title="Zeit",
+        yaxis_title="SOC [MWh]",
+        template="plotly_white",
+        hovermode="x unified",
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    
+    return fig
+
+
+def create_emobility_power_plot(
+    df: pd.DataFrame,
+    power_column: str = "EMobility Power [MW]",
+    title: str = "",
+    date_from: pd.Timestamp | None = None,
+    date_to: pd.Timestamp | None = None,
+) -> go.Figure:
+    """
+    Erstellt einen Split-Plot für E-Mobility Lade-/Entladeleistung.
+    
+    Positive Werte = V2G Rückspeisung (grün)
+    Negative Werte = Laden aus Netz (rot)
+    
+    Args:
+        df: DataFrame mit Zeitpunkt und Power-Spalte
+        power_column: Name der Power-Spalte (default: "EMobility Power [MW]")
+        title: Plot-Titel
+        date_from: Startdatum für Filterung
+        date_to: Enddatum für Filterung
+    
+    Returns:
+        Plotly Figure mit gestacktem Lade-/Entladediagramm
+    """
+    
+    if "Zeitpunkt" not in df.columns or power_column not in df.columns:
+        raise KeyError(f"Benötigte Spalten fehlen: Zeitpunkt, {power_column}")
+    
+    # Kopie erstellen und Zeitpunkt konvertieren
+    df = df.copy()
+    df['Zeitpunkt'] = pd.to_datetime(df['Zeitpunkt'])
+    
+    # Zeitfilter anwenden
+    if date_from is not None:
+        df = df[df['Zeitpunkt'] >= date_from]
+    if date_to is not None:
+        df = df[df['Zeitpunkt'] <= date_to]
+    
+    power_data = df[power_column]
+    
+    fig = go.Figure()
+    
+    # Positive Werte (Entladen/V2G) in Grün
+    fig.add_trace(go.Scatter(
+        x=df['Zeitpunkt'],
+        y=power_data.clip(lower=0),
+        mode='lines',
+        name='V2G Rückspeisung',
+        fill='tozeroy',
+        line=dict(color='#27ae60', width=0.5),
+        fillcolor='rgba(39, 174, 96, 0.5)',
+        hovertemplate="<b>%{x|%d.%m.%Y %H:%M}</b><br>V2G: %{y:,.2f} MW<extra></extra>"
+    ))
+    
+    # Negative Werte (Laden) in Rot
+    fig.add_trace(go.Scatter(
+        x=df['Zeitpunkt'],
+        y=power_data.clip(upper=0),
+        mode='lines',
+        name='Laden',
+        fill='tozeroy',
+        line=dict(color='#e74c3c', width=0.5),
+        fillcolor='rgba(231, 76, 60, 0.5)',
+        hovertemplate="<b>%{x|%d.%m.%Y %H:%M}</b><br>Laden: %{y:,.2f} MW<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        title=title if title else None,
+        xaxis_title="Zeit",
+        yaxis_title="Leistung [MW]",
+        template="plotly_white",
+        hovermode="x unified",
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     
     return fig

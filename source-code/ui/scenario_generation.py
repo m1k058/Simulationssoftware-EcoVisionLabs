@@ -20,7 +20,7 @@ def ensure_state(sm: ScenarioManager) -> None:
 
 
 def _show_year_modal() -> list:
-    """Modal zur Jahreseingabe - blockiert den Rest der Seite."""
+    """Jahreseingabe"""
     if "years_confirmed" not in st.session_state:
         st.session_state["years_confirmed"] = False
     
@@ -72,7 +72,7 @@ def _show_year_modal() -> list:
                     st.rerun()
             
             st.markdown("---")
-        st.stop()  # Seitenladevorgang stoppen, bis Jahre bestätigt sind
+        st.stop()
     
     return st.session_state.get("valid_years", [2030, 2045])
 
@@ -84,10 +84,10 @@ def scenario_generation_page() -> None:
     sm = ScenarioManager()
     ensure_state(sm)
 
-    # === MODAL: JAHRE ZUERST ABFRAGEN ===
+    # jahre abfragen
     valid_years = _show_year_modal()
 
-    # Schneller Reset auf die Beispielwerte aus der Vorlage
+    # Reset auf Beispielwerte
     if st.button(":material/lab_profile: Beispielwerte laden", width='stretch'):
         st.session_state["scenario_editor"] = sm.default_template()
         st.session_state.pop("storage_values", None)
@@ -95,7 +95,7 @@ def scenario_generation_page() -> None:
 
     data = st.session_state["scenario_editor"]
 
-    # === METADATEN ===
+    # METADATEN
     st.subheader("Metadaten")
     name = st.text_input("Name", value=data.get("metadata", {}).get("name", ""))
     description = st.text_area("Beschreibung", value=data.get("metadata", {}).get("description", ""), height=80)
@@ -107,11 +107,10 @@ def scenario_generation_page() -> None:
 
     st.markdown("---")
 
-    # === LASTPROFIL ===
+    # LASTPARAMETER
     st.subheader("Last (Verbrauch) - pro Sektor")
     load_params = data.get("target_load_demand_twh", {})
     
-    # Sektoren definieren (BDEW nur)
     sectors = {
         "Haushalt_Basis": "Haushalte (Standardlastprofil)",
         "Gewerbe_Basis": "Gewerbe",
@@ -145,12 +144,12 @@ def scenario_generation_page() -> None:
     st.markdown("---")
 
 
-    # === WÄRMEPUMPEN-PARAMETER (NEU) ===
+    # Wärmepumpen PARAMETER
     st.subheader("Wärmepumpen - Parameter")
     hp_params = data.get("target_heat_pump_parameters", {})
     edited_hp = {}
     
-    # Verfügbare Temperature-Datasets laden
+    # temp data
     if "cfg" not in st.session_state:
         st.session_state.cfg = ConfigManager()
     available_temps = ScenarioManager.get_available_temperature_datasets(st.session_state.cfg)
@@ -187,7 +186,7 @@ def scenario_generation_page() -> None:
                 key=f"hp_cop_{year}",
             )
         with hp_cols2[1]:
-            # Weather_data als Dropdown mit verfügbaren Temperature-Datasets
+            # wetter daten
             current_weather = year_hp.get("weather_data", "Lufttemperatur-2019")
             default_idx = available_temps.index(current_weather) if current_weather in available_temps else 0
             edited_hp[year]["weather_data"] = st.selectbox(
@@ -197,17 +196,14 @@ def scenario_generation_page() -> None:
                 key=f"hp_weather_{year}",
                 help="Temperature-Dataset aus config.json"
             )
-        
-        # load_profile wird nicht mehr in YAML gespeichert (fix in constants.py)
     
     st.markdown("---")
 
-    # === E-MOBILITÄT-PARAMETER (NEU) ===
+    # E-Mobility PARAMETER
     st.subheader(":material/directions_car: E-Mobilität - Parameter")
     em_params = data.get("target_emobility_parameters", {})
     edited_em = {}
     
-    # Initialisiere E-Mobility Werte in session_state falls nicht vorhanden
     if "emobility_values" not in st.session_state:
         st.session_state["emobility_values"] = {}
         for y in valid_years if valid_years else [2030, 2045]:
@@ -228,7 +224,6 @@ def scenario_generation_page() -> None:
                 "thr_deficit": default_vals.get("thr_deficit", 200000.0),
             }
     
-    # Stelle sicher, dass neue Jahre auch Einträge haben
     for y in valid_years if valid_years else [2030, 2045]:
         if y not in st.session_state["emobility_values"]:
             st.session_state["emobility_values"][y] = {
@@ -247,14 +242,13 @@ def scenario_generation_page() -> None:
                 "thr_deficit": 200000.0,
             }
     
-    # Tabs für jedes Jahr
+    # tabs pro Jahr
     em_tabs = st.tabs([f"Jahr {year}" for year in (valid_years if valid_years else [2030, 2045])])
     
     for tab_idx, (tab, year) in enumerate(zip(em_tabs, valid_years if valid_years else [2030, 2045])):
         with tab:
             year_em = st.session_state["emobility_values"].get(year, {})
             
-            # Hauptparameter
             st.markdown("**Flotten-Parameter**")
             em_col1, em_col2 = st.columns(2)
             with em_col1:
@@ -295,8 +289,7 @@ def scenario_generation_page() -> None:
                     key=f"em_e_batt_{year}",
                     help="Durchschnittliche Batteriekapazität pro Fahrzeug"
                 )
-            
-            # SOC Parameter
+           
             st.markdown("**SOC-Grenzen**")
             soc_col1, soc_col2, soc_col3 = st.columns(3)
             with soc_col1:
@@ -330,7 +323,6 @@ def scenario_generation_page() -> None:
                     help="Ziel-SOC bei Abfahrt morgens"
                 )
             
-            # Erweiterte Einstellungen - Defaults initialisieren
             plug_share_val = float(year_em.get("plug_share_max", 0.6))
             v2g_share_val = float(year_em.get("v2g_share", 0.3))
             t_depart_val = str(year_em.get("t_depart", "07:30"))
@@ -373,7 +365,6 @@ def scenario_generation_page() -> None:
                         help="Format: HH:MM"
                     )
                 
-                # Netz-Schwellwerte
                 st.markdown("**Netz-Dispatch Schwellwerte**")
                 thr_col1, thr_col2 = st.columns(2)
                 with thr_col1:
@@ -397,7 +388,6 @@ def scenario_generation_page() -> None:
                         help="Ab diesem Defizit wird entladen"
                     )
             
-            # Werte in Session State speichern
             st.session_state["emobility_values"][year] = {
                 "s_EV": s_ev_val,
                 "N_cars": n_cars_val,
@@ -410,47 +400,39 @@ def scenario_generation_page() -> None:
                 "SOC_target_depart": soc_target_val,
                 "t_depart": t_depart_val,
                 "t_arrive": t_arrive_val,
-                "thr_surplus": thr_surplus_mw * 1000.0,  # Konvertiere MW zu kW
-                "thr_deficit": thr_deficit_mw * 1000.0,  # Konvertiere MW zu kW
+                "thr_surplus": thr_surplus_mw * 1000.0,
+                "thr_deficit": thr_deficit_mw * 1000.0,
             }
     
-    # E-Mobility Werte für Export zusammenstellen
     for year in valid_years if valid_years else [2030, 2045]:
         edited_em[year] = st.session_state["emobility_values"].get(year, {})
 
     st.markdown("---")
 
-    # === ZIEL-KAPAZITÄTEN ===
+    # Ziel Erzeugungskapazitäten
     st.subheader("Ziel-Kapazitäten [MW]")
     
     years_to_show = valid_years if valid_years else [2030, 2045]
     
-    # Standard-Technologien definieren
     default_techs = [
         "Photovoltaik", "Wind_Onshore", "Wind_Offshore", "Biomasse",
         "Wasserkraft", "Erdgas", "Steinkohle", "Braunkohle", "Kernenergie"
     ]
     
-    # Initialisiere cap_values in session_state
     if "cap_values" not in st.session_state:
         st.session_state["cap_values"] = {}
         for y in years_to_show:
             st.session_state["cap_values"][y] = {tech: 0.0 for tech in default_techs}
     
-    # Stelle sicher, dass neue Jahre auch Einträge haben
     for y in years_to_show:
         if y not in st.session_state["cap_values"]:
             st.session_state["cap_values"][y] = {tech: 0.0 for tech in default_techs}
     
-    
-    
-    # Header-Zeile (Jahre)
     header_cols = st.columns([2] + [1.5] * len(years_to_show))
     header_cols[0].write("**Technologie**")
     for idx, year in enumerate(years_to_show):
         header_cols[idx + 1].write(f"**{year}**")
     
-    # Daten-Zeilen (Technologien)
     for tech in default_techs:
         row_cols = st.columns([2] + [1.5] * len(years_to_show))
         row_cols[0].write(f"**{tech} [MW]**")
@@ -463,18 +445,13 @@ def scenario_generation_page() -> None:
                 key=f"cap_{year}_{tech}"
             )
     
-    # Konvertiere für später (altes Format)
     rows = []
     for y in years_to_show:
         row = {"Jahr": int(y)}
         for tech in default_techs:
             row[tech] = st.session_state["cap_values"][y].get(tech, 0.0)
         rows.append(row)
-    edited_cap = pd.DataFrame(rows)
-    
-    st.markdown("---")
-
-    
+    edited_cap = pd.DataFrame(rows)    
     
     st.markdown("---")
     st.subheader("Wetterprofile für erneuerbare Energien")
@@ -511,7 +488,7 @@ def scenario_generation_page() -> None:
 
     st.markdown("---")
 
-    # === SPEICHER ===
+    # Speicher PARAMETER
     st.subheader(":material/battery_profile: Speicher")
     storage_caps = data.get("target_storage_capacities", {})
     storage_types = {
@@ -525,7 +502,6 @@ def scenario_generation_page() -> None:
         for stor_key in storage_types.keys():
             st.session_state["storage_values"][stor_key] = storage_caps.get(stor_key, {}).copy()
 
-    # Stelle sicher, dass neue Jahre auch Default-Werte bekommen
     for stor_key in storage_types.keys():
         st.session_state["storage_values"].setdefault(stor_key, {})
         for y in valid_years:
@@ -541,7 +517,7 @@ def scenario_generation_page() -> None:
         st.markdown(f"**{stor_label}**")
         years_list = valid_years if valid_years else [2030, 2045]
         
-        # Tabs für jedes Jahr
+        # Tabs für Jahre
         tabs = st.tabs([str(year) for year in years_list])
         
         for tab_idx, (tab, year) in enumerate(zip(tabs, years_list)):
@@ -592,7 +568,7 @@ def scenario_generation_page() -> None:
             if year in valid_years
         }
 
-    # === LIVE ZUSAMMENFASSUNG IN SESSION STATE ===
+    # zusammenbauen
     tech_list = [c for c in edited_cap.columns if c != "Jahr"]
     target_generation_capacities_mw = {tech: {} for tech in tech_list}
     for _, row in edited_cap.iterrows():
@@ -633,7 +609,7 @@ def scenario_generation_page() -> None:
 
     st.success("Daten aktualisiert - YAML immer aktuell.")
 
-    # === GROSSER DOWNLOAD BUTTON AM ENDE ===
+    # Download Button
     st.markdown("---")
     st.markdown("")
     
@@ -663,7 +639,7 @@ def scenario_generation_page() -> None:
         st.code(yaml_output, language="yaml")
     
 
-    # Neustart-Button: Jahre erneut abfragen und State leeren
+    # RESET Button
     col_empty1, col_preview, col_empty2 = st.columns([1, 2, 1])
     if col_preview.button("RESET", width='stretch'):
         reset_keys = [

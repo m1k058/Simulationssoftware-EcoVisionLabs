@@ -7,7 +7,6 @@ def analysis_page() -> None:
     st.title("Dataset-Analyse")
     st.caption("Analysiere und vergleiche mehrere Datensätze stabil und übersichtlich.")
 
-    # Frühzeitige Validierung der Session-State Objekte
     if getattr(st.session_state, "dm", None) is None or getattr(st.session_state, "cfg", None) is None:
         st.warning("DataManager/ConfigManager ist nicht initialisiert.")
         return
@@ -15,12 +14,11 @@ def analysis_page() -> None:
     sidebar = st.sidebar
     sidebar.title("Einstellungen")
 
-    # Datensätze auswählen (mehrere möglich)
+    # Datensätze auswählen
     try:
         all_names = st.session_state.dm.list_dataset_names() or []
     except Exception:
         all_names = []
-
     if not all_names:
         st.info("Keine Datensätze geladen. Bitte lade Daten im Home-Tab.")
         return
@@ -36,7 +34,6 @@ def analysis_page() -> None:
         st.info("Bitte mindestens ein DataFrame auswählen.")
         return
 
-    # Sammle Metadaten und DataFrames
     datasets = []
     for name in selected_names:
         try:
@@ -47,12 +44,11 @@ def analysis_page() -> None:
         except Exception as e:
             st.error(f"Fehler beim Laden von '{name}': {e}")
 
-    # Falls aus irgendeinem Grund nichts gesammelt wurde
     if not datasets:
         st.warning("Es konnten keine gültigen DataFrames geladen werden.")
         return
 
-    # Globalen Zeitraum über alle ausgewählten DataFrames bestimmen (Union)
+    # Zeitraum über alle ausgewählten DataFrames
     global_mins, global_maxs = [], []
     for d in datasets:
         if "Zeitpunkt" in d["df"].columns:
@@ -70,14 +66,12 @@ def analysis_page() -> None:
     min_date_total = min(global_mins)
     max_date_total = max(global_maxs)
 
-    # Anzeige der inhaltlichen Typen-Zusammenfassung
     dtypes = {d["datatype"] for d in datasets}
     if len(dtypes) == 1:
         sidebar.write(f"**Datentyp(e):** {list(dtypes)[0]}")
     else:
         sidebar.write(f"**Datentyp(e):** gemischt ({', '.join(sorted(dtypes))})")
 
-    # Badges-Hinweis
     sidebar.markdown("---\n ***Zeitraum & Anzeige***")
     sidebar.checkbox("Uhrzeit mit angeben", value=st.session_state.get("set_time", False), key="set_time")
 
@@ -104,10 +98,9 @@ def analysis_page() -> None:
         )
         selected_time_from = right.time_input("Uhrzeit von", value=pd.to_datetime("00:00").time(), key="time_from_analysis")
 
-    # Vorschlagswert für "bis" (ein Tag nach Start)
     maxplot_date = pd.to_datetime(selected_date_from) + pd.Timedelta(days=1)
 
-    # Datum bis (min ist immer Start)
+    # Datum bis
     if not st.session_state.get("set_time", False):
         selected_date_to = sidebar.date_input(
             "Datum bis",
@@ -130,22 +123,16 @@ def analysis_page() -> None:
         )
         selected_time_to = right.time_input("Uhrzeit bis", value=pd.to_datetime("23:59").time(), key="time_to_analysis")
 
-    # Kombiniere Datum und Uhrzeit wenn gesetzt
+    # Kombiniere Datum und Uhrzeit
     if st.session_state.get("set_time", False):
         selected_date_from = pd.to_datetime(f"{selected_date_from} {selected_time_from}")
         selected_date_to = pd.to_datetime(f"{selected_date_to} {selected_time_to}")
 
-    # Plausibilitätscheck
+    # check
     if pd.to_datetime(selected_date_from) > pd.to_datetime(selected_date_to):
         st.error("Das Startdatum liegt nach dem Enddatum. Bitte korrigieren.")
         return
 
-    date_diff = pd.to_datetime(selected_date_to) - pd.to_datetime(selected_date_from)
-
-    # Plot-Engine: Nur noch Plotly (Matplotlib/Altair deprecated)
-    plot_engine = "Plotly"  # Fest auf Plotly gesetzt
-
-    # Hilfsfunktionen
     def _energy_options_for_df(local_df: pd.DataFrame):
         opts = [src["colname"] for src in ENERGY_SOURCES.values() if src["colname"] in local_df.columns]
         default = [v["colname"] for k, v in ENERGY_SOURCES.items() if k in ("BIO", "PV") and v["colname"] in local_df.columns]
@@ -188,7 +175,7 @@ def analysis_page() -> None:
         )
         st.plotly_chart(fig, width='stretch')
 
-    # Hauptbereich: Tabs pro ausgewähltem DataFrame
+    # Tabs pro ausgewähltem DataFrame
     tabs = st.tabs([d["name"] for d in datasets])
 
     for tab, d in zip(tabs, datasets):
@@ -198,13 +185,12 @@ def analysis_page() -> None:
                 st.warning("Dieses DataFrame hat keine 'Zeitpunkt'-Spalte und kann nicht dargestellt werden.")
                 continue
 
-            # Filter nach globalem Zeitraum
+            # Filter nach Zeitraum
             df_filtered = df[
                 (pd.to_datetime(df["Zeitpunkt"], errors="coerce") >= pd.to_datetime(selected_date_from)) &
                 (pd.to_datetime(df["Zeitpunkt"], errors="coerce") <= pd.to_datetime(selected_date_to))
             ].copy()
 
-            # Info-Badges zum Inhalt
             if d["datatype"] == "SMARD":
                 st.markdown("**Im Dataframe:** :green-badge[:material/trending_up: Erzeugungs Daten]")
             elif d["datatype"] == "SMARD-V":
@@ -215,7 +201,6 @@ def analysis_page() -> None:
                 st.write("**Im Dataframe:**")
                 st.warning("Unbekannter Datentyp. Möglicherweise nicht vollständig unterstützt.")
 
-            # Darstellung abhängig vom Typ bzw. vorhandenen Spalten
             has_generation_cols = any(src["colname"] in df_filtered.columns for src in ENERGY_SOURCES.values())
             has_consumption = "Netzlast [MWh]" in df_filtered.columns
 
@@ -233,7 +218,6 @@ def analysis_page() -> None:
                 _plot_consumption(df_filtered)
 
             elif d["datatype"] == "CUST_PROG":
-                # Zeige beide Bereiche, sofern vorhanden
                 if has_generation_cols:
                     with st.expander("Erzeugung", expanded=True):
                         opts, default = _energy_options_for_df(df_filtered)
@@ -250,7 +234,6 @@ def analysis_page() -> None:
                 if not has_generation_cols and not has_consumption:
                     st.info("Keine bekannten Spalten für Erzeugung oder Verbrauch gefunden.")
             else:
-                # Fallback: versuche sinnvolle Darstellung
                 if has_generation_cols:
                     opts, default = _energy_options_for_df(df_filtered)
                     energiequellen = st.multiselect(

@@ -4,6 +4,7 @@ from ui.home import home_page, load_data_manager
 from ui.analysis import analysis_page
 from ui.simulation_standard import standard_simulation_page
 from ui.simulation_diff import diff_simulation_page
+from ui.simulation_comparison import comparison_simulation_page
 from ui.scenario_generation import scenario_generation_page
 
 
@@ -96,6 +97,7 @@ def main() -> None:
     page_home = st.Page(home_page, title="Home", icon=":material/home:", default=True)
     page_simulation = st.Page(standard_simulation_page, title="Simulation (Single Mode)", icon=":material/table_chart_view:")
     page_diff_simulation = st.Page(diff_simulation_page, title="Simulation (Diff Mode)", icon=":material/balance:")
+    page_comparison_simulation = st.Page(comparison_simulation_page, title="Simulation (Vergleich)", icon=":material/compare_arrows:")
     page_scenario = st.Page(scenario_generation_page, title="Szenario Konfiguration", icon=":material/tune:")
     page_analysis = st.Page(analysis_page, title="Daten Analyse", icon=":material/area_chart:")
     
@@ -104,6 +106,7 @@ def main() -> None:
         "home": page_home,
         "simulation": page_simulation,
         "diff_simulation": page_diff_simulation,
+        "comparison_simulation": page_comparison_simulation,
         "scenario": page_scenario,
         "analysis": page_analysis,
     }
@@ -113,6 +116,7 @@ def main() -> None:
             page_home,
             page_simulation,
             page_diff_simulation,
+            page_comparison_simulation,
             page_scenario,
             page_analysis,
         ]

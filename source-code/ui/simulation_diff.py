@@ -5,6 +5,9 @@ import pandas as pd
 # Eigene Imports
 from data_processing.simulation_engine import SimulationEngine
 import plotting.plotting_plotly_st as ply
+from ui.kpi_dashboard import convert_results_to_scoring_format, normalize_storage_config
+from data_processing.scoring_system import get_score_and_kpis
+from plotting.scoring_plots import get_category_scores, KPI_CONFIG
 
 # Manager Imports
 from data_manager import DataManager
@@ -19,7 +22,6 @@ def diff_simulation_page() -> None:
     st.title("Simulation (Diff Mode)")
     st.caption("Laden Sie zwei Szenarios und generieren Sie interpolierte Varianten für den Vergleich.")
 
-    # Überprüfe ob DataManager, ConfigManager, ScenarioManager geladen sind
     if st.session_state.dm is None or st.session_state.cfg is None or st.session_state.sm is None:
         st.warning("DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
         return
@@ -84,19 +86,19 @@ def diff_simulation_page() -> None:
         "diff_scenario_2_data" in st.session_state and st.session_state.diff_scenario_2_data is not None):
         if st.button("Alle Szenarien simulieren", type="primary", key="run_diff_sim"):
             try:
-                # Interpoliere alle Szenarien
+                # Interpoliere Szenarien
                 interpolated_scenarios = _interpolate_scenarios(
                     st.session_state.diff_scenario_1_data,
                     st.session_state.diff_scenario_2_data,
                     increments
                 )
+                st.session_state.diff_interpolated_scenarios = interpolated_scenarios
 
-                # Simuliere alle
+                # Simuliere
                 st.session_state.diff_sim_results = {}
                 progress_bar = st.progress(0)
 
                 for idx, (inc_label, scenario) in enumerate(interpolated_scenarios.items()):
-                    # Temporär Szenario in sm setzen
                     st.session_state.sm.current_scenario = scenario
 
                     engine = SimulationEngine(
@@ -125,118 +127,80 @@ def diff_simulation_page() -> None:
                 st.error(f"❌ Fehler: {e}")
 
         if "diff_sim_results" in st.session_state and st.session_state.diff_sim_results:
+            interpolated_scenarios = st.session_state.get("diff_interpolated_scenarios", {})
             st.markdown("---")
-            st.subheader("📈 Parameter-Sättigungskurve")
-            st.caption("KPI vs. Gesamtkapazität der Speicher (inkl. saisonaler Auswertung)")
-            
-            # Extrahiere KPIs (gesamt, Winter, Sommer) und Gesamtkapazität je Szenario
-            saturation_sets = _extract_kpi_for_saturation(
-                st.session_state.diff_sim_results,
-                interpolated_scenarios
-            )
-            
-            if saturation_sets and saturation_sets.get("all"):
-                fig_saturation = ply.plot_parameter_saturation(
-                    simulation_results=saturation_sets["all"],
-                    parameter_name="Gesamtkapazität Speicher [MWh]",
-                    kpi_name="Durchschnittliche Rest-Bilanz [MWh]",
-                    title="KPI-Entwicklung (Gesamt)"
-                )
-                st.plotly_chart(fig_saturation, width='stretch')
+            st.subheader("📊 KPI Score Vergleich")
 
-            # Zeige Winter/Sommer nebeneinander
-            if saturation_sets and (saturation_sets.get("winter") or saturation_sets.get("summer")):
-                col_w, col_s = st.columns(2)
-                if saturation_sets.get("winter"):
-                    fig_w = ply.plot_parameter_saturation(
-                        simulation_results=saturation_sets["winter"],
-                        parameter_name="Gesamtkapazität Speicher [MWh]",
-                        kpi_name="Durchschnittliche Rest-Bilanz [MWh]",
-                        title="Winter (Dez–Feb)"
-                    )
-                    col_w.plotly_chart(fig_w, width='stretch')
-                else:
-                    col_w.info("Keine Winter-Daten")
+            rows = []
 
-                if saturation_sets.get("summer"):
-                    fig_s = ply.plot_parameter_saturation(
-                        simulation_results=saturation_sets["summer"],
-                        parameter_name="Gesamtkapazität Speicher [MWh]",
-                        kpi_name="Durchschnittliche Rest-Bilanz [MWh]",
-                        title="Sommer (Jun–Aug)"
-                    )
-                    col_s.plotly_chart(fig_s, width='stretch')
-                else:
-                    col_s.info("Keine Sommer-Daten")
-            
-            st.markdown("---")
-            st.subheader("Ergebnisse")
+            def _inc_sort(label: str) -> tuple:
+                if label == "Szenario 1":
+                    return (0, 0)
+                if label.startswith("Inkrement "):
+                    try:
+                        num = int(label.split("Inkrement ")[-1])
+                    except Exception:
+                        num = 999
+                    return (1, num)
+                if label == "Szenario 2":
+                    return (2, 0)
+                return (3, label)
 
-            # Auswahl welcher Increment/Jahr angezeigt werden soll
-            inc_labels = sorted(list(st.session_state.diff_sim_results.keys()))
-            sel_inc_str = st.selectbox(
-                "Wähle ein Inkrement",
-                inc_labels,
-                key="diff_inc_select"
+            inc_labels = sorted(list(st.session_state.diff_sim_results.keys()), key=_inc_sort)
+
+            # gemeinsame Jahre
+            common_years = None
+            for inc_label in inc_labels:
+                year_keys = st.session_state.diff_sim_results.get(inc_label, {}).keys()
+                year_set = {int(y) for y in year_keys}
+                common_years = year_set if common_years is None else common_years & year_set
+            common_years = sorted(common_years) if common_years else []
+
+            if not common_years:
+                st.info("Keine gemeinsamen Jahre in den Simulationsergebnissen gefunden.")
+                return
+
+            selected_year = st.selectbox(
+                "Jahr für KPI-Vergleich auswählen",
+                options=common_years,
+                index=0,
+                key="diff_kpi_year_select",
             )
 
-            if sel_inc_str and sel_inc_str in st.session_state.diff_sim_results:
-                results_inc = st.session_state.diff_sim_results[sel_inc_str]
+            for inc_label in inc_labels:
+                results_inc = st.session_state.diff_sim_results.get(inc_label)
+                if not results_inc:
+                    continue
 
-                # Für jeden Jahr in den Ergebnissen Tabs mit Downloads
-                for year in sorted(results_inc.keys()):
-                    with st.expander(f"Jahr {year}", expanded=(year == sorted(results_inc.keys())[0])):
-                        tab_con, tab_prod, tab_bal, tab_stor = st.tabs([
-                            "Verbrauch", "Erzeugung", "Bilanz", "Speicher"
-                        ])
+                storage_cfg_raw = interpolated_scenarios.get(inc_label, {}).get("target_storage_capacities", {})
+                storage_cfg = normalize_storage_config(storage_cfg_raw)
+                if not storage_cfg:
+                    continue
 
-                        with tab_con:
-                            df = results_inc[year]["consumption"]
-                            st.dataframe(df, width='stretch')
-                            csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
-                            st.download_button(
-                                "Download Verbrauch CSV",
-                                data=csv,
-                                file_name=f"diff_{sel_inc_str}_verbrauch_{year}.csv",
-                                mime="text/csv",
-                                key=f"dl_con_{sel_inc_str}_{year}"
-                            )
+                try:
+                    if selected_year not in results_inc:
+                        st.warning(f"⚠️ {inc_label}: Jahr {selected_year} fehlt in den Ergebnissen.")
+                        continue
+                    scoring_results = convert_results_to_scoring_format(results_inc, selected_year)
+                    kpis = get_score_and_kpis(scoring_results, storage_cfg, selected_year)
+                    category_scores = get_category_scores(kpis)
+                    overall_score = sum(category_scores.values()) / len(category_scores)
+                    row = {
+                        "Szenario": inc_label,
+                        "Jahr": selected_year,
+                        "Gesamtscore": round(overall_score, 1),
+                    }
+                    for cat_key, cat_score in category_scores.items():
+                        row[KPI_CONFIG[cat_key]["title"]] = round(cat_score, 1)
+                    rows.append(row)
+                except Exception as exc:
+                    st.warning(f"⚠️ Score für {inc_label} nicht berechenbar: {exc}")
 
-                        with tab_prod:
-                            df = results_inc[year]["production"]
-                            st.dataframe(df, width='stretch')
-                            csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
-                            st.download_button(
-                                "Download Erzeugung CSV",
-                                data=csv,
-                                file_name=f"diff_{sel_inc_str}_erzeugung_{year}.csv",
-                                mime="text/csv",
-                                key=f"dl_prod_{sel_inc_str}_{year}"
-                            )
-
-                        with tab_bal:
-                            df = results_inc[year]["balance"]
-                            st.dataframe(df, width='stretch')
-                            csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
-                            st.download_button(
-                                "Download Bilanz CSV",
-                                data=csv,
-                                file_name=f"diff_{sel_inc_str}_bilanz_{year}.csv",
-                                mime="text/csv",
-                                key=f"dl_bal_{sel_inc_str}_{year}"
-                            )
-
-                        with tab_stor:
-                            df = results_inc[year]["storage"]
-                            st.dataframe(df, width='stretch')
-                            csv = df.to_csv(index=False, sep=';', decimal=',').encode('utf-8')
-                            st.download_button(
-                                "Download Speicher CSV",
-                                data=csv,
-                                file_name=f"diff_{sel_inc_str}_speicher_{year}.csv",
-                                mime="text/csv",
-                                key=f"dl_stor_{sel_inc_str}_{year}"
-                            )
+            if rows:
+                df_scores = pd.DataFrame(rows)
+                st.dataframe(df_scores, width='stretch', hide_index=True)
+            else:
+                st.info("Keine KPI-Scores verfügbar. Prüfe Speicher-Konfigurationen und Simulationsergebnisse.")
     else:
         st.info("⚠️ Bitte lade beide Szenarios hoch, um zu beginnen.")
 
@@ -258,25 +222,20 @@ def _interpolate_scenarios(scenario_1: dict, scenario_2: dict, num_increments: i
     import numpy as np
 
     result = {}
-    
-    # Füge zuerst das original Szenario 1 hinzu
+   
     result["Szenario 1"] = copy.deepcopy(scenario_1)
 
-    # Interpoliere die Inkremente dazwischen
+    # Interpoliere Inkremente 
     for increment in range(1, num_increments + 1):
-        # Berechne Interpolationsfaktor zwischen den zwei Szenarien
         t = increment / (num_increments + 1)
 
-        # Erstelle neues Szenario mit interpolierten Werten
         new_scenario = copy.deepcopy(scenario_1)
 
-        # Kopiere Metadaten aber update Name
         new_scenario["metadata"] = copy.deepcopy(scenario_1.get("metadata", {}))
         s1_name = scenario_1.get("metadata", {}).get("name", "Szenario 1")
         s2_name = scenario_2.get("metadata", {}).get("name", "Szenario 2")
         new_scenario["metadata"]["name"] = f"Inkrement {increment} ({s1_name} → {s2_name})"
 
-        # Interpoliere Verbrauchswerte
         load_1 = scenario_1.get("target_load_demand_twh", {})
         load_2 = scenario_2.get("target_load_demand_twh", {})
         new_load = copy.deepcopy(load_1)
@@ -292,7 +251,6 @@ def _interpolate_scenarios(scenario_1: dict, scenario_2: dict, num_increments: i
 
         new_scenario["target_load_demand_twh"] = new_load
 
-        # Interpoliere Erzeugungskapazitäten
         gen_1 = scenario_1.get("target_generation_capacities_mw", {})
         gen_2 = scenario_2.get("target_generation_capacities_mw", {})
         new_gen = copy.deepcopy(gen_1)
@@ -308,7 +266,6 @@ def _interpolate_scenarios(scenario_1: dict, scenario_2: dict, num_increments: i
 
         new_scenario["target_generation_capacities_mw"] = new_gen
 
-        # Speicher interpolieren (optional, kopiere von Szenario 1)
         if "target_storage_capacities" in scenario_1:
             stor_1 = scenario_1.get("target_storage_capacities", {})
             stor_2 = scenario_2.get("target_storage_capacities", {})
@@ -326,7 +283,6 @@ def _interpolate_scenarios(scenario_1: dict, scenario_2: dict, num_increments: i
 
             new_scenario["target_storage_capacities"] = new_stor
 
-        # Wetterprofile kopieren (keine Interpolation nötig, nimm von Szenario 1)
         if "weather_generation_profiles" in scenario_1:
             new_scenario["weather_generation_profiles"] = copy.deepcopy(
                 scenario_1.get("weather_generation_profiles", {})
@@ -334,7 +290,6 @@ def _interpolate_scenarios(scenario_1: dict, scenario_2: dict, num_increments: i
 
         result[f"Inkrement {increment}"] = new_scenario
     
-    # Füge am Ende das original Szenario 2 hinzu
     result["Szenario 2"] = copy.deepcopy(scenario_2)
 
     return result
@@ -346,11 +301,8 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
     Markiert Zeilen die sich zwischen Szenario 1 und Szenario 2 geändert haben
     """
     import pandas as pd
-    
-    # Sammle Werte
     data_rows = []
     
-    # Verbrauch (target_load_demand_twh)
     load_1 = scenario_1.get("target_load_demand_twh", {})
     load_2 = scenario_2.get("target_load_demand_twh", {})
     
@@ -364,7 +316,6 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
                     if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
                         row = {"Parameter": f"Verbrauch: {sector} ({year_key})", "Szenario 1": round(v1, 2)}
                         
-                        # Füge Inkremente hinzu
                         for inc_label, scenario in sorted(interpolated_scenarios.items()):
                             if inc_label.startswith("Inkrement"):
                                 inc_val = scenario.get("target_load_demand_twh", {}).get(sector, {}).get(year_key, 0)
@@ -374,7 +325,6 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
                         row["_changed"] = v1 != v2
                         data_rows.append(row)
     
-    # Erzeugungskapazitäten (target_generation_capacities_mw)
     gen_1 = scenario_1.get("target_generation_capacities_mw", {})
     gen_2 = scenario_2.get("target_generation_capacities_mw", {})
     
@@ -388,7 +338,6 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
                     if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
                         row = {"Parameter": f"Kapazität: {tech} ({year_key})", "Szenario 1": round(v1, 0)}
                         
-                        # Füge Inkremente hinzu
                         for inc_label, scenario in sorted(interpolated_scenarios.items()):
                             if inc_label.startswith("Inkrement"):
                                 inc_val = scenario.get("target_generation_capacities_mw", {}).get(tech, {}).get(year_key, 0)
@@ -398,7 +347,6 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
                         row["_changed"] = v1 != v2
                         data_rows.append(row)
     
-    # Speicherkapazitäten (target_storage_capacities)
     if "target_storage_capacities" in scenario_1:
         stor_1 = scenario_1.get("target_storage_capacities", {})
         stor_2 = scenario_2.get("target_storage_capacities", {})
@@ -414,7 +362,6 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
                             if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
                                 row = {"Parameter": f"Speicher: {storage_type} - {param} ({year_key})", "Szenario 1": round(v1, 2)}
                                 
-                                # Füge Inkremente hinzu
                                 for inc_label, scenario in sorted(interpolated_scenarios.items()):
                                     if inc_label.startswith("Inkrement"):
                                         inc_val = scenario.get("target_storage_capacities", {}).get(storage_type, {}).get(year_key, {}).get(param, 0)
@@ -427,10 +374,8 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
     if data_rows:
         df_comparison = pd.DataFrame(data_rows)
         
-        # Entferne die _changed Spalte vor der Anzeige
         display_df = df_comparison.drop("_changed", axis=1)
         
-        # Wende Styling an - markiere Zeilen die sich verändert haben
         styled_df = display_df.style.apply(
             lambda row: ["background-color: #ffdb3b; color: black"] * len(row) if df_comparison.loc[row.name, "_changed"] else [""] * len(row),
             axis=1
@@ -440,118 +385,3 @@ def _display_interpolation_table(scenario_1: dict, scenario_2: dict, interpolate
     else:
         st.info("Keine vergleichbaren Parameter gefunden")
 
-
-def _extract_kpi_for_saturation(diff_sim_results: dict, interpolated_scenarios: dict) -> list[dict]:
-    """
-    Extrahiert KPI-Werte aus den Simulationsergebnissen für die Sättigungskurve.
-    
-    Args:
-        diff_sim_results: Dict mit Simulationsergebnissen pro Szenario
-        interpolated_scenarios: Dict mit interpolierten Szenarien
-    
-    Returns:
-        Dict mit Keys 'all', 'winter', 'summer' und jeweiligen Listen aus
-        Dicts: 'scenario_label', 'parameter_value', 'kpi_value'
-    """
-    import pandas as pd
-    import numpy as np
-    
-    data_all = []
-    data_winter = []
-    data_summer = []
-    winter_months = {12, 1, 2}
-    summer_months = {6, 7, 8}
-    
-    # Definiere Sortierung für korrekte Reihenfolge
-    scenario_order = ["Szenario 1"] + [f"Inkrement {i}" for i in range(1, 100)] + ["Szenario 2"]
-    
-    for idx, (scenario_label, results) in enumerate(sorted(
-        diff_sim_results.items(), 
-        key=lambda x: scenario_order.index(x[0]) if x[0] in scenario_order else 999
-    )):
-        scenario = interpolated_scenarios.get(scenario_label)
-        param_value = _compute_total_storage_capacity(scenario) if scenario else idx
-
-        kpi_all = []
-        kpi_winter = []
-        kpi_summer = []
-
-        for year, year_results in results.items():
-            # Quelle: bevorzugt storage Rest Bilanz, sonst original balance
-            df_source = None
-            col_name = None
-            if "storage" in year_results and "Rest Bilanz [MWh]" in year_results["storage"].columns:
-                df_source = year_results["storage"]
-                col_name = "Rest Bilanz [MWh]"
-            elif "balance" in year_results and "Bilanz [MWh]" in year_results["balance"].columns:
-                df_source = year_results["balance"]
-                col_name = "Bilanz [MWh]"
-
-            if df_source is None or col_name is None:
-                continue
-
-            series = df_source[col_name]
-
-            # Full year
-            kpi_all.append(series.mean())
-
-            # Winter (Dez/Jan/Feb) und Sommer (Jun/Jul/Aug) falls Zeitpunkt vorhanden
-            if "Zeitpunkt" in df_source.columns:
-                ts = pd.to_datetime(df_source["Zeitpunkt"])
-                winter_mask = ts.dt.month.isin(winter_months)
-                summer_mask = ts.dt.month.isin(summer_months)
-                if winter_mask.any():
-                    kpi_winter.append(series[winter_mask].mean())
-                if summer_mask.any():
-                    kpi_summer.append(series[summer_mask].mean())
-
-        if kpi_all:
-            data_all.append({
-                "scenario_label": scenario_label,
-                "parameter_value": param_value,
-                "kpi_value": float(np.mean(kpi_all))
-            })
-        if kpi_winter:
-            data_winter.append({
-                "scenario_label": scenario_label,
-                "parameter_value": param_value,
-                "kpi_value": float(np.mean(kpi_winter))
-            })
-        if kpi_summer:
-            data_summer.append({
-                "scenario_label": scenario_label,
-                "parameter_value": param_value,
-                "kpi_value": float(np.mean(kpi_summer))
-            })
-    
-    return {
-        "all": data_all,
-        "winter": data_winter,
-        "summer": data_summer,
-    }
-
-
-def _compute_total_storage_capacity(scenario: dict | None) -> float:
-    """Summiert installierte Speicher-Kapazitäten (MWh) über alle Speicherarten.
-    Nimmt den jüngsten Jahrgang pro Speicherart, falls mehrere Jahre vorhanden sind.
-    """
-    if not scenario:
-        return 0.0
-
-    storage = scenario.get("target_storage_capacities", {})
-    total = 0.0
-
-    for storage_type, per_year in storage.items():
-        if not isinstance(per_year, dict):
-            continue
-        # Wähle den jüngsten Jahrgang, dann installierte Kapazität
-        years = sorted([y for y in per_year.keys() if str(y).isdigit()], key=lambda x: int(x))
-        if not years:
-            continue
-        latest_year = years[-1]
-        attrs = per_year.get(latest_year, {})
-        cap = attrs.get("installed_capacity_mwh") or attrs.get("installed_capacity_MWh")
-        if isinstance(cap, (int, float)):
-            total += cap
-
-    return float(total)

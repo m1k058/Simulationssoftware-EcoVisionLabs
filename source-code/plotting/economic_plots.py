@@ -187,3 +187,119 @@ def plot_investment_donut(investment_dict: Dict[str, float], year: int) -> go.Fi
     )
     
     return fig
+
+
+def plot_economic_trends(results_list: list[dict]) -> go.Figure:
+    """
+    Erstellt einen Kombi-Plot (Bar & Line) für die wirtschaftliche Entwicklung.
+
+    Args:
+        results_list: Liste von Dictionaries mit den Ergebnissen pro Jahr.
+
+    Returns:
+        Plotly Figure mit Primär-Bars (Investitionen) und Sekundär-Linie (LCOE).
+    """
+    if not results_list:
+        return go.Figure()
+
+    df = pd.DataFrame(results_list)
+
+    # Sanity: notwendige Spalten sicherstellen
+    required = ["year", "total_investment_bn", "system_lco_e"]
+    for col in required:
+        if col not in df.columns:
+            raise KeyError(f"Spalte '{col}' fehlt für den Economic-Trend-Plot.")
+
+    # Sortierung und Typ-Korrektur
+    df = df.copy()
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df.dropna(subset=["year"])
+    df = df.sort_values("year")
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Primärachse: Investitionen als Balken
+    fig.add_trace(
+        go.Bar(
+            x=df["year"],
+            y=df["total_investment_bn"],
+            name="Investitionsbedarf (Mrd. €)",
+            marker_color="#1f4b99",  # Modernes Dunkelblau
+            opacity=0.9,
+            hovertemplate="Jahr %{x}<br>Investitionen: %{y:,.2f} Mrd. €<extra></extra>",
+        ),
+        secondary_y=False,
+    )
+
+    # Sekundärachse: LCOE als Linie
+    fig.add_trace(
+        go.Scatter(
+            x=df["year"],
+            y=df["system_lco_e"],
+            mode="lines+markers",
+            name="LCOE (ct/kWh)",
+            line=dict(color="#e4572e", width=3),  # Auffälliges Rot/Orange
+            marker=dict(size=8, color="#e4572e", line=dict(color="white", width=1)),
+            hovertemplate="Jahr %{x}<br>LCOE: %{y:,.2f} ct/kWh<extra></extra>",
+        ),
+        secondary_y=True,
+    )
+
+    fig.update_layout(
+        template="plotly_white",
+        barmode="group",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.08,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=12)
+        ),
+        margin=dict(l=60, r=60, t=60, b=60),
+        height=500,
+        xaxis_title="Jahr",
+        yaxis_title="Investitionen (Mrd. €)",
+        yaxis2_title="LCOE (ct/kWh)",
+        hovermode="x unified",
+        bargap=0.15,
+        title="",
+    )
+
+    # Stelle sicher, dass jede Jahresmarke gezeigt wird
+    fig.update_xaxes(dtick=1)
+
+    # Grid nur auf primärer Achse
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.1)", secondary_y=False)
+    fig.update_yaxes(showgrid=False, secondary_y=True)
+
+    return fig
+    df_combined.loc[mask, "EE_Anteil"] = (
+        df_combined.loc[mask, "Erzeugung_EE"] / df_combined.loc[mask, "Verbrauch"]
+    ) * 100
+    
+    df_combined["EE_Anteil_Clipped"] = df_combined["EE_Anteil"].clip(0, 100.1)
+    
+    fig = px.histogram(
+        df_combined,
+        x="EE_Anteil_Clipped",
+        nbins=11,
+        title=title if title else None,
+        template="plotly_white",
+    )
+    
+    # Custom Tick Labels
+    tick_vals = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105]
+    tick_text = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", 
+                 "60-70", "70-80", "80-90", "90-100", "100+"]
+    
+    fig.update_layout(
+        xaxis_title="Anteil erneuerbarer Energien am Verbrauch (%)",
+        yaxis_title="Anzahl 15-Minuten-Intervalle",
+        xaxis=dict(tickvals=tick_vals, ticktext=tick_text),
+        bargap=0.1,
+    )
+    
+    return fig
+
+

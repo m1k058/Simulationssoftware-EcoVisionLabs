@@ -15,12 +15,11 @@ from typing import Any, Dict, Optional
 import constants as const
 
 
-# Baseline-Kapazitäten 2025 (manuelle Referenzwerte in MW)
-# Quelle: SMARD-Daten 2025, gerundet
+# Baseline-Kapazitäten 2025
 BASELINE_2025_DEFAULTS = {
     "Photovoltaik": 86408.0,
-    "Wind Onshore": 63192.0,  # ACHTUNG: Mit Leerzeichen!
-    "Wind Offshore": 9215.0,  # ACHTUNG: Mit Leerzeichen!
+    "Wind Onshore": 63192.0,
+    "Wind Offshore": 9215.0,
     "Biomasse": 8766.0,
     "Wasserkraft": 5350.0,
     "Erdgas": 36614.0,
