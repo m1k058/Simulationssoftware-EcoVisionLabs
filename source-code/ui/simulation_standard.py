@@ -573,6 +573,7 @@ def standard_simulation_page() -> None:
                 st.caption("Stundliche Verbrauchswerte nach Sektor (Haushalte, Gewerbe, Landwirtschaft, E-Mobility)")
                 fig_con = ply.create_consumption_plot(
                     results[sel_year]["consumption"],
+                    sector_columns=[c for c in results[sel_year]["consumption"].columns if "[MWh]" in c and "Gesamt" not in c and "Zeitpunkt" not in c],
                     title="",
                     date_from=date_from_ts,
                     date_to=date_to_ts

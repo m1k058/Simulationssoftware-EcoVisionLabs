@@ -84,7 +84,7 @@ def render_kpi_overview(kpis: Dict[str, Any]):
     with col1:
         st.subheader('Category Comparison')
         radar_fig = create_category_radar_chart(kpis)
-        st.plotly_chart(radar_fig, use_container_width=True)
+        st.plotly_chart(radar_fig, width='stretch')
     
     with col2:
         st.subheader('Category Scores')
@@ -138,7 +138,7 @@ def render_category_details(category: str, kpis: Dict[str, float], config: Dict[
                 kpi_config.get('best', 0),
                 height=250
             )
-            st.plotly_chart(gauge_fig, use_container_width=True)
+            st.plotly_chart(gauge_fig, width='stretch')
             
             # Show actual value
             value_format = kpi_config.get('format', '.2f')
@@ -156,7 +156,7 @@ def render_category_details(category: str, kpis: Dict[str, float], config: Dict[
     st.markdown('---')
     st.subheader('KPI Values')
     bar_fig = create_kpi_bar_chart(kpis, config)
-    st.plotly_chart(bar_fig, use_container_width=True)
+    st.plotly_chart(bar_fig, width='stretch')
 
 
 def render_detailed_table(kpis: Dict[str, Any]):
@@ -167,7 +167,7 @@ def render_detailed_table(kpis: Dict[str, Any]):
     # Style the dataframe
     st.dataframe(
         df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         column_config={
             'Category': st.column_config.TextColumn('Category', width='small'),

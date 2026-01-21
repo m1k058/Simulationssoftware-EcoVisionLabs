@@ -1,5 +1,5 @@
 """
-Plotting functions for energy simulation KPI visualization.
+Plotting funktionen für KPI-Visualisierung.
 """
 
 import plotly.graph_objects as go
@@ -7,9 +7,9 @@ import pandas as pd
 from typing import Dict, Any, Optional
 
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
+# ------------------------------ #
+#         KONFIGURATION          #
+# ------------------------------ #
 
 KPI_CONFIG = {
     'security': {
@@ -39,14 +39,6 @@ KPI_CONFIG = {
                 'format': '.2%',
                 'worst': 1,
                 'best': 0
-            },
-            'h2_soc': {
-                'name': 'H2 Storage Utilization',
-                'description': 'Durchschnittlicher H2-Füllstand',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 0,
-                'best': 1
             }
         }
     },
@@ -113,69 +105,60 @@ KPI_CONFIG = {
 }
 
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
+# ------------------------------ #
+#        HILFSFUNKTIONEN         #
+# ------------------------------ #
 
 def _calculate_kpi_score(value: float, worst: float, best: float) -> float:
     """
-    Calculate a score (0-100) for a KPI value using min-max normalization.
+        Score zwischen 0 und 100 basierend auf Wert, schlechtestem und bestem Wert berechnen.
     
-    Args:
-        value: Current KPI value (can be absolute or relative)
-        worst: Worst possible value (gets 0 points)
-        best: Best possible value (gets 100 points)
-    
-    Returns:
-        Score between 0 and 100 (100 = best)
-    
-    Examples:
-        - co2_intensity: value=173, worst=1000, best=0 → score≈83
-        - deficit_share: value=0.1, worst=1, best=0 → score=90
+        Examples:
+        - co2_intensity: Wert=173, worst=1000, best=0 → score≈83
+        - deficit_share: Wert=0.1, worst=1, best=0 → score=90
     """
-    # Avoid division by zero
+
+    # division durch null verhindern
     if worst == best:
         return 100 if value == best else 0
     
-    # Min-Max normalization: (value - best) / (worst - best)
-    # Then invert to get score: 1 - normalized
+    # Min-Max Normalisierung  +  invertieren
     normalized = (value - best) / (worst - best)
     score = (1 - normalized) * 100
     
-    # Clamp to 0-100 range
     return max(0, min(100, score))
 
 
 def _get_score_color(score: float) -> str:
     """
-    Get color based on score value.
+    Farbe basierend auf Score-Wert erhalten.
     
     Args:
-        score: Score value (0-100)
+        score: Score-Wert (0-100)
     
     Returns:
-        Hex color code
+        Hex-Farbcode
     """
     if score >= 80:
-        return '#4CAF50'  # Green
+        return '#4CAF50'
     elif score >= 60:
-        return '#FFC107'  # Yellow
+        return '#FFC107'
     elif score >= 40:
-        return '#FF9800'  # Orange
+        return '#FF9800'
     else:
-        return '#F44336'  # Red
+        return '#F44336'
 
 
 def _format_kpi_value(value: float, kpi_config: Dict[str, Any]) -> str:
     """
-    Format KPI value according to its configuration.
+    KPI-Wert gemäß seiner Konfiguration formatieren.
     
     Args:
-        value: KPI value
-        kpi_config: KPI configuration dict
+        value: KPI-Wert
+        kpi_config: KPI-Konfigurations-Dict
     
     Returns:
-        Formatted string
+        Formatierter String
     """
     value_format = kpi_config.get('format', '.2f')
     unit = kpi_config.get('unit', '')
@@ -188,9 +171,9 @@ def _format_kpi_value(value: float, kpi_config: Dict[str, Any]) -> str:
         return f'{value:.2f} {unit}'.strip()
 
 
-# ============================================================================
-# PLOTTING FUNCTIONS
-# ============================================================================
+# ------------------------------- #
+#       PLOTTING FUNKTIONEN       #
+# ------------------------------- #
 
 def create_gauge_chart(
     value: float,
@@ -200,17 +183,17 @@ def create_gauge_chart(
     height: int = 250
 ) -> go.Figure:
     """
-    Create a gauge chart for a single KPI.
+    Erstelle ein Gauge-Diagramm für eine einzelne KPI.
     
     Args:
-        value: Current KPI value
-        title: Chart title
-        worst: Worst possible value
-        best: Best possible value
-        height: Chart height in pixels
+        value: Aktueller KPI-Wert
+        title: Diagrammtitel
+        worst: Schlechtestmöglicher Wert
+        best: Bestmöglicher Wert
+        height: Diagrammhöhe in Pixeln
     
     Returns:
-        Plotly Figure object
+        Plotly Figure objekt
     """
     score = _calculate_kpi_score(value, worst, best)
     color = _get_score_color(score)
@@ -250,21 +233,21 @@ def create_category_radar_chart(
     height: int = 400
 ) -> go.Figure:
     """
-    Create a radar chart comparing all three categories.
+    Erstelle ein Radar-Diagramm, das alle drei Kategorien vergleicht.
     
     Args:
-        kpis: Dictionary with KPI results from get_score_and_kpis()
-        height: Chart height in pixels
+        kpis: Dictionary mit KPI-Ergebnissen von get_score_and_kpis()
+        height: Diagrammhöhe in Pixeln
     
     Returns:
-        Plotly Figure object
+        Plotly Figure objekt
     """
     categories = []
     scores = []
     
     for category, config in KPI_CONFIG.items():
         if category in kpis:
-            # Calculate average score for category
+            # durchschnittlichen Score für Kategorie berechnen
             category_scores = []
             for kpi_name, kpi_value in kpis[category].items():
                 kpi_config = config['kpis'].get(kpi_name, {})
@@ -318,16 +301,16 @@ def create_kpi_bar_chart(
     height: Optional[int] = None
 ) -> go.Figure:
     """
-    Create a bar chart for KPIs in a category.
+    Bar diagramm für KPI-Werte in einer Kategorie erstellen.
     
     Args:
-        kpis: Dictionary of KPI values
-        category_config: Configuration for the category
-        horizontal: If True, create horizontal bars
-        height: Chart height in pixels (auto-calculated if None)
+        kpis: Dictionary mit KPI-Werten
+        category_config: Konfiguration für die Kategorie
+        horizontal: Wenn True, erstelle horizontale Balken
+        height: Diagrammhöhe in Pixeln (automatisch berechnet, wenn None)
     
     Returns:
-        Plotly Figure object
+        Plotly Figure objekt
     """
     kpi_names = []
     kpi_values = []
@@ -337,17 +320,14 @@ def create_kpi_bar_chart(
         kpi_config = category_config['kpis'].get(kpi_name, {})
         kpi_names.append(kpi_config.get('name', kpi_name))
         
-        # Convert percentage values to 0-100 scale for display
         display_value = kpi_value * 100 if kpi_config.get('unit') == '%' else kpi_value
         kpi_values.append(display_value)
         
-        # Calculate score and get color
         worst = kpi_config.get('worst', 1)
         best = kpi_config.get('best', 0)
         score = _calculate_kpi_score(kpi_value, worst, best)
         kpi_colors.append(_get_score_color(score))
     
-    # Auto-calculate height if not provided
     if height is None:
         height = max(200, len(kpi_names) * 60) if horizontal else 400
     
@@ -387,14 +367,14 @@ def create_category_score_bars(
     height: int = 300
 ) -> go.Figure:
     """
-    Create a bar chart showing average scores for each category.
+    Balkendiagramm mit durchschnittlichen Scores für jede Kategorie erstellen.
     
     Args:
-        kpis: Dictionary with KPI results from get_score_and_kpis()
-        height: Chart height in pixels
+        kpis: Dictionary mit KPI-Ergebnissen von get_score_and_kpis()
+        height: Diagrammhöhe in Pixeln
     
     Returns:
-        Plotly Figure object
+        Plotly Figure objekt
     """
     categories = []
     scores = []
@@ -402,7 +382,6 @@ def create_category_score_bars(
     
     for category, config in KPI_CONFIG.items():
         if category in kpis:
-            # Calculate average score for category
             category_scores = []
             for kpi_name, kpi_value in kpis[category].items():
                 kpi_config = config['kpis'].get(kpi_name, {})
@@ -443,19 +422,20 @@ def create_kpi_comparison_chart(
     kpis_list: list[Dict[str, Dict[str, float]]],
     labels: list[str],
     category: str = 'security',
+        show_title: bool = False,
     height: int = 400
 ) -> go.Figure:
     """
-    Create a comparison chart for multiple simulation runs.
+    Vergleichsdiagramm für mehrere Simulationsläufe erstellen.
     
     Args:
-        kpis_list: List of KPI dictionaries to compare
-        labels: Labels for each simulation run
-        category: Category to compare ('security', 'ecology', 'economy')
-        height: Chart height in pixels
+        kpis_list: Liste von KPI-Dictionaries zum Vergleichen
+        labels: Bezeichnungen für jeden Simulationslauf
+        category: Kategorie zum Vergleichen ('security', 'ecology', 'economy')
+        height: Diagrammhöhe in Pixeln
     
     Returns:
-        Plotly Figure object
+        Plotly Figure objekt
     """
     if category not in KPI_CONFIG:
         raise ValueError(f"Invalid category: {category}")
@@ -483,8 +463,8 @@ def create_kpi_comparison_chart(
     fig.update_layout(
         height=height,
         barmode='group',
-        title=f'{category_config["title"]} Comparison',
-        margin=dict(l=20, r=20, t=60, b=20),
+        title=f'{category_config["title"]} Comparison' if show_title else '',
+        margin=dict(l=100, r=20, t=10, b=60),
         paper_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(title='', tickangle=-45),
         yaxis=dict(title='Value', gridcolor='lightgray'),
@@ -492,7 +472,7 @@ def create_kpi_comparison_chart(
         legend=dict(
             orientation='h',
             yanchor='bottom',
-            y=1.02,
+            y=1.05,
             xanchor='right',
             x=1
         )
@@ -503,13 +483,13 @@ def create_kpi_comparison_chart(
 
 def create_kpi_table(kpis: Dict[str, Dict[str, float]]) -> pd.DataFrame:
     """
-    Create a detailed table of all KPIs.
+    Detaillierte Tabelle aller KPIs erstellen.
     
     Args:
-        kpis: Dictionary with KPI results from get_score_and_kpis()
+        kpis: Dictionary mit KPI-Ergebnissen von get_score_and_kpis()
     
     Returns:
-        Pandas DataFrame with formatted KPI data
+        Pandas DataFrame mit formatierten KPI-Daten
     """
     rows = []
     
@@ -522,12 +502,10 @@ def create_kpi_table(kpis: Dict[str, Dict[str, float]]) -> pd.DataFrame:
         for kpi_name, kpi_value in category_kpis.items():
             kpi_config = category_config.get('kpis', {}).get(kpi_name, {})
             
-            # Calculate score
             worst = kpi_config.get('worst', 1)
             best = kpi_config.get('best', 0)
             score = _calculate_kpi_score(kpi_value, worst, best)
             
-            # Format value
             formatted_value = _format_kpi_value(kpi_value, kpi_config)
             
             rows.append({
@@ -535,7 +513,7 @@ def create_kpi_table(kpis: Dict[str, Dict[str, float]]) -> pd.DataFrame:
                 'KPI': kpi_config.get('name', kpi_name),
                 'Value': formatted_value,
                 'Score': f'{score:.1f}',
-                'Rating': '⭐' * (int(score / 20)),  # 0-5 stars
+                'Rating': '⭐' * (int(score / 20)),
                 'Description': kpi_config.get('description', '')
             })
     
@@ -544,13 +522,13 @@ def create_kpi_table(kpis: Dict[str, Dict[str, float]]) -> pd.DataFrame:
 
 def get_category_scores(kpis: Dict[str, Dict[str, float]]) -> Dict[str, float]:
     """
-    Calculate average scores for each category.
+    Durchschnittliche Scores für jede Kategorie berechnen.
     
     Args:
-        kpis: Dictionary with KPI results from get_score_and_kpis()
+        kpis: Dictionary mit KPI-Ergebnissen von get_score_and_kpis()
     
     Returns:
-        Dictionary mapping category names to average scores
+        Dictionary mit durchschnittlichen Scores pro Kategorie
     """
     category_scores = {}
     

@@ -4,7 +4,7 @@ import pandas as pd
 from data_processing.simulation_engine import SimulationEngine
 from ui.kpi_dashboard import convert_results_to_scoring_format, normalize_storage_config
 from data_processing.scoring_system import get_score_and_kpis
-from plotting.scoring_plots import get_category_scores, KPI_CONFIG
+from plotting.scoring_plots import get_category_scores, KPI_CONFIG, create_kpi_comparison_chart
 
 # Manager Imports
 from data_manager import DataManager
@@ -128,6 +128,9 @@ def comparison_simulation_page() -> None:
             )
 
             rows = []
+            all_kpis_list = []
+            scenario_labels = []
+            
             for scenario_name in sorted(results_dict.keys()):
                 data = results_dict[scenario_name]
                 results_inc = data["results"]
@@ -158,12 +161,67 @@ def comparison_simulation_page() -> None:
                     for cat_key, cat_score in category_scores.items():
                         row[KPI_CONFIG[cat_key]["title"]] = round(cat_score, 1)
                     rows.append(row)
+                    
+                    # Für Vergleichscharts sammeln
+                    all_kpis_list.append(kpis)
+                    scenario_labels.append(scenario_name)
                 except Exception as exc:
                     st.warning(f"⚠️ Score für {scenario_name} nicht berechenbar: {exc}")
 
             if rows:
                 df_scores = pd.DataFrame(rows)
                 st.dataframe(df_scores, width='stretch', hide_index=True)
+                
+                # Vergleichscharts für alle 3 Kategorien
+                if all_kpis_list:
+                    st.markdown("---")
+                    st.subheader("📊 KPI Detail Vergleich")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown("#### 🛡️ Security")
+                        try:
+                            fig_security = create_kpi_comparison_chart(
+                                all_kpis_list, 
+                                scenario_labels, 
+                                category='security',
+                                height=450,
+                                show_title=False
+                            )
+                            st.plotly_chart(fig_security, width='stretch')
+                        except Exception as e:
+                            st.warning(f"⚠️ Security Chart: {e}")
+                                            
+                    
+                    with col2:
+                        st.markdown("#### 🌱 Ecology")
+                        try:
+                            fig_ecology = create_kpi_comparison_chart(
+                                all_kpis_list, 
+                                scenario_labels, 
+                                category='ecology',
+                                height=450,
+                                show_title=False
+                            )
+                            st.plotly_chart(fig_ecology, width='stretch')
+                        except Exception as e:
+                            st.warning(f"⚠️ Ecology Chart: {e}")
+                    
+                    with col3:
+                                                
+                        try:
+                            st.markdown("#### 💰 Economy")
+                            fig_economy = create_kpi_comparison_chart(
+                                all_kpis_list, 
+                                scenario_labels, 
+                                category='economy',
+                                height=450,
+                                show_title=False
+                            )
+                            st.plotly_chart(fig_economy, width='stretch')
+                        except Exception as e:
+                            st.warning(f"⚠️ Economy Chart: {e}")
             else:
                 st.info("Keine KPI-Scores verfügbar. Prüfe Speicher-Konfigurationen und Simulationsergebnisse.")
     else:
