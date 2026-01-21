@@ -116,7 +116,7 @@ def main() -> None:
         "debug_scoring": page_debug_scoring,  # Immer verfügbar für direkten Zugriff
     }
     
-    # Baue das pages Dictionary basierend auf DEBUG-Modus
+    # Baue das pages Dictionary
     pages = {
         "Hauptseiten": [
             page_home,
@@ -125,9 +125,6 @@ def main() -> None:
             page_comparison_simulation,
             page_scenario,
             page_analysis,
-        ],
-        "🔧 Debug Tools": [
-            page_debug_scoring,
         ]
     }
 
