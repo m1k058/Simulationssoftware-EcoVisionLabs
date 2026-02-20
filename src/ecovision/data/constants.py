@@ -1,0 +1,202 @@
+"""Constants für data handling"""
+
+# Datentypen und ihre erwarteten Header-Spalten
+HEADER = {
+    "SMARD-con": [
+        "Datum von",
+        "Datum bis",
+        "Biomasse [MWh]",
+        "Wasserkraft [MWh]",
+        "Wind Offshore [MWh]",
+        "Wind Onshore [MWh]",
+        "Photovoltaik [MWh]",
+        "Sonstige Erneuerbare [MWh]",
+        "Kernenergie [MWh]",
+        "Braunkohle [MWh]",
+        "Steinkohle [MWh]",
+        "Erdgas [MWh]",
+        "Pumpspeicher [MWh]",
+        "Sonstige Konventionelle [MWh]"
+    ],
+    "SMARD-gen": [
+        "Datum von",
+        "Datum bis",
+        "Biomasse [MWh]",
+        "Wasserkraft [MWh]",
+        "Wind Offshore [MWh]",
+        "Wind Onshore [MWh]",
+        "Photovoltaik [MWh]",
+        "Sonstige Erneuerbare [MWh]",
+        "Kernenergie [MWh]",
+        "Braunkohle [MWh]",
+        "Steinkohle [MWh]",
+        "Erdgas [MWh]",
+        "Pumpspeicher [MWh]",
+        "Sonstige Konventionelle [MWh]"
+    ],
+    "SMARD-pro": [
+        "Datum von",
+        "Datum bis",
+        "Netzlast [MWh]",
+        "Netzlast inkl. Pumpspeicher [MWh]",
+        "Pumpspeicher [MWh]",
+        "Residuallast [MWh]"
+        ],
+    "SMARD-inst": [
+        "Datum von",
+        "Datum bis",
+        "Biomasse [MW]",
+        "Wasserkraft [MW]",
+        "Wind Offshore [MW]",
+        "Wind Onshore [MW]",
+        "Photovoltaik [MW]",
+        "Sonstige Erneuerbare [MW]",
+        "Kernenergie [MW]",
+        "Braunkohle [MW]",
+        "Steinkohle [MW]",
+        "Erdgas [MW]",
+        "Pumpspeicher [MW]",
+        "Sonstige Konventionelle [MW]"
+    ],
+    "STUDY_PROG": [
+       "Studie",
+        "Jahr",
+        "Biomasse [TWh]",
+        "Wasserkraft [TWh]",
+        "Wind Offshore [TWh]",
+        "Wind Onshore [TWh]",
+        "Photovoltaik [TWh]",
+        "Abgeregelte EE-Menge [TWh]",
+        "Wasserstoff [TWh]",
+        "Kernenergie [TWh]",
+        "Braunkohle [TWh]",
+        "Steinkohle [TWh]",
+        "Erdgas [TWh]",
+        "Sonstige [TWh]",
+        "Speicher [TWh]",
+        "Abfall [TWh]",
+        "Summe [TWh]",
+        "Importsaldo [TWh]",
+        "Gesamterzeugung Erneuerbare [TWh]",
+        "Gesamterzeugung Konventionelle [TWh]",
+        "Gesamterzeugung [TWh]",
+        "Bruttostromverbrauch [TWh]",
+        "Anteil Erneuerbare",
+    ],
+    "STUDY-prog": [
+       "Studie",
+        "Jahr",
+        "Biomasse [TWh]",
+        "Wasserkraft [TWh]",
+        "Wind Offshore [TWh]",
+        "Wind Onshore [TWh]",
+        "Photovoltaik [TWh]",
+        "Abgeregelte EE-Menge [TWh]",
+        "Wasserstoff [TWh]",
+        "Kernenergie [TWh]",
+        "Braunkohle [TWh]",
+        "Steinkohle [TWh]",
+        "Erdgas [TWh]",
+        "Sonstige [TWh]",
+        "Speicher [TWh]",
+        "Abfall [TWh]",
+        "Summe [TWh]",
+        "Importsaldo [TWh]",
+        "Gesamterzeugung Erneuerbare [TWh]",
+        "Gesamterzeugung Konventionelle [TWh]",
+        "Gesamterzeugung [TWh]",
+        "Bruttostromverbrauch [TWh]",
+        "Anteil Erneuerbare",
+    ],
+    "BDEW-Last": [
+        "timestamp",
+        "month",
+        "day_type",
+        "value_kWh",
+    ],
+    "WP-Last": [
+        "Zeitpunkt", "LOW", "-13", "-12", "-11", "-10",
+        "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2",
+        "-1", "0", "1", "2", "3", "4", "5", "6", "7",
+        "8", "9", "10", "11", "12", "13", "14", "15",
+        "16", "17", "HIGH"
+    ],
+    "Temperature": [
+        "Zeitpunkt", "AVERAGE", "Berlin", "Chemnitz", "Diepholz", "Frankfurt/Main",
+        "Hamburg", "München", "Villingen-Schwenningen", "Itzehoe"
+    ] 
+}
+
+# Trenner und andere Formatoptionen für die verschiedenen Datentypen
+FILE_FORMAT = {
+    "SMARD-con": {
+        "sep": ";",
+        "decimal": ",",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+    },
+    "SMARD-gen": {
+        "sep": ";",
+        "decimal": ",",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+    },
+    "SMARD-pro": {
+        "sep": ";",
+        "decimal": ",",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+    },
+    "SMARD-inst": {
+        "sep": ";",
+        "decimal": ",",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+    },
+    "STUDY_PROG": {
+        "sep": ";",
+        "decimal": ",",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+    },
+    "STUDY-prog": {
+        "sep": ";",
+        "decimal": ",",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "date_format": "%d.%m.%Y %H:%M",
+        "encoding": "utf-8",
+    },
+    "BDEW-Last": {
+        "sep": "\t",
+        "decimal": ",",
+        "date_format": "%Y-%m-%d %H:%M:%S",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "encoding": "utf-8",
+    },
+    "WP-Last": {
+        "sep": "\t",
+        "decimal": ",",
+        "date_format": "%d.%m.%Y %H:%M",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "encoding": "utf-8",
+    },
+    "Temperature": {
+        "sep": ";",
+        "decimal": ",",
+        "thousands": ".",
+        "date_format": "%d.%m.%Y %H:%M",
+        "na_values": ["-", "NaN", "n/a", ""],
+        "encoding": "cp1252",
+    },
+}
+
+# Zu löschende Spaltennamen in den Headern
+SCRAPE_FOR = [
+    "Berechnete Auflösungen",
+    "Originalauflösungen"
+]

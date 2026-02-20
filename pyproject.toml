@@ -14,11 +14,12 @@ keywords = ["energy", "simulations", "visualization", "streamlit", "plotly"]
 python = "^3.12,<3.13"  # Numba requires Python 3.12
 streamlit = "^1.51.0"
 pandas = "^2.3.3"
-numpy = "^2.3.5"
+numpy = "^1.26.4"
 plotly = "^6.4.0"
 pyyaml = "^6.0"
 holidays = "*"
-numba = "^0.58.0"
+numba = "^0.59.1"
+openpyxl = "^3.1.5"
 
 [tool.poetry.group.dev.dependencies]
 # Development/Testing Tools (nur für Entwickler)
@@ -48,6 +49,7 @@ ignore = ["E501"]  # Ignore line too long (handled by formatter)
 # === Pytest Configuration ===
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"

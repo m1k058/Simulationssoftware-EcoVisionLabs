@@ -1,0 +1,1 @@
+"""EcoVision application package."""
