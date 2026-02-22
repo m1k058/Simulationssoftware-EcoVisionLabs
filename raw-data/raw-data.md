@@ -19,3 +19,6 @@ Hier eine zusammenfassung aller Daten die als Basis für das Simulationsprogramm
 |7|BDEW-Standardlastprofile-H25|Verbrauchsprofil Haushalte BDEW|Viertelstündig|`.csv`|`BDEW-Last`|bdew.de (SW-Team)|
 |8|BDEW-Standardlastprofile-G25|Verbrauchsprofil Gewerbe BDEW|Viertelstündig|`.csv`|`BDEW-Last`|bdew.de (SW-Team)|
 |9|BDEW-Standardlastprofile-L25|Verbrauchsprofil Landwirtshaft BDEW|Viertelstündig|`.csv`|`BDEW-Last`|bdew.de (SW-Team)|
+|10|Waermepumpen-Standartlastprofile|Waermepumpen-Standartlastprofile SWM-Infrastruktur|Viertelstündig|`.csv`|`WP-Last`|SWM Infrastruktur|
+|11|Lufttemperatur-2019|DWD Wetterdaten|Stündlich|`.csv`|`Temps`|DWD|
+|11|Lufttemperatur-2021|DWD Wetterdaten|Stündlich|`.csv`|`Temps`|DWD|
