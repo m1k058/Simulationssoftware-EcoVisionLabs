@@ -2,7 +2,7 @@ import streamlit as st
 from pathlib import Path
 import pandas as pd
 from ecovision.scenarios.manager import ScenarioManager
-from ecovision.config.manager import ConfigManager
+from ecovision.config import manager as cfg_module
 
 
 LOAD_PROFILE_OPTIONS = [
@@ -149,10 +149,7 @@ def scenario_generation_page() -> None:
     hp_params = data.get("target_heat_pump_parameters", {})
     edited_hp = {}
     
-    # temp data
-    if "cfg" not in st.session_state:
-        st.session_state.cfg = ConfigManager()
-    available_temps = ScenarioManager.get_available_temperature_datasets(st.session_state.cfg)
+    available_temps = cfg_module.get_temperature_dataset_names()
     
     for year in valid_years if valid_years else [2030, 2045]:
         st.markdown(f"**Jahr {year}**")

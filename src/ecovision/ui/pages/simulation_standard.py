@@ -21,9 +21,9 @@ def standard_simulation_page() -> None:
     #          Szenario Laden Bereich          #
     # -----------------------------------------#
 
-    # check IF DataManager, ConfigManager, ScenarioManager geladen sind
-    if st.session_state.dm is None or st.session_state.cfg is None or st.session_state.sm is None:
-        st.warning("DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
+    # check IF DataManager, ScenarioManager geladen sind
+    if st.session_state.dm is None or st.session_state.sm is None:
+        st.warning("DataManager/ScenarioManager ist nicht initialisiert.")
         return
     uploaded_file = st.file_uploader("Lade ein Szenario YAML Datei hoch", type=["yaml"], key="scenario_uploader")
     

@@ -21,7 +21,6 @@ def ensure_base_session_state() -> None:
     """Stellt die zentralen Session-State Variablen bereit und lädt Daten automatisch."""
     defaults = {
         "dm": None,
-        "cfg": None,
         "sm": None,
         "load_log": "",
         "debug_mode": False,
@@ -61,8 +60,8 @@ def ensure_base_session_state() -> None:
                 dataset_placeholder = st.empty()
                 
                 # Progress 1
-                progress_placeholder.progress(10, "Loading ConfigManager...")
-                log_placeholder.info("📄 Loading ConfigManager...")
+                progress_placeholder.progress(10, "Initialisierung...")
+                log_placeholder.info("⚙️ Initialisierung...")
                 
                 # Progress 2
                 progress_placeholder.progress(20, "Loading ScenarioManager...")
@@ -134,7 +133,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
-else:
-    # Streamlit runs the module, so execute immediately.
     main()

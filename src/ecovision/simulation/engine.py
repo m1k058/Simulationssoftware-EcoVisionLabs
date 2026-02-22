@@ -27,6 +27,7 @@ from ecovision.simulation.emobility import (
     validate_ev_results
 )
 from ecovision.config.constants import HEATPUMP_LOAD_PROFILE_NAME
+from ecovision.config import manager as cfg_module
 
 
 class _SimpleLogger:
@@ -147,24 +148,34 @@ class SimulationEngine:
             self.progress_callback(progress, message)
     
     def _load_base_data(self):
-        """Lädt alle Basisdaten, die für alle Jahre benötigt werden."""
-        self.logger.start_step("Verbrauchsprofile werden geladen")
+        """Lädt alle Basisdaten, die für alle Jahre benötigt werden.
+        
+        Ruft einmalig DataManager.load_all() auf, das alle in DATA_SOURCES
+        definierten Datensätze lädt (bereits geladene werden übersprungen).
+        Danach werden die benötigten DataFrames aus dem Cache abgerufen.
+        """
+        self.logger.start_step("Alle Basisdaten werden via DataManager geladen")
+        try:
+            self.dm.load_all()
+            self.logger.finish_step(True, "Datensätze geladen / bereits im Cache")
+        except Exception as e:
+            self.logger.finish_step(False, str(e))
+            raise
+
+        # BDEW-Profile aus dem Cache holen
+        self.logger.start_step("Verbrauchsprofile werden zugewiesen")
         try:
             load_cfg = self.sm.scenario_data.get("target_load_demand_twh", {})
-            last_H_name = load_cfg["Haushalt_Basis"]["load_profile"]
-            last_G_name = load_cfg["Gewerbe_Basis"]["load_profile"]
-            last_L_name = load_cfg["Landwirtschaft_Basis"]["load_profile"]
-            
-            self.last_H = self.dm.get(last_H_name)
-            self.last_G = self.dm.get(last_G_name)
-            self.last_L = self.dm.get(last_L_name)
-            self.logger.finish_step(True, "H/G/L-Profile erfolgreich geladen")
+            self.last_H = self.dm.get(load_cfg["Haushalt_Basis"]["load_profile"])
+            self.last_G = self.dm.get(load_cfg["Gewerbe_Basis"]["load_profile"])
+            self.last_L = self.dm.get(load_cfg["Landwirtschaft_Basis"]["load_profile"])
+            self.logger.finish_step(True, "H/G/L-Profile erfolgreich zugewiesen")
         except Exception as e:
             self.logger.finish_step(False, str(e))
             raise KeyError(f"Fehlende Load-Profile in Szenario: {e}")
-        
-        # SMARD-Daten laden
-        self.logger.start_step("SMARD-Erzeugungsdaten werden geladen")
+
+        # SMARD-Daten aus dem Cache zusammenführen
+        self.logger.start_step("SMARD-Erzeugungsdaten werden zusammengeführt")
         try:
             self.smard_generation = pd.concat([
                 self.dm.get("SMARD_2015-2019_Erzeugung"),
@@ -178,7 +189,7 @@ class SimulationEngine:
         except Exception as e:
             self.logger.finish_step(False, str(e))
             raise
-        
+
         # Ziel-Kapazitäten und Wetterprofile
         self.capacity_dict = self.sm.get_generation_capacities()
         self.weather_profiles = self.sm.scenario_data.get("weather_generation_profiles", {})
@@ -281,7 +292,6 @@ class SimulationEngine:
         try:
             wprof = self.weather_profiles.get(year, {})
             df_prod = simulate_production(
-                self.cfg,
                 self.smard_generation,
                 self.smard_installed,
                 self.capacity_dict,
@@ -356,8 +366,8 @@ class SimulationEngine:
                 thr_deficit=float(em_data.get('thr_deficit', 200_000.0))
             )
             
-            # Config-Parameter aus config.json laden
-            ev_config_data = self.cfg.config.get("EV_PARAMETERS", {})
+            # Config-Parameter aus constants laden
+            ev_config_data = cfg_module.get_ev_params()
             config_params = EVConfigParams(
                 SOC0=ev_config_data.get("SOC0", 0.6),
                 eta_ch=ev_config_data.get("eta_ch", 0.95),
@@ -480,8 +490,8 @@ class SimulationEngine:
                 thr_deficit=float(em_data.get('thr_deficit', 200_000.0))
             )
             
-            # Config-Parameter aus config.json laden
-            ev_config_data = self.cfg.config.get("EV_PARAMETERS", {})
+            # Config-Parameter aus constants laden
+            ev_config_data = cfg_module.get_ev_params()
             config_params = EVConfigParams(
                 SOC0=ev_config_data.get("SOC0", 0.6),
                 eta_ch=ev_config_data.get("eta_ch", 0.95),

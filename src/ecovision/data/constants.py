@@ -132,6 +132,7 @@ FILE_FORMAT = {
     "SMARD-con": {
         "sep": ";",
         "decimal": ",",
+        "thousands": ".",
         "na_values": ["-", "NaN", "n/a", ""],
         "date_format": "%d.%m.%Y %H:%M",
         "encoding": "utf-8",
@@ -139,6 +140,7 @@ FILE_FORMAT = {
     "SMARD-gen": {
         "sep": ";",
         "decimal": ",",
+        "thousands": ".",
         "na_values": ["-", "NaN", "n/a", ""],
         "date_format": "%d.%m.%Y %H:%M",
         "encoding": "utf-8",
@@ -146,6 +148,7 @@ FILE_FORMAT = {
     "SMARD-pro": {
         "sep": ";",
         "decimal": ",",
+        "thousands": ".",
         "na_values": ["-", "NaN", "n/a", ""],
         "date_format": "%d.%m.%Y %H:%M",
         "encoding": "utf-8",
@@ -153,6 +156,7 @@ FILE_FORMAT = {
     "SMARD-inst": {
         "sep": ";",
         "decimal": ",",
+        "thousands": ".",
         "na_values": ["-", "NaN", "n/a", ""],
         "date_format": "%d.%m.%Y %H:%M",
         "encoding": "utf-8",

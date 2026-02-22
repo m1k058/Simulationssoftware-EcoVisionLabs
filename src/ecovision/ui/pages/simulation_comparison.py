@@ -8,7 +8,6 @@ from ecovision.plotting.scoring_plots import get_category_scores, KPI_CONFIG, cr
 
 # Manager Imports
 from ecovision.data.manager import DataManager
-from ecovision.config.manager import ConfigManager
 from ecovision.scenarios.manager import ScenarioManager
 
 
@@ -19,8 +18,8 @@ def comparison_simulation_page() -> None:
     st.title("Simulation (Szenario Vergleich)")
     st.caption("Laden Sie 2–5 Szenarien und vergleichen Sie deren KPI-Scores.")
 
-    if st.session_state.dm is None or st.session_state.cfg is None or st.session_state.sm is None:
-        st.warning("DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
+    if st.session_state.dm is None or st.session_state.sm is None:
+        st.warning("DataManager/ScenarioManager ist nicht initialisiert.")
         return
 
     st.markdown("---")

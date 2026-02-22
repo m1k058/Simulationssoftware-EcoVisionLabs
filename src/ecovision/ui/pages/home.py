@@ -2,18 +2,15 @@ import streamlit as st
 from pathlib import Path
 import traceback
 from ecovision.data.manager import DataManager
-from ecovision.config.manager import ConfigManager
 from ecovision.scenarios.manager import ScenarioManager
 
 
 def load_data_manager(progress_callback=None) -> bool:
-    """Lädt den DataManager, ConfigManager und ScenarioManager und speichert sie im Session-State."""
+    """Lädt den DataManager und ScenarioManager und speichert sie im Session-State."""
     try:
-        cfg = ConfigManager()
         dm = DataManager(progress_callback=progress_callback, auto_load=True)
         sm = ScenarioManager()
 
-        st.session_state.cfg = cfg
         st.session_state.dm = dm
         st.session_state.sm = sm
         return True
@@ -57,17 +54,17 @@ def home_page() -> None:
     st.markdown("---")
     st.subheader("Status:")    
     if is_loaded:
-        st.success(":material/check: DataManager, ConfigManager, ScenarioManager sind geladen und bereit.")
+        st.success(":material/check: DataManager und ScenarioManager sind geladen und bereit.")
     else:
         st.warning(":material/sync: Daten werden beim Start automatisch geladen...")
         st.info("Falls das Laden fehlgeschlagen ist, verwende den Button unten zum manuellen Neuladen.")
 
     # manual reload button
     if st.button(":material/refresh: Daten neu laden", width='stretch', type="secondary" if is_loaded else "primary", key="home_reload_data"):
-        with st.spinner("Datenmanager/ConfigManager/ScenarioManager laden..."):
+        with st.spinner("DataManager/ScenarioManager laden..."):
             success = load_data_manager()
         if success:
-            st.success("✅ DataManager, ConfigManager, ScenarioManager erfolgreich geladen!")
+            st.success("✅ DataManager und ScenarioManager erfolgreich geladen!")
             st.rerun()
         else:
             st.error("❌ Laden fehlgeschlagen. Siehe Log/Console für Details.")

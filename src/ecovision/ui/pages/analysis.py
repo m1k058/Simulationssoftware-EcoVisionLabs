@@ -7,8 +7,8 @@ def analysis_page() -> None:
     st.title("Dataset-Analyse")
     st.caption("Analysiere und vergleiche mehrere Datensätze stabil und übersichtlich.")
 
-    if getattr(st.session_state, "dm", None) is None or getattr(st.session_state, "cfg", None) is None:
-        st.warning("DataManager/ConfigManager ist nicht initialisiert.")
+    if getattr(st.session_state, "dm", None) is None:
+        st.warning("DataManager ist nicht initialisiert.")
         return
 
     sidebar = st.sidebar

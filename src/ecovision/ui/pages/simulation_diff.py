@@ -11,7 +11,6 @@ from ecovision.plotting.scoring_plots import get_category_scores, KPI_CONFIG
 
 # Manager Imports
 from ecovision.data.manager import DataManager
-from ecovision.config.manager import ConfigManager
 from ecovision.scenarios.manager import ScenarioManager
 
 
@@ -22,8 +21,8 @@ def diff_simulation_page() -> None:
     st.title("Simulation (Diff Mode)")
     st.caption("Laden Sie zwei Szenarios und generieren Sie interpolierte Varianten für den Vergleich.")
 
-    if st.session_state.dm is None or st.session_state.cfg is None or st.session_state.sm is None:
-        st.warning("DataManager/ConfigManager/ScenarioManager ist nicht initialisiert.")
+    if st.session_state.dm is None or st.session_state.sm is None:
+        st.warning("DataManager/ScenarioManager ist nicht initialisiert.")
         return
 
     st.markdown("---")

@@ -16,15 +16,24 @@ class DataManager:
             self.load_all()
 
     def load_all(self) -> None:
-        """Lädt alle Datensätze, die in constants.DATA_SOURCES definiert sind."""
+        """Lädt alle Datensätze, die in constants.DATA_SOURCES definiert sind.
+        
+        Bereits geladene Datensätze werden übersprungen.
+        """
         if not hasattr(constants, 'DATA_SOURCES'):
             print("Fehler: DATA_SOURCES nicht in constants.py gefunden.")
             return
 
-        print("Starte automatischen Ladevorgang...")
         sources = constants.DATA_SOURCES
-        total = len(sources)
-        for idx, source in enumerate(sources, start=1):
+        to_load = [s for s in sources if s["name"] not in self._data]
+
+        if not to_load:
+            print("Alle Datensätze bereits geladen – überspringe load_all.")
+            return
+
+        print(f"Starte Ladevorgang ({len(to_load)} von {len(sources)} Datensätzen)...")
+        total = len(to_load)
+        for idx, source in enumerate(to_load, start=1):
             name = source["name"]
             filepath = source["path"]
             datatype = source["datatype"]
@@ -51,6 +60,11 @@ class DataManager:
         if name not in self._data:
             raise KeyError(f"Datensatz '{name}' existiert nicht im Manager.")
         return self._data[name]
+
+    # Kurz-Alias – wird u.a. von SimulationEngine genutzt
+    def get(self, name: str) -> pd.DataFrame:
+        """Alias für get_data."""
+        return self.get_data(name)
 
     def list_datasets(self) -> list:
         """Gibt eine Liste aller aktuell geladenen Datensätze mit Metadaten zurück."""

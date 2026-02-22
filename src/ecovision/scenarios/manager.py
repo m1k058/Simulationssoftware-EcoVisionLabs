@@ -389,22 +389,10 @@ class ScenarioManager:
         return params
     
     @staticmethod
-    def get_available_temperature_datasets(config_manager) -> list:
-        """
-        Holt alle verfügbaren Temperature-Datensätze aus der config.json.
-        
-        Args:
-            config_manager: ConfigManager-Instanz zum Zugriff auf die Konfiguration
-            
-        Returns:
-            Liste von Namen der verfügbaren Temperature-Datensätze
-        """
-        available = []
-        dataframes = config_manager.config.get("DATAFRAMES", [])
-        for df_config in dataframes:
-            if df_config.get("datatype") == "Temperature":
-                available.append(df_config.get("name"))
-        return available
+    def get_available_temperature_datasets() -> list:
+        """Gibt die Namen aller Temperatur-Datensätze aus DATA_SOURCES zurück."""
+        from ecovision.config import manager as cfg_module
+        return cfg_module.get_temperature_dataset_names()
 
     def get_generation_profile_df(self, year: int, include_conv: bool = False) -> pd.DataFrame:
         """

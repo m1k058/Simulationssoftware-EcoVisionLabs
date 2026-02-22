@@ -4,7 +4,7 @@ Erzeugungssimulation für Energiesystem-Szenarien.
 
 import pandas as pd
 from typing import Dict
-from ecovision.config.manager import ConfigManager
+from ecovision.config import manager as cfg_module
 from ecovision.config.constants import ENERGY_SOURCES, SOURCES_GROUPS
 
 
@@ -56,11 +56,16 @@ def _generate_generation_profile(
         if installiert_jahr_row.empty:
             raise ValueError(f"Keine installierten Leistungsdaten für Jahr {jahr} gefunden.")
         installiert_werte = installiert_jahr_row[installiert_cols].iloc[0]
-    else:
+    elif isinstance(smard_instaliert_df.index, pd.DatetimeIndex):
         installiert_jahr_row = smard_instaliert_df[smard_instaliert_df.index.year == jahr]
         if installiert_jahr_row.empty:
             raise ValueError(f"Keine installierten Leistungsdaten für Jahr {jahr} gefunden.")
         installiert_werte = installiert_jahr_row[installiert_cols].iloc[0]
+    else:
+        # Bereits nach Jahr vorgefiltert (via "Datum von") — direkt erste Zeile nehmen
+        if smard_instaliert_df.empty:
+            raise ValueError(f"Keine installierten Leistungsdaten für Jahr {jahr} gefunden.")
+        installiert_werte = smard_instaliert_df[installiert_cols].iloc[0]
     
     installiert_werte.index = [col_mapping[col] for col in installiert_werte.index]
     
@@ -76,7 +81,6 @@ def _generate_generation_profile(
 
 
 def simulate_production(
-    cfg: ConfigManager,
     smardGeneration: pd.DataFrame,
     smardCapacity: pd.DataFrame,
     capacity_dict: Dict,
@@ -90,7 +94,6 @@ def simulate_production(
     und Ziel-installierten Leistungen für ein Simulationsjahr.
     
     Args:
-        cfg: ConfigManager Instanz
         smardGeneration: DataFrame mit SMARD Erzeugungsdaten (MWh, Viertelstunden)
         smardCapacity: DataFrame mit installierten Kapazitäten im Referenzjahr
         capacity_dict: Dictionary mit Ziel-Kapazitäten pro Technologie und Jahr
@@ -107,14 +110,20 @@ def simulate_production(
     """
 
     # Suche Referenzjahre für das Filtern der SMARD-Daten basierend auf Wetterprofil
-    windOn_smard_ref_jahr = cfg.get_generation_year("Wind_Onshore", wind_on_weather)
-    windOff_smard_ref_jahr = cfg.get_generation_year("Wind_Offshore", wind_off_weather)
-    pv_smard_ref_jahr = cfg.get_generation_year("Photovoltaik", pv_weather)
-    ref_jahr = cfg.config["GENERATION_SIMULATION"]["optimal_reference_years_by_technology"]["default"]
+    windOn_smard_ref_jahr = cfg_module.get_generation_year("Wind Onshore", wind_on_weather)
+    windOff_smard_ref_jahr = cfg_module.get_generation_year("Wind Offshore", wind_off_weather)
+    pv_smard_ref_jahr = cfg_module.get_generation_year("Photovoltaik", pv_weather)
+    ref_jahr = cfg_module.get_generation_default_year()
 
-    # Bereite SMARD-Daten vor (setze Zeitpunkt als Index)
-    smardGeneration = smardGeneration.set_index("Zeitpunkt")
-    smardGeneration.index = pd.to_datetime(smardGeneration.index)
+    # Bereite SMARD-Daten vor (setze Datum von als DatetimeIndex, falls nicht schon gesetzt)
+    if "Datum von" in smardGeneration.columns:
+        smardGeneration = smardGeneration.set_index("Datum von")
+        smardGeneration.index = pd.to_datetime(smardGeneration.index, format="%d.%m.%Y %H:%M", dayfirst=True)
+    elif "Zeitpunkt" in smardGeneration.columns:
+        smardGeneration = smardGeneration.set_index("Zeitpunkt")
+        smardGeneration.index = pd.to_datetime(smardGeneration.index)
+    else:
+        smardGeneration.index = pd.to_datetime(smardGeneration.index)
 
     # Filtere Referenzjahre aus SMARD-Daten
     df_windOn_ref = smardGeneration.loc[str(windOn_smard_ref_jahr)].copy()
@@ -122,10 +131,14 @@ def simulate_production(
     df_pv_ref = smardGeneration.loc[str(pv_smard_ref_jahr)].copy()
     df_ref = smardGeneration.loc[str(ref_jahr)].copy()
 
-    df_windOn_refCap = smardCapacity[smardCapacity["Jahr"] == windOn_smard_ref_jahr]
-    df_windOff_refCap = smardCapacity[smardCapacity["Jahr"] == windOff_smard_ref_jahr]
-    df_pv_refCap = smardCapacity[smardCapacity["Jahr"] == pv_smard_ref_jahr]
-    df_refCap = smardCapacity[smardCapacity["Jahr"] == ref_jahr]
+    # Extrahiere Jahreszahlen aus "Datum von" für Kapazitäts-Filterung
+    # (SMARD-inst CSV hat "Datum von" im Format "01.01.2015", kein "Jahr"-Spalte)
+    _cap_years = pd.to_datetime(smardCapacity["Datum von"], format="%d.%m.%Y", errors="coerce").dt.year
+
+    df_windOn_refCap = smardCapacity[_cap_years == windOn_smard_ref_jahr]
+    df_windOff_refCap = smardCapacity[_cap_years == windOff_smard_ref_jahr]
+    df_pv_refCap = smardCapacity[_cap_years == pv_smard_ref_jahr]
+    df_refCap = smardCapacity[_cap_years == ref_jahr]
 
     # Generiere Kapazitätsfaktor-Profile für alle Technologien
     df_windOn_Profile = _generate_generation_profile(df_windOn_ref, df_windOn_refCap, False)
