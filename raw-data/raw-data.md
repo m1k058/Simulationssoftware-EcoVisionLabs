@@ -13,8 +13,8 @@ Hier eine zusammenfassung aller Daten die als Basis für das Simulationsprogramm
 |1| Realisierte_Erzeugung_2020-2025 |SMARD_2020-2025_Erzeugung|Viertelstündig (Orginalauflösung)|`.csv`|`SMARD`|smard.de|
 |2| Realisierter_Stromverbrauch_2015-2019 |SMARD_2015-2019_Verbrauch|Viertelstündig (Orginalauflösung)|`.csv`|`SMARD-V`|smard.de|
 |3| Realisierter_Stromverbrauch_2020-2025 |SMARD_2020-2025_Verbrauch|Viertelstündig (Orginalauflösung)|`.csv`|`SMARD-V`|smard.de|
-|4| Instalierte_Leistung_2015-2019 |SMARD_Installierte Leistung 2015-2019|Viertelstündig (Orginalauflösung)| `.csv` |`SMARD-Inst`|smard.de|
-|5| Instalierte_Leistung_2020-2025 |SMARD_Installierte Leistung 2020-2025|Viertelstündig (Orginalauflösung)| `.csv` |`SMARD-Inst`|smard.de|
+|4| Instalierte_Leistung_2015-2019 |SMARD_Installierte Leistung 2015-2019|Jährlich (Orginalauflösung)| `.csv` |`SMARD-Inst`|smard.de|
+|5| Instalierte_Leistung_2020-2025 |SMARD_Installierte Leistung 2020-2025|Jährlich (Orginalauflösung)| `.csv` |`SMARD-Inst`|smard.de|
 |6| Prognosedaten_Studien |Erzeugungs- und Verbrauchsprognosen verschiedener Studien|Jahreswerte (ausgewählt)|`.csv`|`CUST_PROG`|DV-Team|
 |7|BDEW-Standardlastprofile-H25|Verbrauchsprofil Haushalte BDEW|Viertelstündig|`.csv`|`BDEW-Last`|bdew.de (SW-Team)|
 |8|BDEW-Standardlastprofile-G25|Verbrauchsprofil Gewerbe BDEW|Viertelstündig|`.csv`|`BDEW-Last`|bdew.de (SW-Team)|
