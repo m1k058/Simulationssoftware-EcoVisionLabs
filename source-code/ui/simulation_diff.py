@@ -184,7 +184,11 @@ def diff_simulation_page() -> None:
                     scoring_results = convert_results_to_scoring_format(results_inc, selected_year)
                     kpis = get_score_and_kpis(scoring_results, storage_cfg, selected_year)
                     category_scores = get_category_scores(kpis)
-                    overall_score = sum(category_scores.values()) / len(category_scores)
+                    overall_score = (
+                        0.40 * category_scores.get('safety', 0)
+                        + 0.30 * category_scores.get('ecology', 0)
+                        + 0.30 * category_scores.get('economy', 0)
+                    )
                     row = {
                         "Szenario": inc_label,
                         "Jahr": selected_year,

@@ -31,73 +31,76 @@ def debug_scoring_page():
     st.markdown("---")
     
     # Tabs für die drei Kategorien
-    security_tab, ecology_tab, economy_tab = st.tabs([
-        "🛡️ Security",
-        "🌱 Ecology", 
+    safety_tab, ecology_tab, economy_tab = st.tabs([
+        "🛡️ Safety",
+        "🌱 Ecology",
         "💰 Economy"
     ])
     
     # Speichere die eingegebenen Werte
     kpis = {}
     
-    # ============== SECURITY ============== #
-    with security_tab:
-        st.subheader("🛡️ Security KPIs")
-        st.markdown("Geben Sie die Werte für Security-Indikatoren ein:")
-        
-        security_kpis = {}
-        security_config = KPI_CONFIG['security']['kpis']
+    # ============== SAFETY ============== #
+    with safety_tab:
+        st.subheader("🛡️ Safety KPIs")
+        st.markdown("Geben Sie die Werte für Safety-Indikatoren ein:")
+
+        safety_kpis = {}
+        safety_config = KPI_CONFIG['safety']['kpis']
         
         col1, col2 = st.columns(2)
         
         with col1:
-            # Energy Deficit Share
-            kpi_cfg = security_config['energy_deficit_share']
+            # Adequacy Score
+            kpi_cfg = safety_config['adequacy_score']
             st.markdown(f"**{kpi_cfg['name']}**")
             st.caption(kpi_cfg['description'])
-            security_kpis['energy_deficit_share'] = st.number_input(
-                f"Wert ({kpi_cfg['unit']})",
+            safety_kpis['adequacy_score'] = st.number_input(
+                "Wert (0–1)",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.05,
+                value=0.90,
                 step=0.01,
-                format="%.4f",
-                key="sec_energy_deficit",
+                format="%.3f",
+                key="sec_adequacy",
                 help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
             )
             
         with col2:
-            # Peak Deficit Ratio
-            kpi_cfg = security_config['peak_deficit_ratio']
+            # Robustness Score
+            kpi_cfg = safety_config['robustness_score']
             st.markdown(f"**{kpi_cfg['name']}**")
             st.caption(kpi_cfg['description'])
-            security_kpis['peak_deficit_ratio'] = st.number_input(
-                f"Wert ({kpi_cfg['unit']})",
+            safety_kpis['robustness_score'] = st.number_input(
+                "Wert (0–1)",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.10,
+                value=0.75,
                 step=0.01,
-                format="%.4f",
-                key="sec_peak_deficit",
+                format="%.3f",
+                key="sec_robustness",
                 help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
             )
         
-        # Deficit Frequency
-        kpi_cfg = security_config['deficit_frequency']
+        # Dependency Score
+        kpi_cfg = safety_config['dependency_score']
         st.markdown(f"**{kpi_cfg['name']}**")
         st.caption(kpi_cfg['description'])
-        security_kpis['deficit_frequency'] = st.number_input(
-            f"Wert ({kpi_cfg['unit']})",
+        safety_kpis['dependency_score'] = st.number_input(
+            "Wert (0–1)",
             min_value=0.0,
             max_value=1.0,
-            value=0.02,
+            value=0.95,
             step=0.01,
-            format="%.4f",
-            key="sec_deficit_freq",
+            format="%.3f",
+            key="sec_dependency",
             help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
         )
-        
-        kpis['security'] = security_kpis
+
+        # Composite (Anzeige)
+        safety_composite = (safety_kpis['adequacy_score'] + safety_kpis['robustness_score'] + safety_kpis['dependency_score']) / 3.0
+        st.info(f"📊 Safety Composite Score (gleichgewichtet): **{safety_composite:.3f}**")
+        kpis['safety'] = safety_kpis
     
     # ============== ECOLOGY ============== #
     with ecology_tab:
@@ -110,51 +113,56 @@ def debug_scoring_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            # CO2 Intensity
-            kpi_cfg = ecology_config['co2_intensity']
+            # CO2 Score
+            kpi_cfg = ecology_config['co2_score']
             st.markdown(f"**{kpi_cfg['name']}**")
             st.caption(kpi_cfg['description'])
-            ecology_kpis['co2_intensity'] = st.number_input(
-                f"Wert ({kpi_cfg['unit']})",
+            ecology_kpis['co2_score'] = st.number_input(
+                "Score (0–1)",
                 min_value=0.0,
-                max_value=1000.0,
-                value=150.0,
-                step=10.0,
-                format="%.2f",
+                max_value=1.0,
+                value=0.57,  # ≙ CO2 ≈ 170 g/kWh
+                step=0.01,
+                format="%.3f",
                 key="eco_co2",
                 help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
             )
             
         with col2:
-            # Curtailment Share
-            kpi_cfg = ecology_config['curtailment_share']
+            # Renewable Share
+            kpi_cfg = ecology_config['renewable_share']
             st.markdown(f"**{kpi_cfg['name']}**")
             st.caption(kpi_cfg['description'])
-            ecology_kpis['curtailment_share'] = st.number_input(
-                f"Wert ({kpi_cfg['unit']})",
+            ecology_kpis['renewable_share'] = st.number_input(
+                "Score (0–1)",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.08,
+                value=0.85,
                 step=0.01,
-                format="%.4f",
-                key="eco_curtailment",
+                format="%.3f",
+                key="eco_renewable",
                 help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
             )
         
-        # Fossil Share
-        kpi_cfg = ecology_config['fossil_share']
+        # Curtailment Score
+        kpi_cfg = ecology_config['curtailment_score']
         st.markdown(f"**{kpi_cfg['name']}**")
         st.caption(kpi_cfg['description'])
-        ecology_kpis['fossil_share'] = st.number_input(
-            f"Wert ({kpi_cfg['unit']})",
+        ecology_kpis['curtailment_score'] = st.number_input(
+            "Score (0–1)",
             min_value=0.0,
             max_value=1.0,
-            value=0.15,
+            value=0.80,
             step=0.01,
-            format="%.4f",
-            key="eco_fossil",
+            format="%.3f",
+            key="eco_curtailment",
             help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
         )
+
+        # Gewichteter Gesamt-Score (Anzeige)
+        eco_composite = 0.60 * ecology_kpis['co2_score'] + 0.25 * ecology_kpis['renewable_share'] + 0.15 * ecology_kpis['curtailment_score']
+        st.info(f"📊 Ecology Composite Score (60/25/15 %): **{eco_composite:.3f}**")
+        kpis['ecology'] = ecology_kpis
         
         kpis['ecology'] = ecology_kpis
     
@@ -169,53 +177,63 @@ def debug_scoring_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            # System Cost Index
-            kpi_cfg = economy_config['system_cost_index']
+            # LCOE Index
+            kpi_cfg = economy_config['lcoe_index']
             st.markdown(f"**{kpi_cfg['name']}**")
             st.caption(kpi_cfg['description'])
-            economy_kpis['system_cost_index'] = st.number_input(
-                f"Wert ({kpi_cfg['unit']})",
-                min_value=0.0,
-                max_value=100.0,
-                value=8.5,
-                step=0.5,
-                format="%.2f",
-                key="econ_cost",
-                help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
-            )
-            
-        with col2:
-            # Import Dependency
-            kpi_cfg = economy_config['import_dependency']
-            st.markdown(f"**{kpi_cfg['name']}**")
-            st.caption(kpi_cfg['description'])
-            economy_kpis['import_dependency'] = st.number_input(
-                f"Wert ({kpi_cfg['unit']})",
+            economy_kpis['lcoe_index'] = st.number_input(
+                "Score (0–1)",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.12,
+                value=0.98,  # ≙ LCOE ≈ 8.6 ct/kWh
                 step=0.01,
-                format="%.4f",
-                key="econ_import",
+                format="%.3f",
+                key="econ_lcoe",
                 help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
             )
-        
-        # Storage Utilization
-        kpi_cfg = economy_config['storage_utilization']
+
+        with col2:
+            # Curtailment Econ Score
+            kpi_cfg = economy_config['curtailment_econ_score']
+            st.markdown(f"**{kpi_cfg['name']}**")
+            st.caption(kpi_cfg['description'])
+            economy_kpis['curtailment_econ_score'] = st.number_input(
+                "Score (0–1)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.88,
+                step=0.01,
+                format="%.3f",
+                key="econ_curtailment",
+                help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
+            )
+
+        # Storage Efficiency
+        kpi_cfg = economy_config['storage_efficiency']
         st.markdown(f"**{kpi_cfg['name']}**")
         st.caption(kpi_cfg['description'])
-        economy_kpis['storage_utilization'] = st.number_input(
-            f"Wert ({kpi_cfg['unit']})",
+        economy_kpis['storage_efficiency'] = st.number_input(
+            "Score (0–1)",
             min_value=0.0,
             max_value=1.0,
             value=0.65,
             step=0.01,
-            format="%.4f",
+            format="%.3f",
             key="econ_storage",
             help=f"Best: {kpi_cfg['best']}, Worst: {kpi_cfg['worst']}"
         )
-        
+
+        # Gewichteter Gesamt-Score (Anzeige)
+        composite = 0.40 * economy_kpis['lcoe_index'] + 0.35 * economy_kpis['curtailment_econ_score'] + 0.25 * economy_kpis['storage_efficiency']
+        st.info(f"📊 Economy Composite Score (40/35/25 %): **{composite:.3f}**")
         kpis['economy'] = economy_kpis
+
+        # Übergreifender Gesamt-Score
+        overall = round(0.40 * safety_composite + 0.30 * eco_composite + 0.30 * composite, 4)
+        kpis['safety_composite']  = round(safety_composite, 4)
+        kpis['ecology_composite'] = round(eco_composite, 4)
+        kpis['economy_composite'] = round(composite, 4)
+        kpis['overall_score']     = overall
     
     # ============== DASHBOARD ============== #
     st.markdown("---")
@@ -255,7 +273,11 @@ def debug_scoring_page():
                 delta_color=delta_color
             )
         
-        overall_score = sum(category_scores.values()) / len(category_scores)
+        overall_score = (
+            0.40 * category_scores.get('safety', 0)
+            + 0.30 * category_scores.get('ecology', 0)
+            + 0.30 * category_scores.get('economy', 0)
+        )
         st.markdown("---")
         st.metric(
             label="🎯 Gesamtscore",

@@ -139,6 +139,7 @@ def render_kpi_overview(kpis: dict):
 
         for category, score in category_scores.items():
             config = KPI_CONFIG[category]
+            cat_weight = config.get('category_weight', 0.0)
 
             if score >= 80:
                 delta_color = "normal"
@@ -148,13 +149,17 @@ def render_kpi_overview(kpis: dict):
                 delta_color = "inverse"
 
             st.metric(
-                label=config["title"],
+                label=f"{config['title']} ({cat_weight*100:.0f} % Gewichtung)",
                 value=f"{score:.1f} Punkte",
                 delta=None,
                 delta_color=delta_color,
             )
 
-        overall_score = sum(category_scores.values()) / len(category_scores)
+        overall_score = (
+            0.40 * category_scores.get('safety', 0)
+            + 0.30 * category_scores.get('ecology', 0)
+            + 0.30 * category_scores.get('economy', 0)
+        )
         st.markdown("---")
         st.metric(label="🎯 Gesamtscore", value=f"{overall_score:.1f} Punkte", delta=None)
 
@@ -207,12 +212,13 @@ def render_detailed_table(kpis: dict):
         width="stretch",
         hide_index=True,
         column_config={
-            "Category": st.column_config.TextColumn("Kategorie", width="small"),
-            "KPI": st.column_config.TextColumn("KPI", width="medium"),
-            "Value": st.column_config.TextColumn("Wert", width="small"),
-            "Score": st.column_config.NumberColumn("Score", width="small", format="%.1f"),
-            "Rating": st.column_config.TextColumn("Bewertung", width="small"),
-            "Description": st.column_config.TextColumn("Beschreibung", width="large"),
+            "Kategorie":     st.column_config.TextColumn("Kategorie",       width="small"),
+            "KPI":           st.column_config.TextColumn("KPI",              width="medium"),
+            "Wert":          st.column_config.TextColumn("Wert",             width="small"),
+            "Score (0\u2013100)": st.column_config.TextColumn("Score (0\u2013100)", width="small"),
+            "Gewichtung":    st.column_config.TextColumn("Gewichtung",       width="medium"),
+            "Bewertung":     st.column_config.TextColumn("Bewertung",        width="small"),
+            "Beschreibung":  st.column_config.TextColumn("Beschreibung",     width="large"),
         },
     )
 
@@ -221,10 +227,10 @@ def render_detailed_table(kpis: dict):
             st.subheader("Rohwerte nach Kategorie")
 
             if "raw_values" in kpis:
-                security_vals = {
+                safety_vals = {
                     k: v
                     for k, v in kpis["raw_values"].items()
-                    if any(x in k.lower() for x in ["unserved", "deficit", "load", "h2", "security", "autarkie"])
+                    if any(x in k.lower() for x in ["unserved", "deficit", "load", "h2", "safety", "autarkie", "available_power"])
                 }
                 ecology_vals = {
                     k: v
@@ -240,8 +246,8 @@ def render_detailed_table(kpis: dict):
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
-                    st.markdown("**Security Values**")
-                    st.json(security_vals)
+                    st.markdown("**Safety Values**")
+                    st.json(safety_vals)
 
                 with col2:
                     st.markdown("**Ecology Values**")

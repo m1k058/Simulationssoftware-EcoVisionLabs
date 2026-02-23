@@ -43,11 +43,12 @@ class EconomicCalculator:
     """
 
     def __init__(self, inputs: Dict[str, Any], simulation_results: Dict[str, Any], 
-                 target_storage_capacities: Optional[Dict[str, Any]] = None) -> None:
+                 target_storage_capacities: Optional[Dict[str, Any]] = None,
+                 base_year: int = 2025) -> None:
         self.inputs = inputs or {}
         self.simulation_results = simulation_results or {}
         self.target_storage_capacities = target_storage_capacities or {}
-        self.base_year = 2025
+        self.base_year = base_year
 
     def _get_capex_value(self, capex_data: Any, mode: str = "average") -> float:
         """Extrahiere CAPEX-Wert aus Liste [Min, Max] oder Skalar.
@@ -409,9 +410,10 @@ class EconomicCalculator:
             investment_by_tech[tech_id] = investment
 
             # 2. Kapitalkosten (Annual Capital Cost)
-            if lifetime > 0 and capex_eur_per_mw > 0:
+            # Annuität nur auf das investierte Delta (neu gebaute Kapazität im Zeitraum)
+            if lifetime > 0 and capex_eur_per_mw > 0 and delta_p > 0:
                 annuity_factor = self._calculate_annuity_factor(wacc, lifetime)
-                annual_capital_cost = p_target_for_capex * capex_eur_per_mw * annuity_factor
+                annual_capital_cost = delta_p * capex_eur_per_mw * annuity_factor
             else:
                 annual_capital_cost = 0.0
 
@@ -518,7 +520,15 @@ def calculate_economics_from_simulation(
             'Braunkohle': 'Braunkohle [MWh]',
             'Kernenergie': 'Kernenergie [MWh]'
         }
-        
+
+        # Bestimme Basisjahr: das Vorjahr aus valid_for_years (sortiert)
+        all_years = sorted(
+            scenario_manager.current_scenario.get("metadata", {}).get("valid_for_years", [2025, 2030, 2045])
+        )
+        # Suche das größte Jahr, das kleiner als target_year ist
+        prev_years = [y for y in all_years if y < target_year]
+        base_year = prev_years[-1] if prev_years else 2025
+
         # 1. Hole Ziel-Kapazitäten aus ScenarioManager
         capacities_target_raw = scenario_manager.get_generation_capacities(year=target_year)
         
@@ -536,10 +546,19 @@ def calculate_economics_from_simulation(
             "h2_storage": scenario_manager.get_storage_capacities("h2_storage", target_year) or {},
         }
         
-        # 3. Bestimme Baseline-Kapazitäten
+        # 3. Bestimme Baseline-Kapazitäten für das Basisjahr
         if baseline_capacities is None:
-            baseline_capacities = BASELINE_2025_DEFAULTS.copy()
-        
+            if base_year == 2025:
+                # Für 2025 nehmen wir die Standardwerte
+                baseline_capacities = BASELINE_2025_DEFAULTS.copy()
+            else:
+                # Für spätere Basisjahre (z.B. 2030 als Basis für 2045): Szenariowerte
+                capacities_base_raw = scenario_manager.get_generation_capacities(year=base_year)
+                baseline_capacities = {}
+                for tech_id_raw, val in capacities_base_raw.items():
+                    cap = val.get(base_year, 0) if isinstance(val, dict) else (val or 0)
+                    baseline_capacities[tech_id_raw] = float(cap)
+
         # 4. Strukturiere Inputs
         name_fix = {
             "Wind_Onshore": "Wind Onshore",
@@ -562,7 +581,7 @@ def calculate_economics_from_simulation(
                     base_val = BASELINE_2025_DEFAULTS.get(tech_id, 0.0)
                 
                 inputs[tech_id] = {
-                    2025: base_val,
+                    base_year: base_val,
                     target_year: target_cap
                 }
         
@@ -570,14 +589,23 @@ def calculate_economics_from_simulation(
         storage_inputs = {}
         for storage_id, storage_config in storage_targets.items():
             if isinstance(storage_config, dict) and storage_config:
-                baseline_storage = {
-                    "installed_capacity_mwh": 0.0,
-                    "max_charge_power_mw": 0.0,
-                    "max_discharge_power_mw": 0.0,
-                    "initial_soc": storage_config.get("initial_soc", 0.0)
-                }
+                if base_year == 2025:
+                    baseline_storage = {
+                        "installed_capacity_mwh": 0.0,
+                        "max_charge_power_mw": 0.0,
+                        "max_discharge_power_mw": 0.0,
+                        "initial_soc": storage_config.get("initial_soc", 0.0)
+                    }
+                else:
+                    # Vorjahr-Speicherwerte aus dem Szenario holen
+                    baseline_storage = scenario_manager.get_storage_capacities(storage_id, base_year) or {
+                        "installed_capacity_mwh": 0.0,
+                        "max_charge_power_mw": 0.0,
+                        "max_discharge_power_mw": 0.0,
+                        "initial_soc": storage_config.get("initial_soc", 0.0)
+                    }
                 storage_inputs[storage_id] = {
-                    2025: baseline_storage,
+                    base_year: baseline_storage,
                     target_year: storage_config
                 }
         
@@ -613,7 +641,8 @@ def calculate_economics_from_simulation(
         calculator = EconomicCalculator(
             inputs=inputs,
             simulation_results=sim_results_formatted,
-            target_storage_capacities=storage_inputs
+            target_storage_capacities=storage_inputs,
+            base_year=base_year
         )
         
         result = calculator.perform_calculation(target_year)

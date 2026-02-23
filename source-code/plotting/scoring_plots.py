@@ -11,94 +11,111 @@ from typing import Dict, Any, Optional
 #         KONFIGURATION          #
 # ------------------------------ #
 
+# Gewichtung Gesamtscore: Safety 40 %, Ecology 30 %, Economy 30 %
+# Gewichtung innerhalb Safety: gleichgewichtet (je 1/3)
+# Gewichtung innerhalb Ecology: CO2 60 %, Renewable 25 %, Curtailment 15 %
+# Gewichtung innerhalb Economy: LCOE 40 %, Curtailment 35 %, Storage 25 %
+
 KPI_CONFIG = {
-    'security': {
-        'title': '🛡️ Security',
+    'safety': {
+        'title': '🛡️ Safety',
         'color': '#FF6B6B',
+        'category_weight': 0.40,  # Anteil am Gesamtscore
         'kpis': {
-            'energy_deficit_share': {
-                'name': 'Unserved Energy Ratio',
-                'description': 'Anteil ungedeckter Energie an Gesamtlast',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
-                'best': 0
+            'adequacy_score': {
+                'name': 'Adequacy Score',
+                'description': 'Autarker Stundenanteil: 1 − (Defizit-Stunden / Jahresstunden) – Anteil der Stunden ohne Import-/Reservebedarf',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 1/3,  # Intra-Kategorie-Gewicht
             },
-            'peak_deficit_ratio': {
-                'name': 'Max Unserved Power Ratio',
-                'description': 'Maximale ungedeckte Leistung',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
-                'best': 0
+            'robustness_score': {
+                'name': 'Robustness Score',
+                'description': 'Gesicherte Leistung / Spitzenlast (0.75 @ 100 %, 1.0 @ ≥110 %)',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 1/3,
             },
-            'deficit_frequency': {
-                'name': 'Deficit Hours Ratio',
-                'description': 'Anteil Stunden mit Defizit',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
-                'best': 0
+            'dependency_score': {
+                'name': 'Dependency Score',
+                'description': '1 − (Nicht gedeckte Energie / Gesamtverbrauch)',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 1/3,
             }
         }
     },
     'ecology': {
         'title': '🌱 Ecology',
         'color': '#4ECDC4',
+        'category_weight': 0.30,
         'kpis': {
-            'co2_intensity': {
-                'name': 'CO2 Intensity',
-                'description': 'CO2-Emissionen pro kWh Stromerzeugung',
-                'unit': 'g/kWh',
-                'format': '.2f',
-                'worst': 1000,
-                'best': 0
+            'co2_score': {
+                'name': 'CO2 Score',
+                'description': '1 − min(1, CO2-Intensität / 400 g/kWh)',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 0.60,
             },
-            'curtailment_share': {
-                'name': 'Curtailment Ratio',
-                'description': 'Abgeregelter Anteil erneuerbarer Energie',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
-                'best': 0
+            'renewable_share': {
+                'name': 'Renewable Share',
+                'description': 'Fossil-Free Degree: (Gesamt − Fossil) / Gesamt',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 0.25,
             },
-            'fossil_share': {
-                'name': 'Fossil Share',
-                'description': 'Anteil fossiler Erzeugung',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
-                'best': 0
+            'curtailment_score': {
+                'name': 'Curtailment Score',
+                'description': '1 − (Abregelungsquote / 40 %)',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 0.15,
             }
         }
     },
     'economy': {
         'title': '💰 Economy',
         'color': '#95E1D3',
+        'category_weight': 0.30,
         'kpis': {
-            'system_cost_index': {
-                'name': 'System Cost (LCOE)',
-                'description': 'Levelized Cost of Energy',
-                'unit': 'ct/kWh',
-                'format': '.2f',
-                'worst': 100,
-                'best': 0
-            },
-            'import_dependency': {
-                'name': 'Import Dependency',
-                'description': 'Anteil importierter Energie',
-                'unit': '%',
-                'format': '.2%',
-                'worst': 1,
-                'best': 0
-            },
-            'storage_utilization': {
-                'name': 'Storage Utilization',
-                'description': 'Speicherauslastung',
-                'unit': '%',
-                'format': '.2%',
+            'lcoe_index': {
+                'name': 'LCOE Index',
+                'description': '1 − (LCOE − 8 ct/kWh) / (40 − 8), Ziel 0.08–0.40 €/kWh',
+                'unit': '',
+                'format': '.3f',
                 'worst': 0,
-                'best': 1
+                'best': 1,
+                'weight': 0.40,
+            },
+            'curtailment_econ_score': {
+                'name': 'Curtailment Econ Score',
+                'description': '1 − (Abregelungsanteil / 35 %), wirtschaftlicher Verlust durch verschwendete EE-Erzeugung',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 0.35,
+            },
+            'storage_efficiency': {
+                'name': 'Storage Efficiency',
+                'description': 'Nützlicher Speicherdurchsatz / Speicherbedarf',
+                'unit': '',
+                'format': '.3f',
+                'worst': 0,
+                'best': 1,
+                'weight': 0.25,
             }
         }
     }
@@ -421,7 +438,7 @@ def create_category_score_bars(
 def create_kpi_comparison_chart(
     kpis_list: list[Dict[str, Dict[str, float]]],
     labels: list[str],
-    category: str = 'security',
+    category: str = 'safety',
         show_title: bool = False,
     height: int = 400
 ) -> go.Figure:
@@ -431,7 +448,7 @@ def create_kpi_comparison_chart(
     Args:
         kpis_list: Liste von KPI-Dictionaries zum Vergleichen
         labels: Bezeichnungen für jeden Simulationslauf
-        category: Kategorie zum Vergleichen ('security', 'ecology', 'economy')
+        category: Kategorie zum Vergleichen ('safety', 'ecology', 'economy')
         height: Diagrammhöhe in Pixeln
     
     Returns:
@@ -496,8 +513,11 @@ def create_kpi_table(kpis: Dict[str, Dict[str, float]]) -> pd.DataFrame:
     for category, category_kpis in kpis.items():
         if category == 'raw_values':
             continue
+        if not isinstance(category_kpis, dict):
+            continue
         
         category_config = KPI_CONFIG.get(category, {})
+        cat_weight = category_config.get('category_weight', 0.0)
         
         for kpi_name, kpi_value in category_kpis.items():
             kpi_config = category_config.get('kpis', {}).get(kpi_name, {})
@@ -508,13 +528,18 @@ def create_kpi_table(kpis: Dict[str, Dict[str, float]]) -> pd.DataFrame:
             
             formatted_value = _format_kpi_value(kpi_value, kpi_config)
             
+            kpi_weight = kpi_config.get('weight', 0.0)
+            overall_contribution = cat_weight * kpi_weight * 100  # in %
+            weight_str = f"{kpi_weight * 100:.0f} % (∑ {overall_contribution:.1f} % Gesamt)"
+            
             rows.append({
-                'Category': category_config.get('title', category),
+                'Kategorie': category_config.get('title', category),
                 'KPI': kpi_config.get('name', kpi_name),
-                'Value': formatted_value,
-                'Score': f'{score:.1f}',
-                'Rating': '⭐' * (int(score / 20)),
-                'Description': kpi_config.get('description', '')
+                'Wert': formatted_value,
+                'Score (0–100)': f'{score:.1f}',
+                'Gewichtung': weight_str,
+                'Bewertung': '⭐' * (int(score / 20)),
+                'Beschreibung': kpi_config.get('description', '')
             })
     
     return pd.DataFrame(rows)

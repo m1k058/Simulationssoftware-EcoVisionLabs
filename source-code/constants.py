@@ -276,12 +276,14 @@ TECHNOLOGY_COSTS = {
         "fuel_type": None
     },
     "Wasserstoffspeicher": {
-        # EWI Rückrechnung (siehe Doku)
-        "capex": [10000, 20000],
-        "opex_fix": 5000,
+        # Saisonale Salzkaverne (DE): Fraunhofer ISE / IEA 2024
+        # Druckspeicher (alt: 10.000-20.000) gilt NICHT für große Saisonspeicher
+        # Salzkaverne: ~2.000-5.000 EUR/MWh_H2 (elektrisches Äquivalent bei eta~0.6)
+        "capex": [2000, 5000],
+        "opex_fix": 3000,        # EUR/MW Entladeleistung * Jahr
         "opex_var": 0.0,
-        "lifetime": 30,
-        "efficiency": 1.0, 
+        "lifetime": 40,           # Kavernen haben >40 Jahre Lebensdauer
+        "efficiency": 1.0,
         "fuel_type": None
     },
     "Pumpspeicher": {

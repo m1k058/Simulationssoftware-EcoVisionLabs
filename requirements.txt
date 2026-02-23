@@ -9,6 +9,7 @@ plotly==6.4.0
 # Data Processing
 pyyaml
 holidays
+openpyxl
 
 # Performance-Optimierung (CPU-Beschleunigung für Wärmepumpen)
 # WICHTIG: Funktioniert nur mit Python 3.12 (nicht 3.13!)

@@ -126,21 +126,21 @@ def render_debug_scoring_dashboard():
     scores = {}
     
     # Tabs für die drei Kategorien
-    security_tab, ecology_tab, economy_tab = st.tabs(["🛡️ Security", "🌱 Ecology", "💰 Economy"])
+    safety_tab, ecology_tab, economy_tab = st.tabs(["🛡️ Safety", "🌱 Ecology", "💰 Economy"])
     
-    # ============== SECURITY ============== #
-    with security_tab:
-        st.markdown("**Security Scores**")
-        security_config = KPI_CONFIG['security']['kpis']
-        security_scores = {}
+    # ============== SAFETY ============== #
+    with safety_tab:
+        st.markdown("**Safety Scores**")
+        safety_config = KPI_CONFIG['safety']['kpis']
+        safety_scores = {}
         
         col1, col2, col3 = st.columns(3)
         
-        kpi_list = list(security_config.items())
+        kpi_list = list(safety_config.items())
         for idx, (kpi_name, kpi_cfg) in enumerate(kpi_list):
             with [col1, col2, col3][idx % 3]:
                 st.caption(f"**{kpi_cfg['name']}**")
-                security_scores[kpi_name] = st.number_input(
+                safety_scores[kpi_name] = st.number_input(
                     "Score (0-100)",
                     min_value=0.0,
                     max_value=100.0,
@@ -150,7 +150,7 @@ def render_debug_scoring_dashboard():
                     help=kpi_cfg['description']
                 )
         
-        scores['security'] = security_scores
+        scores['safety'] = safety_scores
     
     # ============== ECOLOGY ============== #
     with ecology_tab:
@@ -238,7 +238,7 @@ def render_debug_scoring_dashboard():
     with col2:
         st.markdown("**Kategorie-Scores**")
         
-        for category in ['security', 'ecology', 'economy']:
+        for category in ['safety', 'ecology', 'economy']:
             config = KPI_CONFIG[category]
             avg_score = sum(scores[category].values()) / len(scores[category]) if scores[category] else 0
             
@@ -256,10 +256,11 @@ def render_debug_scoring_dashboard():
                 delta_color=delta_color
             )
         
-        overall_score = sum(
-            sum(cat_scores.values()) / len(cat_scores) 
-            for cat_scores in scores.values()
-        ) / 3
+        overall_score = (
+            0.40 * (sum(scores.get('safety', {}).values()) / max(1, len(scores.get('safety', {}))))
+            + 0.30 * (sum(scores.get('ecology', {}).values()) / max(1, len(scores.get('ecology', {}))))
+            + 0.30 * (sum(scores.get('economy', {}).values()) / max(1, len(scores.get('economy', {}))))
+        )
         st.markdown("---")
         st.metric(label="🎯 Gesamtscore", value=f"{overall_score:.1f} Punkte", delta=None)
     

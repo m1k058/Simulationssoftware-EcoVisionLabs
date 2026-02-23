@@ -92,13 +92,13 @@ def _get_value(
     return agg_functions.get(agg_func, lambda s: None)(df[col_name])
 
 
-def _extract_security_values(
+def _extract_safety_values(
     results: Dict[str, pd.DataFrame],
     storage_config: Dict[str, Any],
     year: int,
     value_mapping: Dict[str, Dict[str, str]]
 ) -> Dict[str, float]:
-    """Extrahiert Werte, die für Sicherheits-KPIs benötigt werden."""
+    """Extrahiert Werte, die für Safety-KPIs benötigt werden."""
     values = {}
     
     # Gesamtstunden in der Simulation
@@ -119,7 +119,25 @@ def _extract_security_values(
     # Lastwerte
     values['total_load_mwh'] = _get_value(results, value_mapping, 'total_load_mwh', 'sum') or 0
     values['max_load_mw'] = (_get_value(results, value_mapping, 'total_load_mwh', 'max') or 0) * 4
-    
+
+    # Verfügbare gesicherte Leistung zum Zeitpunkt der Spitzenlast (für Robustness Score)
+    load_series_raw = _get_value(results, value_mapping, 'total_load_mwh', 'series')
+    prod_series_raw = _get_value(results, value_mapping, 'production_total', 'series')
+    if load_series_raw is not None and prod_series_raw is not None:
+        try:
+            peak_idx = load_series_raw.idxmax()
+            peak_prod_mwh = prod_series_raw.loc[peak_idx]
+            storage_at_peak = 0
+            for _key in ['battery_discharged', 'pumped_storage_discharged', 'h2_discharged']:
+                _s = _get_value(results, value_mapping, _key, 'series')
+                if _s is not None and peak_idx in _s.index:
+                    storage_at_peak += _s.loc[peak_idx]
+            values['available_power_at_peak_mw'] = (peak_prod_mwh + storage_at_peak) * 4
+        except Exception:
+            values['available_power_at_peak_mw'] = 0
+    else:
+        values['available_power_at_peak_mw'] = 0
+
     # H2 Speicher Kapazität und Winterdurchschnitt
     h2_soc_series = _get_value(results, value_mapping, 'h2_soc', 'series')
     year_str = str(year)
@@ -175,12 +193,13 @@ def _extract_ecology_values(
         'gas': _get_value(results, value_mapping, 'gas_mwh', 'sum') or 0,
     }
     
-    # Erneuerbare Erzeugung
+    # Erneuerbare Erzeugung (Wind + PV)
     values['renewable_generation_mwh'] = (
         sources['wind_onshore'] + sources['wind_offshore'] + sources['pv']
     )
-    
-    # Fossile Erzeugung
+
+    # Fossil-freier Anteil: (Gesamt - Fossil) / Gesamt  → inkl. Biomasse, Wasser, Wind, PV
+    # Wird als Renewable Share (Fossil-Free Degree) verwendet.
     values['fossil_generation_mwh'] = sources['gas']
     
     # Gesamterzeugung
@@ -296,75 +315,130 @@ def _safe_ratio(numerator: float, denominator: float, max_value: float = None) -
     return ratio
 
 
-def _calculate_security_kpis(values: Dict[str, float]) -> Dict[str, float]:
-    """Berechnet Sicherheits-KPIs aus extrahierten Werten."""
+def _calculate_safety_kpis(values: Dict[str, float]) -> Dict[str, float]:
+    """Berechnet Safety-Scores aus extrahierten Werten.
+
+    Alle drei Scores liegen im Bereich [0, 1] – höher ist besser.
+    """
+    # A. Adequacy Score: Anteil der Stunden die das System OHNE Import/Reserve deckt
+    # Normierung auf Gesamtstunden der Simulation (kein fixer Grenzwert nötig).
+    # Interpretation: "In X% der Jahresstunden reichen EE + Speicher + (historisches) Gas allein."
+    # Score = 1.0 → kein Defizit, Score = 0.0 → jede Stunde Defizit
+    # Das Gas in der Simulation ist ein historisches Profil, kein dispatchable Backup –
+    # verbleibendes Defizit entspricht dem Bedarf an Importen / Reservekraftwerken.
+    total_hours = values.get('total_hours', 8760)
+    adequacy_score = 1.0 - min(1.0, values['deficit_hours'] / total_hours)
+
+    # B. Robustness Score: Verfügbare gesicherte Leistung / Spitzenlast
+    # Kalibriert für autarken Betrieb (VOR Importen / Reservekraftwerken):
+    #   100 % Deckung = Score 0.75 (sehr gut ohne Netzverbund)
+    #   ≥110 % Deckung = Score 1.0 (Sicherheitsreserve vorhanden)
+    #   <100 % linear von 0.0 bis 0.75
+    cap_ratio = _safe_ratio(values['available_power_at_peak_mw'], values['max_load_mw'])
+    if cap_ratio >= 1.1:
+        robustness_score = 1.0
+    elif cap_ratio >= 1.0:
+        robustness_score = 0.75 + (cap_ratio - 1.0) / 0.1 * 0.25
+    else:
+        robustness_score = cap_ratio * 0.75
+
+    # C. Dependency Score: 1 - (Netto-Importe / Gesamtverbrauch)
+    # Hohe Autarkie = hoher Score
+    dependency_score = 1.0 - _safe_ratio(
+        values['total_unserved_mwh'],
+        values['total_load_mwh'],
+        max_value=1.0
+    )
+
+    safety_composite = (adequacy_score + robustness_score + dependency_score) / 3.0
+
     return {
-        # Anteil der nicht gedeckten Energie (0-100%)
-        'energy_deficit_share': _safe_ratio(
-            values['total_unserved_mwh'], 
-            values['total_load_mwh'],
-            max_value=1.0
-        ),
-        
-        # Schlimmster Moment (0-100%)
-        'peak_deficit_ratio': _safe_ratio(
-            values['max_unserved_mw'], 
-            values['max_load_mw'],
-            max_value=1.0
-        ),
-        
-        # Anteil der Stunden mit Defizit (0-100%)
-        'deficit_frequency': _safe_ratio(
-            values['deficit_hours'], 
-            values['total_hours'],
-            max_value=1.0 
-        ),
+        'adequacy_score':   max(0.0, adequacy_score),
+        'robustness_score': max(0.0, min(1.0, robustness_score)),
+        'dependency_score': max(0.0, dependency_score),
+        'safety_composite': round(max(0.0, min(1.0, safety_composite)), 4),
     }
 
 
 def _calculate_ecology_kpis(values: Dict[str, float]) -> Dict[str, float]:
-    """Berechnet Ökologie-KPIs aus extrahierten Werten."""
+    """Berechnet Ökologie-Scores aus extrahierten Werten.
+
+    Alle drei Komponenten liegen in [0, 1] – höher ist besser.
+    Gewichtung: CO2-Intensität 60 %, Renewable Share 25 %, Curtailment 15 %.
+    """
+    CO2_WORST = 400.0   # g/kWh: ab hier Score 0.0  (typischer fossiler Mix)
+    CURT_WORST = 0.40   # 40 % Abregelung = Score 0.0
+
+    # A. CO2-Score (60 %): 1 − min(1, CO2 / 400 g/kWh)
+    co2_score = 1.0 - min(1.0, values['co2_intensity_g_per_kwh'] / CO2_WORST)
+
+    # B. Renewable Share / Fossil-Free Degree (25 %):  (Gesamt − Fossil) / Gesamt
+    total_gen = values['total_generation_mwh']
+    fossil     = values['fossil_generation_mwh']
+    renewable_share = _safe_ratio(max(0.0, total_gen - fossil), total_gen, max_value=1.0)
+
+    # C. Curtailment Score (15 %): 1 − min(1, Abregelungsquote / 0.40)
+    curtailment_ratio = _safe_ratio(
+        values['curtailment_mwh'],
+        values['renewable_generation_mwh'],
+        max_value=CURT_WORST
+    )
+    curtailment_score = 1.0 - curtailment_ratio / CURT_WORST
+
+    # Gewichteter Gesamt-Score
+    ecology_composite = 0.60 * co2_score + 0.25 * renewable_share + 0.15 * curtailment_score
+
     return {
-        # CO2-Intensität in g/kWh
-        'co2_intensity': values['co2_intensity_g_per_kwh'],
-        
-        # Anteil abgeregelter erneuerbarer Energie (0-40%)
-        'curtailment_share': _safe_ratio(
-            values['curtailment_mwh'], 
-            values['renewable_generation_mwh'],
-            max_value=0.4
-        ),
-        
-        # Anteil fossiler Erzeugung (0-100%)
-        'fossil_share': _safe_ratio(
-            values['fossil_generation_mwh'], 
-            values['total_generation_mwh'],
-            max_value=1.0
-        )
+        'co2_score':          round(max(0.0, co2_score), 4),
+        'renewable_share':    round(max(0.0, min(1.0, renewable_share)), 4),
+        'curtailment_score':  round(max(0.0, min(1.0, curtailment_score)), 4),
+        'ecology_composite':  round(max(0.0, min(1.0, ecology_composite)), 4),
     }
 
 
 def _calculate_economy_kpis(values: Dict[str, float]) -> Dict[str, float]:
-    """Berechnet Wirtschafts-KPIs aus extrahierten Werten."""
-    total_load = values.get('total_load_mwh', 0)
-    
-    storage_util_raw = _safe_ratio(
-        values['useful_storage_throughput_mwh'], 
-        values['storage_need_mwh']
+    """Berechnet Wirtschafts-Scores aus extrahierten Werten.
+
+    Alle drei Komponenten liegen in [0, 1] – höher ist besser.
+    Gewichtung: LCOE 40 %, Import-Quote 35 %, Speichereffizienz 25 %.
+    """
+    LCOE_BEST_CT  =  8.0   # ct/kWh ≙ 0.08 €/kWh → Score 1.0
+    LCOE_WORST_CT = 40.0   # ct/kWh ≙ 0.40 €/kWh → Score 0.0
+    CURT_ECON_WORST = 0.35  # 35 % Abregelung = Score 0.0 (wirtschaftlicher Verlust)
+
+    # A. LCOE Index (40 %): 1 − (LCOE − Best) / (Worst − Best)
+    # Wenn LCOE nicht berechnet wurde (None), neutraler Score 0.5 statt künstlich 1.0.
+    lcoe_raw = values.get('system_lcoe')
+    if lcoe_raw is None:
+        lcoe_index = 0.5  # Datenlage unbekannt → neutral
+    else:
+        lcoe_index = 1.0 - (lcoe_raw - LCOE_BEST_CT) / (LCOE_WORST_CT - LCOE_BEST_CT)
+        lcoe_index = max(0.0, min(1.0, lcoe_index))
+
+    # B. Curtailment Score (35 %): wirtschaftlicher Verlust durch Abregelung
+    # Ersetzt den redundanten Import-Score (der identisch mit dependency_score in Safety wäre).
+    # Curtailment = verschwendete EE-Investitionen, je höher, desto schlechter die Wirtschaftlichkeit.
+    curtailment_econ_ratio = _safe_ratio(
+        values.get('curtailment_mwh', 0),
+        values.get('total_generation_mwh', 1),
+        max_value=CURT_ECON_WORST
     )
-    
-    storage_utilization = min(storage_util_raw, 1.2)
-    
+    curtailment_econ_score = 1.0 - curtailment_econ_ratio / CURT_ECON_WORST
+
+    # C. Speichereffizienz (25 %): nützlicher Durchsatz / Speicherbedarf, auf [0, 1] begrenzt
+    storage_efficiency = min(1.0, _safe_ratio(
+        values['useful_storage_throughput_mwh'],
+        values['storage_need_mwh']
+    ))
+
+    # Gewichteter Gesamt-Score
+    economy_composite = 0.40 * lcoe_index + 0.35 * curtailment_econ_score + 0.25 * storage_efficiency
+
     return {
-        'system_cost_index': values['system_lcoe'] if values['system_lcoe'] is not None else 0,
-        
-        'import_dependency': _safe_ratio(
-            values['import_mwh'], 
-            total_load,
-            max_value=1.0
-        ),
-        
-        'storage_utilization': storage_utilization
+        'lcoe_index':              lcoe_index,
+        'curtailment_econ_score':  round(max(0.0, min(1.0, curtailment_econ_score)), 4),
+        'storage_efficiency':      storage_efficiency,
+        'economy_composite':       round(max(0.0, min(1.0, economy_composite)), 4),
     }
 
 
@@ -383,43 +457,68 @@ def get_score_and_kpis(
     
     Returns KPIs:
     
-    Security (all 0-1 ratios):
-    - energy_deficit_share: Total unmet energy / total demand
-    - peak_deficit_ratio: Max unmet power / peak demand
-    - deficit_frequency: Hours with deficit / total hours
+    Safety (all 0-1 scores, higher = better):
+    - adequacy_score:   1 - (deficit_hours / total_hours)  [Anteil autark gedeckter Stunden]
+    - robustness_score: gesicherte Leistung / Spitzenlast  (0.5 @ 100%, 1.0 @ 120%)
+    - dependency_score: 1 - (Netto-Importe / Gesamtverbrauch)    - safety_composite: Durchschnitt der drei Safety-Scores
+
+    Overall:
+    - overall_score: 0.40 * safety_composite + 0.30 * ecology_composite + 0.30 * economy_composite    
+    Ecology (all 0-1 scores, higher = better):
+    - co2_score:         1 − min(1, CO2 [g/kWh] / 400)  (60 %)
+    - renewable_share:   (Gesamt − Fossil) / Gesamt  (25 %)
+    - curtailment_score: 1 − (Abregelungsquote / 0.40)  (15 %)
+    - ecology_composite: gewichteter Gesamt-Score (60 / 25 / 15 %)
     
-    Ecology:
-    - co2_intensity: Actual g CO2/kWh (0-1000 range)
-    - curtailment_share: Curtailed / renewable generation (0-0.4)
-    - fossil_share: Fossil / total generation (0-1)
-    
-    Economy:
-    - system_cost_index: LCOE in ct/kWh
-    - import_dependency: Imports / total demand (0-1)
-    - storage_utilization: Useful throughput / storage need (0-1.2)
+    Economy (all 0-1 scores, higher = better):
+    - lcoe_index:              1 − (LCOE [ct/kWh] − 8) / (40 − 8)  [Target 0.08–0.40 €/kWh]; neutral 0.5 wenn kein LCOE verfügbar
+    - curtailment_econ_score:  1 − (Abregelungsanteil / 35 %), wirtschaftlicher Verlust durch EE-Abregelung  (35 %)
+    - storage_efficiency:      nützlicher Speicherdurchsatz / Speicherbedarf  (25 %)
+    - economy_composite:       gewichteter Gesamt-Score (40 / 35 / 25 %)
     """
     # Use default mapping if none provided
     mapping = value_mapping or DEFAULT_VALUE_MAPPING
     
     # Extract values by category
-    security_values = _extract_security_values(results, storage_config, year, mapping)
+    safety_values = _extract_safety_values(results, storage_config, year, mapping)
     ecology_values = _extract_ecology_values(results, mapping)
     economy_values = _extract_economy_values(
-        results, 
-        storage_config, 
-        year, 
+        results,
+        storage_config,
+        year,
         mapping,
-        security_values['total_unserved_mwh']
+        safety_values['total_unserved_mwh']
     )
-    
-    all_values = {**security_values, **ecology_values, **economy_values}
-    
+
+    all_values = {**safety_values, **ecology_values, **economy_values}
+
     # Calculate KPIs
+    safety_kpis  = _calculate_safety_kpis(all_values)
+    ecology_kpis = _calculate_ecology_kpis(all_values)
+    economy_kpis = _calculate_economy_kpis(all_values)
+
+    # Composite-Werte aus Sub-Dicts herausnehmen (Top-Level-Keys)
+    safety_composite  = safety_kpis.pop('safety_composite')
+    ecology_composite = ecology_kpis.pop('ecology_composite')
+    economy_composite = economy_kpis.pop('economy_composite')
+
+    # Gesamt-Score: Safety 40 %, Ecology 30 %, Economy 30 %
+    overall_score = round(
+        0.40 * safety_composite
+        + 0.30 * ecology_composite
+        + 0.30 * economy_composite,
+        4
+    )
+
     kpis = {
-        'security': _calculate_security_kpis(all_values),
-        'ecology': _calculate_ecology_kpis(all_values),
-        'economy': _calculate_economy_kpis(all_values),
-        'raw_values': all_values
+        'safety':             safety_kpis,
+        'ecology':            ecology_kpis,
+        'economy':            economy_kpis,
+        'safety_composite':   safety_composite,
+        'ecology_composite':  ecology_composite,
+        'economy_composite':  economy_composite,
+        'overall_score':      overall_score,
+        'raw_values':         all_values
     }
-    
+
     return kpis
