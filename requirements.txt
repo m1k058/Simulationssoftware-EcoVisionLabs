@@ -9,5 +9,6 @@ plotly==6.4.0
 # Data Processing
 pyyaml>=6.0
 holidays
+openpyxl
 
 numba>=0.58.0
