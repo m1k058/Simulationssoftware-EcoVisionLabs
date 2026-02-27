@@ -9,10 +9,7 @@ from ui.kpi_dashboard import convert_results_to_scoring_format, normalize_storag
 from data_processing.scoring_system import get_score_and_kpis
 from plotting.scoring_plots import get_category_scores, KPI_CONFIG
 
-# Manager Imports
-from data_manager import DataManager
-from config_manager import ConfigManager
-from scenario_manager import ScenarioManager
+
 
 
 def diff_simulation_page() -> None:

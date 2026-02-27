@@ -2,7 +2,6 @@ from pathlib import Path
 import pandas as pd
 import warnings
 from io_handler import load_data
-import warnings
 
 
 class DataManager:

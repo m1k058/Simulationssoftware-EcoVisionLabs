@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "simulationssoftware-ecovisionlabs"
-version = "1.0.3"
-description = "EcoVisionLabs simulations software"
+version = "0.6.2"
+description = "EcoVisionLabs Simulation Software – Beta Release"
 package-mode = false
 readme = "README.md"
 authors = ["EcoVisionLabs"]
@@ -12,10 +12,10 @@ keywords = ["energy", "simulations", "visualization", "streamlit", "plotly"]
 
 [tool.poetry.dependencies]
 python = "^3.12,<3.13"  # Numba requires Python 3.12
-streamlit = "^1.51.0"
-pandas = "^2.3.3"
-numpy = "^2.3.5"
-plotly = "^6.4.0"
+streamlit = ">=1.41.0"
+pandas = ">=2.2.0"
+numpy = ">=2.0.0"
+plotly = ">=5.24.0"
 pyyaml = "^6.0"
 holidays = "*"
 numba = "^0.58.0"

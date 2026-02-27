@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 from copy import deepcopy
 import warnings
-import warnings
 
 
 CONFIG_PATH = Path("source-code/config.json")

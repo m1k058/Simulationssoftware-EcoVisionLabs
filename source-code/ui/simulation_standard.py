@@ -1,8 +1,6 @@
 # Standard Bibliotheken
-import streamlit as st 
+import streamlit as st
 import pandas as pd
-from datetime import datetime
-import plotly.graph_objects as go
 
 # Eigene Imports
 from data_processing.simulation_engine import SimulationEngine

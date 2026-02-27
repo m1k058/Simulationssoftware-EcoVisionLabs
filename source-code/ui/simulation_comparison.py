@@ -3,12 +3,9 @@ import io
 import pandas as pd
 import streamlit as st
 
-from config_manager import ConfigManager
-from data_manager import DataManager
 from data_processing.scoring_system import get_score_and_kpis
 from data_processing.simulation_engine import SimulationEngine
 from plotting.scoring_plots import KPI_CONFIG, create_kpi_comparison_chart, get_category_scores
-from scenario_manager import ScenarioManager
 from ui.kpi_dashboard import (
     convert_results_to_scoring_format,
     normalize_storage_config,
